@@ -3,20 +3,21 @@ import pandas as pd
 import os
 import io
 import re
+from pypdf import PdfReader
 
 st.set_page_config(page_title="Evaluador de Créditos - FF.AA.", layout="wide", page_icon="🪖")
 
 DB_LIQUIDEZ_FILE = "base_liquidez_militares.csv"
 DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
 
-# --- FUNCIONES DE AUXILIO Y FORMATO ---
+# --- FUNCIONES DE LIMPIEZA Y FORMATO ---
 def limpiar_ci(val):
     if pd.isna(val) or val is None:
         return ""
     try:
         return str(int(float(val))).strip()
     except:
-        return str(val).split('.')[0].strip()
+        return str(val).split('.')[0].replace('.', '').strip()
 
 def limpiar_monto(val):
     if pd.isna(val) or val is None:
@@ -33,6 +34,37 @@ def formato_guarani(val):
         return f"{int(round(val)):,}".replace(',', '.')
     except:
         return "0"
+
+def extraer_datos_de_pdf(file_bytes):
+    """ Lectura automatizada para planillas en PDF """
+    reader = PdfReader(file_bytes)
+    lineas = []
+    for page in reader.pages:
+        texto = page.extract_text()
+        if texto:
+            lineas.extend(texto.split('\n'))
+    
+    registros = []
+    for line in lineas:
+        ci_match = re.search(r'\b\d{1,2}\.?\d{3}\.?\d{3}\b', line)
+        if ci_match:
+            ci = ci_match.group(0).replace('.', '')
+            montos = re.findall(r'\b\d{1,3}(?:\.\d{3})+\b|\b\d{6,8}\b', line)
+            montos_limpios = [limpiar_monto(m) for m in montos]
+            
+            presupuestado = montos_limpios[0] if len(montos_limpios) > 0 else 0.0
+            liquido = montos_limpios[-1] if len(montos_limpios) > 1 else presupuestado
+            
+            registros.append({
+                'emp_ci': ci,
+                'emp_nomape': f"Militar C.I. {ci}",
+                'cat_codigo': 'MIL',
+                'presupuestado': presupuestado,
+                'liquido': liquido,
+                'UNIDAD': 'DEPENDENCIA MILITAR'
+            })
+            
+    return pd.DataFrame(registros)
 
 def cargar_liquidez():
     if os.path.exists(DB_LIQUIDEZ_FILE):
@@ -55,12 +87,12 @@ df_dictamenes = cargar_dictamenes()
 
 st.title("🪖 Sistema Evaluador de Capacidad Crediticia (FF.AA.)")
 
-# --- MENÚ DE NAVEGACIÓN ---
+# --- BARRA LATERAL ---
 st.sidebar.header("⚙️ Menú Principal")
 opcion = st.sidebar.radio("Navegación:", [
     "🔍 Simular / Consultar Crédito", 
     "📋 Dictamen del Girador", 
-    "📥 Cargar Base Mensual (Excel/CSV)"
+    "📥 Cargar Base Mensual"
 ])
 
 # --- MÓDULO 1: SIMULAR / CONSULTAR CRÉDITO ---
@@ -70,7 +102,7 @@ if opcion == "🔍 Simular / Consultar Crédito":
     if df_liquidez.empty:
         st.info("👈 La base de datos está vacía. Carga la planilla mensual desde 'Cargar Base Mensual'.")
     else:
-        ci_input = st.text_input("Ingresá el Número de Cédula (C.I.):", placeholder="Ej: 1093300").strip()
+        ci_input = st.text_input("Ingresá el Número de Cédula (C.I.):", placeholder="Ej: 1093300").strip().replace('.', '')
         
         if ci_input:
             match = df_liquidez[df_liquidez['emp_ci'].apply(limpiar_ci) == ci_input]
@@ -104,10 +136,10 @@ if opcion == "🔍 Simular / Consultar Crédito":
                     diferencia = limite_50 - cuota_solicitada
                     if cuota_solicitada <= limite_50:
                         st.success("✅ **CRÉDITO FACTIBLE (APROBADO)**")
-                        st.write(f"La cuota entra dentro del límite del 50%. Margen libre disponible: **Gs. {formato_guarani(diferencia)}**")
+                        st.write(f"La cuota entra dentro del límite del 50%. Margen disponible: **Gs. {formato_guarani(diferencia)}**")
                     else:
                         st.error("⚠️ **RECHAZADO POR LÍMITE DE LIQUIDEZ DEL 50% - HABLAR CON SU GIRADURÍA**")
-                        st.write(f"La cuota supera el límite permitido por **Gs. {formato_guarani(abs(diferencia))}**.")
+                        st.write(f"La cuota supera el límite del 50% por **Gs. {formato_guarani(abs(diferencia))}**.")
 
                 dict_match = df_dictamenes[df_dictamenes['CEDULA'].apply(limpiar_ci) == ci_input]
                 if not dict_match.empty:
@@ -122,7 +154,7 @@ elif opcion == "📋 Dictamen del Girador":
     if df_liquidez.empty:
         st.info("Carga la base de liquidez primero.")
     else:
-        ci_girador = st.text_input("Ingresá la Cédula del Militar para consultar/editar dictamen:", placeholder="Ej: 1093300").strip()
+        ci_girador = st.text_input("Ingresá la Cédula del Militar para consultar/editar dictamen:", placeholder="Ej: 1093300").strip().replace('.', '')
         
         if ci_girador:
             match = df_liquidez[df_liquidez['emp_ci'].apply(limpiar_ci) == ci_girador]
@@ -170,25 +202,31 @@ elif opcion == "📋 Dictamen del Girador":
                             }])
                             df_dictamenes = pd.concat([df_dictamenes, nuevo_dictamen], ignore_index=True)
                             guardar_dictamenes(df_dictamenes)
-                            st.success("✅ ¡Dictamen guardado con éxito! Ahora se reflejará en la consulta principal.")
+                            st.success("✅ ¡Dictamen guardado con éxito! Se reflejará en la consulta principal.")
 
 # --- MÓDULO 3: CARGAR BASE MENSUAL ---
-elif opcion == "📥 Cargar Base Mensual (Excel/CSV)":
+elif opcion == "📥 Cargar Base Mensual":
     st.subheader("📥 Cargar Base de Liquidez Mensual de Militares")
-    archivo = st.file_uploader("Subir planilla de Excel o CSV (Hoja 4)", type=["xlsx", "xls", "csv"])
+    archivo = st.file_uploader("Seleccioná la planilla en formato Excel, CSV o PDF", type=["xlsx", "xls", "csv", "pdf"])
     
     if archivo:
         if st.button("⚠️ Procesar e Importar Base de Datos Mensual"):
             try:
-                if archivo.name.endswith('.csv'):
+                ext = archivo.name.lower().split('.')[-1]
+                if ext == 'pdf':
+                    df_cargado = extraer_datos_de_pdf(archivo)
+                elif ext == 'csv':
                     df_cargado = pd.read_csv(archivo, dtype=str)
                 else:
                     xls = pd.ExcelFile(archivo)
                     hoja = xls.sheet_names[3] if len(xls.sheet_names) >= 4 else xls.sheet_names[0]
                     df_cargado = pd.read_excel(xls, sheet_name=hoja, dtype=str)
 
-                guardar_liquidez(df_cargado)
-                st.success(f"✅ ¡Base de datos importada correctamente! Total de registros procesados: {len(df_cargado):,}")
+                if df_cargado.empty:
+                    st.warning("No se encontraron datos procesables en el archivo.")
+                else:
+                    guardar_liquidez(df_cargado)
+                    st.success(f"✅ ¡Base de datos importada correctamente! Total de registros procesados: {len(df_cargado):,}")
             except Exception as e:
                 st.error(f"Error al procesar el archivo: {e}")
-          
+    
