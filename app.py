@@ -9,28 +9,16 @@ st.set_page_config(page_title="Evaluador de Créditos - FF.AA.", layout="wide", 
 DB_LIQUIDEZ_FILE = "base_liquidez_militares.csv"
 DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
 
-def cargar_excel_inteligente(file_bytes_or_path):
-    """ Detecta automáticamente la fila de encabezados """
-    df_raw = pd.read_excel(file_bytes_or_path, header=None, dtype=str)
-    header_idx = 0
-    for idx, row in df_raw.iterrows():
-        row_str = " ".join([str(val).upper() for val in row.values if pd.notna(val)])
-        if 'C.I' in row_str or 'CEDULA' in row_str or 'NOMBRE' in row_str:
-            header_idx = idx
-            break
-    return pd.read_excel(file_bytes_or_path, skiprows=header_idx, dtype=str)
-
-def estandarizar_columnas_robusto(df):
-    """ Mapea con precisión todos los descuentos y datos del militar """
+def estandarizar_columnas(df):
     cols_map = {}
     for c in df.columns:
         c_clean = str(c).strip().upper().replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
         
-        if any(term in c_clean for term in ['N° C.I.', 'C.I.', 'CEDULA', 'NRO CI', 'EMP_CI']) or c_clean == 'CI':
+        if 'N° C.I' in c_clean or 'C.I' in c_clean or 'CEDULA' in c_clean or 'EMP_CI' in c_clean or c_clean == 'CI':
             cols_map[c] = 'emp_ci'
-        elif any(term in c_clean for term in ['NOMBRE', 'APELLIDO', 'NOMAPE', 'SOCIO']):
+        elif 'NOMBRE' in c_clean or 'APELLIDO' in c_clean or 'NOMAPE' in c_clean:
             cols_map[c] = 'emp_nomape'
-        elif 'CAT' in c_clean or 'GRADO' in c_clean or 'CATEGORIA' in c_clean:
+        elif 'CAT' in c_clean or 'CATEGORIA' in c_clean or 'GRADO' in c_clean:
             cols_map[c] = 'cat_codigo'
         elif 'PRESUPUESTADO' in c_clean or 'SUELDO' in c_clean:
             cols_map[c] = 'presupuestado'
@@ -50,7 +38,7 @@ def estandarizar_columnas_robusto(df):
             cols_map[c] = 'UNIDAD'
 
     df_renamed = df.rename(columns=cols_map)
-    if 'emp_ci' not in df_renamed.columns:
+    if 'emp_ci' not in df_renamed.columns and len(df_renamed.columns) > 0:
         df_renamed['emp_ci'] = df_renamed.iloc[:, 0]
     return df_renamed
 
@@ -120,7 +108,7 @@ if opcion == "🔍 Simular / Consultar Crédito":
     if df_liquidez.empty:
         st.info("👈 La base de datos está vacía. Carga la planilla mensual desde 'Cargar Base Mensual'.")
     else:
-        ci_input = st.text_input("Ingresá el Número de Cédula (C.I.):", placeholder="Ej: 5511820").strip().replace('.', '')
+        ci_input = st.text_input("Ingresá el Número de Cédula (C.I.):", placeholder="Ej: 1160650").strip().replace('.', '')
         
         if ci_input:
             match = df_liquidez[df_liquidez['emp_ci'].apply(limpiar_ci) == ci_input]
@@ -185,7 +173,7 @@ elif opcion == "📋 Dictamen del Girador":
     if df_liquidez.empty:
         st.info("Carga la base de liquidez primero.")
     else:
-        ci_girador = st.text_input("Ingresá la Cédula del Militar:", placeholder="Ej: 5511820").strip().replace('.', '')
+        ci_girador = st.text_input("Ingresá la Cédula del Militar:", placeholder="Ej: 1160650").strip().replace('.', '')
         
         if ci_girador:
             match = df_liquidez[df_liquidez['emp_ci'].apply(limpiar_ci) == ci_girador]
@@ -247,9 +235,10 @@ elif opcion == "📥 Cargar Base Mensual":
                 if ext == 'csv':
                     df_cargado = pd.read_csv(archivo, dtype=str)
                 else:
-                    df_cargado = cargar_excel_inteligente(archivo)
+                    xls = pd.ExcelFile(archivo)
+                    df_cargado = pd.read_excel(xls, sheet_name=0, dtype=str)
 
-                df_normalizado = estandarizar_columnas_robusto(df_cargado)
+                df_normalizado = estandarizar_columnas(df_cargado)
 
                 if df_normalizado.empty:
                     st.warning("No se encontraron datos procesables en el archivo.")
