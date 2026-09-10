@@ -3,11 +3,23 @@ import pandas as pd
 import os
 import io
 import re
+from fpdf import FPDF
 
 st.set_page_config(page_title="Evaluador de Créditos - FF.AA.", layout="wide", page_icon="🪖")
 
 DB_LIQUIDEZ_FILE = "base_liquidez_militares.csv"
 DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
+
+# --- FUNCIONES DE LECTURA Y LIMPIEZA ---
+def cargar_excel_detectando_cabecera(file_bytes_or_path):
+    df_raw = pd.read_excel(file_bytes_or_path, header=None, dtype=str)
+    header_idx = 0
+    for idx, row in df_raw.iterrows():
+        row_str = " ".join([str(val).upper() for val in row.values if pd.notna(val)])
+        if 'C.I' in row_str or 'CEDULA' in row_str or 'NOMBRE' in row_str:
+            header_idx = idx
+            break
+    return pd.read_excel(file_bytes_or_path, skiprows=header_idx, dtype=str)
 
 def estandarizar_columnas(df):
     cols_map = {}
@@ -46,7 +58,7 @@ def limpiar_ci(val):
     if pd.isna(val) or val is None:
         return ""
     try:
-        s = str(val).split('.')[0].replace('.', '').strip()
+        s = str(val).split('.')[0].replace('.', '').replace(',', '').strip()
         numeros = re.findall(r'\d+', s)
         return str(numeros[0]) if numeros else ""
     except:
@@ -89,6 +101,56 @@ def cargar_dictamenes():
 def guardar_dictamenes(df):
     df.to_csv(DB_DICTAMENES_FILE, index=False)
 
+# --- FUNCIÓN GENERADORA DE PDF FORMAL ---
+def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, liquido, limite, cuota, estado, obs=""):
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Encabezado Institucional
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 10, "SISTEMA EVALUADOR DE CAPACIDAD CREDITICIA - FF.AA.", border=0, ln=True, align="C")
+    pdf.set_font("Helvetica", "I", 10)
+    pdf.cell(0, 6, f"Constancia Oficial de {tipo_reporte}", border=0, ln=True, align="C")
+    pdf.ln(5)
+    
+    pdf.line(10, 28, 200, 28)
+    pdf.ln(5)
+
+    # Datos del Militar
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 8, "1. DATOS DEL MILITAR / SOCIO", ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(100, 6, f"Nombre y Apellido: {nombre}")
+    pdf.cell(90, 6, f"Cédula N°: {ci}", ln=True)
+    pdf.cell(100, 6, f"Unidad / Dependencia: {unidad}", ln=True)
+    pdf.ln(4)
+
+    # Desglose Financiero
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 8, "2. RESUMEN DE LIQUIDEZ Y HABERES", ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(100, 6, f"Sueldo Presupuestado: Gs. {formato_guarani(presupuestado)}")
+    pdf.cell(90, 6, f"Líquido Real Actual: Gs. {formato_guarani(liquido)}", ln=True)
+    pdf.cell(100, 6, f"Límite Disponible (50%): Gs. {formato_guarani(limite)}", ln=True)
+    pdf.ln(4)
+
+    # Dictamen / Evaluación
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 8, "3. EVALUACIÓN DE CRÉDITO Y DICTAMEN", ln=True)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(100, 6, f"Cuota Solicitada: Gs. {formato_guarani(cuota)}")
+    pdf.cell(90, 6, f"Estado de Factibilidad: {estado}", ln=True)
+    
+    if obs:
+        pdf.ln(2)
+        pdf.multi_cell(0, 6, f"Observación / Dictamen de Giraduría: {obs}")
+
+    pdf.ln(15)
+    pdf.cell(0, 6, "_____________________________", align="C", ln=True)
+    pdf.cell(0, 6, "Firma / Sello de Recepción", align="C", ln=True)
+
+    return bytes(pdf.output())
+
 df_liquidez = cargar_liquidez()
 df_dictamenes = cargar_dictamenes()
 
@@ -103,68 +165,98 @@ opcion = st.sidebar.radio("Navegación:", [
 
 # --- MÓDULO 1: SIMULAR / CONSULTAR CRÉDITO ---
 if opcion == "🔍 Simular / Consultar Crédito":
-    st.subheader("🔍 Buscador de Liquidez por Cédula")
+    st.subheader("🔍 Buscador de Liquidez de Personal")
     
     if df_liquidez.empty:
         st.info("👈 La base de datos está vacía. Carga la planilla mensual desde 'Cargar Base Mensual'.")
     else:
-        ci_input = st.text_input("Ingresá el Número de Cédula (C.I.):", placeholder="Ej: 1160650").strip().replace('.', '')
+        tipo_busqueda = st.radio("Seleccioná el método de búsqueda:", ["💳 Por Número de Cédula", "👤 Por Nombre / Apellido"], horizontal=True)
+        matches = pd.DataFrame()
         
-        if ci_input:
-            match = df_liquidez[df_liquidez['emp_ci'].apply(limpiar_ci) == ci_input]
-            
-            if match.empty:
-                st.error(f"No se encontró ningún militar registrado con la C.I. Nº '{ci_input}'.")
+        if tipo_busqueda == "💳 Por Número de Cédula":
+            ci_input = st.text_input("Ingresá el Número de Cédula (C.I.):", placeholder="Ej: 5511820").strip().replace('.', '')
+            if ci_input:
+                matches = df_liquidez[df_liquidez['emp_ci'].apply(limpiar_ci) == ci_input]
+        else:
+            nombre_input = st.text_input("Ingresá el Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
+            if nombre_input:
+                matches = df_liquidez[df_liquidez['emp_nomape'].astype(str).str.contains(nombre_input, case=False, na=False)]
+
+        if not matches.empty:
+            if len(matches) > 1:
+                st.warning(f"Se encontraron {len(matches)} coincidencias:")
+                opciones = [f"{row['emp_nomape']} (C.I.: {row['emp_ci']}) - {row.get('UNIDAD', '-')}" for idx, row in matches.iterrows()]
+                seleccion = st.selectbox("Seleccionar Militar:", opciones)
+                idx_sel = opciones.index(seleccion)
+                row = matches.iloc[idx_sel]
             else:
-                row = match.iloc[0]
-                nombre = row.get('emp_nomape', 'S/N')
-                unidad = row.get('UNIDAD', '-')
-                categoria = row.get('cat_codigo', '-')
+                row = matches.iloc[0]
 
-                presupuestado = limpiar_monto(row.get('presupuestado', 0))
-                jubilacion = limpiar_monto(row.get('jubilacion', 0))
-                giraduria = limpiar_monto(row.get('giraduria', 0))
-                desc_cf2 = limpiar_monto(row.get('descuento_cf2', 0))
-                judicial = limpiar_monto(row.get('judicial', 0))
-                
-                total_descuentos = jubilacion + giraduria + desc_cf2 + judicial
-                liquido_real = presupuestado - total_descuentos if total_descuentos > 0 else limpiar_monto(row.get('liquido', 0))
-                limite_50 = liquido_real / 2.0
+            nombre = row.get('emp_nomape', 'S/N')
+            cedula_militar = limpiar_ci(row.get('emp_ci', '0'))
+            unidad = row.get('UNIDAD', '-')
+            categoria = row.get('cat_codigo', '-')
 
+            presupuestado = limpiar_monto(row.get('presupuestado', 0))
+            jubilacion = limpiar_monto(row.get('jubilacion', 0))
+            giraduria = limpiar_monto(row.get('giraduria', 0))
+            desc_cf2 = limpiar_monto(row.get('descuento_cf2', 0))
+            judicial = limpiar_monto(row.get('judicial', 0))
+            
+            total_descuentos = jubilacion + giraduria + desc_cf2 + judicial
+            liquido_real = presupuestado - total_descuentos if total_descuentos > 0 else limpiar_monto(row.get('liquido', 0))
+            limite_50 = liquido_real / 2.0
+
+            st.markdown("---")
+            st.success(f"👤 **Militar:** {nombre} | **C.I.:** {cedula_militar} | **Categoría:** {categoria}")
+            st.info(f"🏛️ **Unidad Militar:** {unidad}")
+
+            st.markdown("### 📊 Desglose de Haberes y Descuentos")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Presupuestado", f"Gs. {formato_guarani(presupuestado)}")
+            c2.metric("Jubilación", f"Gs. {formato_guarani(jubilacion)}")
+            c3.metric("Giraduría", f"Gs. {formato_guarani(giraduria)}")
+            c4.metric("Descuento CF2", f"Gs. {formato_guarani(desc_cf2)}")
+
+            c5, c6, c7 = st.columns(3)
+            c5.metric("Judicial", f"Gs. {formato_guarani(judicial)}")
+            c6.metric("Líquido Real", f"Gs. {formato_guarani(liquido_real)}")
+            c7.metric("Límite Cuota (50%)", f"Gs. {formato_guarani(limite_50)}")
+
+            st.markdown("---")
+            st.subheader("💳 Evaluación del Nuevo Crédito")
+            cuota_solicitada = st.number_input("Ingresá el Monto de la Cuota para el Nuevo Crédito (Gs.):", min_value=0.0, step=50000.0, format="%.0f")
+
+            estado_eval = "SIN EVALUAR"
+            if cuota_solicitada > 0:
+                diferencia = limite_50 - cuota_solicitada
+                if cuota_solicitada <= limite_50:
+                    estado_eval = "APROBADO (DENTRO DEL MARGEN DEL 50%)"
+                    st.success("✅ **CRÉDITO FACTIBLE (APROBADO)**")
+                    st.write(f"La cuota entra dentro del límite del 50%. Margen disponible: **Gs. {formato_guarani(diferencia)}**")
+                else:
+                    estado_eval = "RECHAZADO (SUPERA EL 50% DE LIQUIDEZ)"
+                    st.error("⚠️ **RECHAZADO POR LÍMITE DE LIQUIDEZ DEL 50% - HABLAR CON SU GIRADURÍA**")
+                    st.write(f"La cuota supera el límite del 50% por **Gs. {formato_guarani(abs(diferencia))}**.")
+
+            dict_match = df_dictamenes[df_dictamenes['CEDULA'].apply(limpiar_ci) == cedula_militar]
+            obs_dictamen = dict_match.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_match.empty else "Sin observaciones previas."
+            
+            if not dict_match.empty:
                 st.markdown("---")
-                st.success(f"👤 **Militar:** {nombre} | **C.I.:** {ci_input} | **Categoría:** {categoria}")
-                st.info(f"🏛️ **Unidad Militar:** {unidad}")
+                st.warning(f"📌 **Dictamen Registrado por Giraduría:** {obs_dictamen}")
 
-                st.markdown("### 📊 Desglose de Haberes y Descuentos")
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Presupuestado", f"Gs. {formato_guarani(presupuestado)}")
-                c2.metric("Jubilación", f"Gs. {formato_guarani(jubilacion)}")
-                c3.metric("Giraduría", f"Gs. {formato_guarani(giraduria)}")
-                c4.metric("Descuento CF2", f"Gs. {formato_guarani(desc_cf2)}")
-
-                c5, c6, c7 = st.columns(3)
-                c5.metric("Judicial", f"Gs. {formato_guarani(judicial)}")
-                c6.metric("Líquido Real", f"Gs. {formato_guarani(liquido_real)}")
-                c7.metric("Límite Cuota (50%)", f"Gs. {formato_guarani(limite_50)}")
-
-                st.markdown("---")
-                st.subheader("💳 Evaluación del Nuevo Crédito")
-                cuota_solicitada = st.number_input("Ingresá el Monto de la Cuota para el Nuevo Crédito (Gs.):", min_value=0.0, step=50000.0, format="%.0f")
-
-                if cuota_solicitada > 0:
-                    diferencia = limite_50 - cuota_solicitada
-                    if cuota_solicitada <= limite_50:
-                        st.success("✅ **CRÉDITO FACTIBLE (APROBADO)**")
-                        st.write(f"La cuota entra dentro del límite del 50%. Margen disponible: **Gs. {formato_guarani(diferencia)}**")
-                    else:
-                        st.error("⚠️ **RECHAZADO POR LÍMITE DE LIQUIDEZ DEL 50% - HABLAR CON SU GIRADURÍA**")
-                        st.write(f"La cuota supera el límite del 50% por **Gs. {formato_guarani(abs(diferencia))}**.")
-
-                dict_match = df_dictamenes[df_dictamenes['CEDULA'].apply(limpiar_ci) == ci_input]
-                if not dict_match.empty:
-                    st.markdown("---")
-                    dict_row = dict_match.iloc[-1]
-                    st.warning(f"📌 **Dictamen Registrado por Giraduría ({dict_row['FECHA']}):** {dict_row['DICTAMEN_GIRADOR']}")
+            # BOTÓN PARA GENERAR Y DESCARGAR PDF
+            st.markdown("---")
+            pdf_bytes = generar_pdf_constancia("Simulación de Crédito", nombre, cedula_militar, unidad, presupuestado, liquido_real, limite_50, cuota_solicitada, estado_eval, obs_dictamen)
+            
+            st.download_button(
+                label="📄 Descargar / Imprimir Constancia de Evaluación (PDF)",
+                data=pdf_bytes,
+                file_name=f"Constancia_Credito_{cedula_militar}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
 
 # --- MÓDULO 2: DICTAMEN DEL GIRADOR ---
 elif opcion == "📋 Dictamen del Girador":
@@ -173,55 +265,84 @@ elif opcion == "📋 Dictamen del Girador":
     if df_liquidez.empty:
         st.info("Carga la base de liquidez primero.")
     else:
-        ci_girador = st.text_input("Ingresá la Cédula del Militar:", placeholder="Ej: 1160650").strip().replace('.', '')
-        
-        if ci_girador:
-            match = df_liquidez[df_liquidez['emp_ci'].apply(limpiar_ci) == ci_girador]
-            
-            if match.empty:
-                st.error(f"No se encontró la Cédula '{ci_girador}'.")
+        tipo_busq_g = st.radio("Buscar por:", ["💳 Cédula", "👤 Nombre / Apellido"], horizontal=True)
+        matches_g = pd.DataFrame()
+
+        if tipo_busq_g == "💳 Cédula":
+            ci_girador = st.text_input("Ingresá la Cédula:", placeholder="Ej: 5511820").strip().replace('.', '')
+            if ci_girador:
+                matches_g = df_liquidez[df_liquidez['emp_ci'].apply(limpiar_ci) == ci_girador]
+        else:
+            nom_girador = st.text_input("Ingresá el Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
+            if nom_girador:
+                matches_g = df_liquidez[df_liquidez['emp_nomape'].astype(str).str.contains(nom_girador, case=False, na=False)]
+
+        if not matches_g.empty:
+            if len(matches_g) > 1:
+                st.warning(f"Se encontraron {len(matches_g)} coincidencias:")
+                opciones_g = [f"{row['emp_nomape']} (C.I.: {row['emp_ci']})" for idx, row in matches_g.iterrows()]
+                seleccion_g = st.selectbox("Seleccionar Registro:", opciones_g)
+                idx_g = opciones_g.index(seleccion_g)
+                row_g = matches_g.iloc[idx_g]
             else:
-                row = match.iloc[0]
-                nombre = row.get('emp_nomape', 'S/N')
-                unidad = row.get('UNIDAD', '-')
-                liquido_real = limpiar_monto(row.get('liquido', 0))
-                limite_50 = liquido_real / 2.0
+                row_g = matches_g.iloc[0]
 
-                st.markdown("---")
-                st.write("### Datos de Solo Lectura:")
-                col_g1, col_g2 = st.columns(2)
-                with col_g1:
-                    st.text_input("Nombre y Apellido:", value=nombre, disabled=True)
-                    st.text_input("Unidad Militar:", value=unidad, disabled=True)
-                with col_g2:
-                    st.text_input("Cédula N°:", value=ci_girador, disabled=True)
-                    st.text_input("Límite de Cuota Máxima (50%):", value=f"Gs. {formato_guarani(limite_50)}", disabled=True)
+            nombre_g = row_g.get('emp_nomape', 'S/N')
+            ci_g = limpiar_ci(row_g.get('emp_ci', '0'))
+            unidad_g = row_g.get('UNIDAD', '-')
+            
+            presupuestado_g = limpiar_monto(row_g.get('presupuestado', 0))
+            tot_desc_g = limpiar_monto(row_g.get('jubilacion', 0)) + limpiar_monto(row_g.get('giraduria', 0)) + limpiar_monto(row_g.get('descuento_cf2', 0)) + limpiar_monto(row_g.get('judicial', 0))
+            liquido_real_g = presupuestado_g - tot_desc_g if tot_desc_g > 0 else limpiar_monto(row_g.get('liquido', 0))
+            limite_50_g = liquido_real_g / 2.0
 
-                st.markdown("---")
-                dict_previo = df_dictamenes[df_dictamenes['CEDULA'].apply(limpiar_ci) == ci_girador]
-                obs_inicial = dict_previo.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_previo.empty else ""
+            st.markdown("---")
+            st.write("### Datos de Solo Lectura:")
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                st.text_input("Nombre y Apellido:", value=nombre_g, disabled=True)
+                st.text_input("Unidad Militar:", value=unidad_g, disabled=True)
+            with col_g2:
+                st.text_input("Cédula N°:", value=ci_g, disabled=True)
+                st.text_input("Límite de Cuota Máxima (50%):", value=f"Gs. {formato_guarani(limite_50_g)}", disabled=True)
 
-                with st.form("form_dictamen"):
-                    st.subheader("📝 Editar Dictamen / Observación de Giraduría")
-                    cuota_evaluando = st.number_input("Monto de Cuota Solicitada (Gs.):", min_value=0.0, step=50000.0, format="%.0f")
-                    obs_girador = st.text_area("Observaciones / Respuesta del Girador:", value=obs_inicial, placeholder="Ej: Compra de deuda aprobada / Rechazado definitivo")
-                    
-                    btn_guardar_dictamen = st.form_submit_button("💾 Guardar Dictamen")
+            st.markdown("---")
+            dict_previo = df_dictamenes[df_dictamenes['CEDULA'].apply(limpiar_ci) == ci_g]
+            obs_inicial = dict_previo.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_previo.empty else ""
 
-                    if btn_guardar_dictamen:
-                        if not obs_girador.strip():
-                            st.error("Por favor ingresa una observación para guardar el dictamen.")
-                        else:
-                            df_dictamenes = df_dictamenes[df_dictamenes['CEDULA'].apply(limpiar_ci) != ci_girador]
-                            nuevo_dictamen = pd.DataFrame([{
-                                'CEDULA': ci_girador,
-                                'CUOTA_PROPUESTA': formato_guarani(cuota_evaluando),
-                                'DICTAMEN_GIRADOR': obs_girador.strip(),
-                                'FECHA': pd.Timestamp.now().strftime("%d/%m/%Y %H:%M")
-                            }])
-                            df_dictamenes = pd.concat([df_dictamenes, nuevo_dictamen], ignore_index=True)
-                            guardar_dictamenes(df_dictamenes)
-                            st.success("✅ ¡Dictamen guardado con éxito!")
+            with st.form("form_dictamen"):
+                st.subheader("📝 Editar Dictamen / Observación de Giraduría")
+                cuota_evaluando = st.number_input("Monto de Cuota Solicitada (Gs.):", min_value=0.0, step=50000.0, format="%.0f")
+                obs_girador = st.text_area("Observaciones / Respuesta del Girador:", value=obs_inicial, placeholder="Ej: Compra de deuda aprobada / Rechazado definitivo")
+                
+                btn_guardar_dictamen = st.form_submit_button("💾 Guardar Dictamen")
+
+                if btn_guardar_dictamen:
+                    if not obs_girador.strip():
+                        st.error("Por favor ingresa una observación para guardar el dictamen.")
+                    else:
+                        df_dictamenes = df_dictamenes[df_dictamenes['CEDULA'].apply(limpiar_ci) != ci_g]
+                        nuevo_dictamen = pd.DataFrame([{
+                            'CEDULA': ci_g,
+                            'CUOTA_PROPUESTA': formato_guarani(cuota_evaluando),
+                            'DICTAMEN_GIRADOR': obs_girador.strip(),
+                            'FECHA': pd.Timestamp.now().strftime("%d/%m/%Y %H:%M")
+                        }])
+                        df_dictamenes = pd.concat([df_dictamenes, nuevo_dictamen], ignore_index=True)
+                        guardar_dictamenes(df_dictamenes)
+                        st.success("✅ ¡Dictamen guardado con éxito!")
+
+            # BOTÓN DE IMPRESIÓN / PDF EN DICTAMENES
+            st.markdown("---")
+            pdf_bytes_g = generar_pdf_constancia("Dictamen de Giraduría", nombre_g, ci_g, unidad_g, presupuestado_g, liquido_real_g, limite_50_g, cuota_evaluando, "EVALUADO POR GIRADOR", obs_inicial)
+            
+            st.download_button(
+                label="📄 Descargar / Imprimir Dictamen de Giraduría (PDF)",
+                data=pdf_bytes_g,
+                file_name=f"Dictamen_Giraduria_{ci_g}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
 
 # --- MÓDULO 3: CARGAR BASE MENSUAL ---
 elif opcion == "📥 Cargar Base Mensual":
@@ -235,8 +356,7 @@ elif opcion == "📥 Cargar Base Mensual":
                 if ext == 'csv':
                     df_cargado = pd.read_csv(archivo, dtype=str)
                 else:
-                    xls = pd.ExcelFile(archivo)
-                    df_cargado = pd.read_excel(xls, sheet_name=0, dtype=str)
+                    df_cargado = cargar_excel_detectando_cabecera(archivo)
 
                 df_normalizado = estandarizar_columnas(df_cargado)
 
