@@ -3,15 +3,14 @@ import pandas as pd
 import os
 import io
 import re
-from PIL import Image, ImageDraw
 
-st.set_page_config(page_title="Sistema Multiuso & Evaluador", layout="wide", page_icon="🪖")
+st.set_page_config(page_title="Evaluador de Créditos - FF.AA.", layout="wide", page_icon="🪖")
 
 DB_LIQUIDEZ_FILE = "base_liquidez_militares.csv"
 DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
 
 def cargar_excel_inteligente(file_bytes_or_path):
-    """ Detecta automáticamente en qué fila están los encabezados del Excel """
+    """ Detecta automáticamente la fila de encabezados """
     df_raw = pd.read_excel(file_bytes_or_path, header=None, dtype=str)
     header_idx = 0
     for idx, row in df_raw.iterrows():
@@ -22,7 +21,7 @@ def cargar_excel_inteligente(file_bytes_or_path):
     return pd.read_excel(file_bytes_or_path, skiprows=header_idx, dtype=str)
 
 def estandarizar_columnas_robusto(df):
-    """ Asigna con precisión cada campo numérico y de descuentos """
+    """ Mapea con precisión todos los descuentos y datos del militar """
     cols_map = {}
     for c in df.columns:
         c_clean = str(c).strip().upper().replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
@@ -50,7 +49,10 @@ def estandarizar_columnas_robusto(df):
         elif c_clean == 'UNIDAD' or 'DEPENDENCIA' in c_clean:
             cols_map[c] = 'UNIDAD'
 
-    return df.rename(columns=cols_map)
+    df_renamed = df.rename(columns=cols_map)
+    if 'emp_ci' not in df_renamed.columns:
+        df_renamed['emp_ci'] = df_renamed.iloc[:, 0]
+    return df_renamed
 
 def limpiar_ci(val):
     if pd.isna(val) or val is None:
@@ -80,7 +82,12 @@ def formato_guarani(val):
 
 def cargar_liquidez():
     if os.path.exists(DB_LIQUIDEZ_FILE):
-        return pd.read_csv(DB_LIQUIDEZ_FILE, dtype=str)
+        try:
+            df = pd.read_csv(DB_LIQUIDEZ_FILE, dtype=str)
+            if 'emp_ci' in df.columns:
+                return df
+        except:
+            pass
     return pd.DataFrame()
 
 def guardar_liquidez(df):
@@ -97,13 +104,12 @@ def guardar_dictamenes(df):
 df_liquidez = cargar_liquidez()
 df_dictamenes = cargar_dictamenes()
 
-st.title("🪖 Evaluador Crediticio & 🎨 Generador de Flyers")
+st.title("🪖 Sistema Evaluador de Capacidad Crediticia (FF.AA.)")
 
 st.sidebar.header("⚙️ Menú Principal")
 opcion = st.sidebar.radio("Navegación:", [
     "🔍 Simular / Consultar Crédito", 
     "📋 Dictamen del Girador", 
-    "🎨 Generador de Flyers (E-Commerce)",
     "📥 Cargar Base Mensual"
 ])
 
@@ -141,7 +147,6 @@ if opcion == "🔍 Simular / Consultar Crédito":
                 st.success(f"👤 **Militar:** {nombre} | **C.I.:** {ci_input} | **Categoría:** {categoria}")
                 st.info(f"🏛️ **Unidad Militar:** {unidad}")
 
-                # Desglose Completo de Descuentos
                 st.markdown("### 📊 Desglose de Haberes y Descuentos")
                 c1, c2, c3, c4 = st.columns(4)
                 c1.metric("Presupuestado", f"Gs. {formato_guarani(presupuestado)}")
@@ -230,17 +235,7 @@ elif opcion == "📋 Dictamen del Girador":
                             guardar_dictamenes(df_dictamenes)
                             st.success("✅ ¡Dictamen guardado con éxito!")
 
-# --- MÓDULO 3: GENERADOR DE FLYERS ---
-elif opcion == "🎨 Generador de Flyers (E-Commerce)":
-    st.subheader("🎨 Creador Inteligente de Flyers Publicitarios")
-    file_producto = st.file_uploader("1. Foto del Producto (JPG/PNG) *", type=["jpg", "jpeg", "png"])
-    file_logo = st.file_uploader("2. Logo de la Tienda (Opcional)", type=["jpg", "jpeg", "png"])
-    titulo_prod = st.text_input("Nombre / Título del Producto:", placeholder="Ej: Auriculares Bluetooth Pro")
-    caracteristicas_prod = st.text_area("Características principales:", placeholder="Cancelación de ruido\nBatería hasta 24hs")
-    precio_prod = st.text_input("Precio de Venta (Gs.):", placeholder="Ej: 180.000")
-    wa_prod = st.text_input("Número de WhatsApp:", placeholder="Ej: 0981 123 456")
-
-# --- MÓDULO 4: CARGAR BASE MENSUAL ---
+# --- MÓDULO 3: CARGAR BASE MENSUAL ---
 elif opcion == "📥 Cargar Base Mensual":
     st.subheader("📥 Cargar Base de Liquidez Mensual de Militares")
     archivo = st.file_uploader("Seleccioná la planilla en formato Excel o CSV", type=["xlsx", "xls", "csv"])
@@ -261,5 +256,6 @@ elif opcion == "📥 Cargar Base Mensual":
                 else:
                     guardar_liquidez(df_normalizado)
                     st.success(f"✅ ¡Base de datos importada correctamente! Total de militares registrados: {len(df_normalizado):,}")
+                    st.rerun()
             except Exception as e:
                 st.error(f"Error al procesar el archivo: {e}")
