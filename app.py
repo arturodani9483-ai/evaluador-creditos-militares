@@ -3,21 +3,64 @@ import pandas as pd
 import os
 import io
 import re
-from pypdf import PdfReader
+from PIL import Image, ImageDraw
 
-st.set_page_config(page_title="Evaluador de Créditos - FF.AA.", layout="wide", page_icon="🪖")
+st.set_page_config(page_title="Sistema Multiuso & Evaluador", layout="wide", page_icon="🪖")
 
 DB_LIQUIDEZ_FILE = "base_liquidez_militares.csv"
 DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
 
-# --- FUNCIONES DE LIMPIEZA Y FORMATO ---
+def cargar_excel_inteligente(file_bytes_or_path):
+    """ Detecta automáticamente en qué fila están los encabezados del Excel """
+    df_raw = pd.read_excel(file_bytes_or_path, header=None, dtype=str)
+    header_idx = 0
+    for idx, row in df_raw.iterrows():
+        row_str = " ".join([str(val).upper() for val in row.values if pd.notna(val)])
+        if 'C.I' in row_str or 'CEDULA' in row_str or 'NOMBRE' in row_str:
+            header_idx = idx
+            break
+    return pd.read_excel(file_bytes_or_path, skiprows=header_idx, dtype=str)
+
+def estandarizar_columnas_robusto(df):
+    """ Asigna con precisión cada campo numérico y de descuentos """
+    cols_map = {}
+    for c in df.columns:
+        c_clean = str(c).strip().upper().replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
+        
+        if any(term in c_clean for term in ['N° C.I.', 'C.I.', 'CEDULA', 'NRO CI', 'EMP_CI']) or c_clean == 'CI':
+            cols_map[c] = 'emp_ci'
+        elif any(term in c_clean for term in ['NOMBRE', 'APELLIDO', 'NOMAPE', 'SOCIO']):
+            cols_map[c] = 'emp_nomape'
+        elif 'CAT' in c_clean or 'GRADO' in c_clean or 'CATEGORIA' in c_clean:
+            cols_map[c] = 'cat_codigo'
+        elif 'PRESUPUESTADO' in c_clean or 'SUELDO' in c_clean:
+            cols_map[c] = 'presupuestado'
+        elif 'JUBILA' in c_clean:
+            cols_map[c] = 'jubilacion'
+        elif 'GIRA' in c_clean:
+            cols_map[c] = 'giraduria'
+        elif 'CF2' in c_clean:
+            cols_map[c] = 'descuento_cf2'
+        elif 'JUDICIAL' in c_clean:
+            cols_map[c] = 'judicial'
+        elif 'TOTAL' in c_clean and 'DESC' in c_clean:
+            cols_map[c] = 'total_desc'
+        elif 'LIQUIDO' in c_clean or 'NETO' in c_clean:
+            cols_map[c] = 'liquido'
+        elif c_clean == 'UNIDAD' or 'DEPENDENCIA' in c_clean:
+            cols_map[c] = 'UNIDAD'
+
+    return df.rename(columns=cols_map)
+
 def limpiar_ci(val):
     if pd.isna(val) or val is None:
         return ""
     try:
-        return str(int(float(val))).strip()
+        s = str(val).split('.')[0].replace('.', '').strip()
+        numeros = re.findall(r'\d+', s)
+        return str(numeros[0]) if numeros else ""
     except:
-        return str(val).split('.')[0].replace('.', '').strip()
+        return str(val).strip()
 
 def limpiar_monto(val):
     if pd.isna(val) or val is None:
@@ -34,37 +77,6 @@ def formato_guarani(val):
         return f"{int(round(val)):,}".replace(',', '.')
     except:
         return "0"
-
-def extraer_datos_de_pdf(file_bytes):
-    """ Lectura automatizada para planillas en PDF """
-    reader = PdfReader(file_bytes)
-    lineas = []
-    for page in reader.pages:
-        texto = page.extract_text()
-        if texto:
-            lineas.extend(texto.split('\n'))
-    
-    registros = []
-    for line in lineas:
-        ci_match = re.search(r'\b\d{1,2}\.?\d{3}\.?\d{3}\b', line)
-        if ci_match:
-            ci = ci_match.group(0).replace('.', '')
-            montos = re.findall(r'\b\d{1,3}(?:\.\d{3})+\b|\b\d{6,8}\b', line)
-            montos_limpios = [limpiar_monto(m) for m in montos]
-            
-            presupuestado = montos_limpios[0] if len(montos_limpios) > 0 else 0.0
-            liquido = montos_limpios[-1] if len(montos_limpios) > 1 else presupuestado
-            
-            registros.append({
-                'emp_ci': ci,
-                'emp_nomape': f"Militar C.I. {ci}",
-                'cat_codigo': 'MIL',
-                'presupuestado': presupuestado,
-                'liquido': liquido,
-                'UNIDAD': 'DEPENDENCIA MILITAR'
-            })
-            
-    return pd.DataFrame(registros)
 
 def cargar_liquidez():
     if os.path.exists(DB_LIQUIDEZ_FILE):
@@ -85,13 +97,13 @@ def guardar_dictamenes(df):
 df_liquidez = cargar_liquidez()
 df_dictamenes = cargar_dictamenes()
 
-st.title("🪖 Sistema Evaluador de Capacidad Crediticia (FF.AA.)")
+st.title("🪖 Evaluador Crediticio & 🎨 Generador de Flyers")
 
-# --- BARRA LATERAL ---
 st.sidebar.header("⚙️ Menú Principal")
 opcion = st.sidebar.radio("Navegación:", [
     "🔍 Simular / Consultar Crédito", 
     "📋 Dictamen del Girador", 
+    "🎨 Generador de Flyers (E-Commerce)",
     "📥 Cargar Base Mensual"
 ])
 
@@ -102,7 +114,7 @@ if opcion == "🔍 Simular / Consultar Crédito":
     if df_liquidez.empty:
         st.info("👈 La base de datos está vacía. Carga la planilla mensual desde 'Cargar Base Mensual'.")
     else:
-        ci_input = st.text_input("Ingresá el Número de Cédula (C.I.):", placeholder="Ej: 1093300").strip().replace('.', '')
+        ci_input = st.text_input("Ingresá el Número de Cédula (C.I.):", placeholder="Ej: 5511820").strip().replace('.', '')
         
         if ci_input:
             match = df_liquidez[df_liquidez['emp_ci'].apply(limpiar_ci) == ci_input]
@@ -116,17 +128,31 @@ if opcion == "🔍 Simular / Consultar Crédito":
                 categoria = row.get('cat_codigo', '-')
 
                 presupuestado = limpiar_monto(row.get('presupuestado', 0))
-                liquido_real = limpiar_monto(row.get('liquido', 0))
+                jubilacion = limpiar_monto(row.get('jubilacion', 0))
+                giraduria = limpiar_monto(row.get('giraduria', 0))
+                desc_cf2 = limpiar_monto(row.get('descuento_cf2', 0))
+                judicial = limpiar_monto(row.get('judicial', 0))
+                
+                total_descuentos = jubilacion + giraduria + desc_cf2 + judicial
+                liquido_real = presupuestado - total_descuentos if total_descuentos > 0 else limpiar_monto(row.get('liquido', 0))
                 limite_50 = liquido_real / 2.0
 
                 st.markdown("---")
                 st.success(f"👤 **Militar:** {nombre} | **C.I.:** {ci_input} | **Categoría:** {categoria}")
                 st.info(f"🏛️ **Unidad Militar:** {unidad}")
 
-                col_m1, col_m2, col_m3 = st.columns(3)
-                col_m1.metric("Presupuestado", f"Gs. {formato_guarani(presupuestado)}")
-                col_m2.metric("Líquido Real Actual", f"Gs. {formato_guarani(liquido_real)}")
-                col_m3.metric("Límite de Cuota (50%)", f"Gs. {formato_guarani(limite_50)}")
+                # Desglose Completo de Descuentos
+                st.markdown("### 📊 Desglose de Haberes y Descuentos")
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Presupuestado", f"Gs. {formato_guarani(presupuestado)}")
+                c2.metric("Jubilación", f"Gs. {formato_guarani(jubilacion)}")
+                c3.metric("Giraduría", f"Gs. {formato_guarani(giraduria)}")
+                c4.metric("Descuento CF2", f"Gs. {formato_guarani(desc_cf2)}")
+
+                c5, c6, c7 = st.columns(3)
+                c5.metric("Judicial", f"Gs. {formato_guarani(judicial)}")
+                c6.metric("Líquido Real", f"Gs. {formato_guarani(liquido_real)}")
+                c7.metric("Límite Cuota (50%)", f"Gs. {formato_guarani(limite_50)}")
 
                 st.markdown("---")
                 st.subheader("💳 Evaluación del Nuevo Crédito")
@@ -154,7 +180,7 @@ elif opcion == "📋 Dictamen del Girador":
     if df_liquidez.empty:
         st.info("Carga la base de liquidez primero.")
     else:
-        ci_girador = st.text_input("Ingresá la Cédula del Militar para consultar/editar dictamen:", placeholder="Ej: 1093300").strip().replace('.', '')
+        ci_girador = st.text_input("Ingresá la Cédula del Militar:", placeholder="Ej: 5511820").strip().replace('.', '')
         
         if ci_girador:
             match = df_liquidez[df_liquidez['emp_ci'].apply(limpiar_ci) == ci_girador]
@@ -202,31 +228,38 @@ elif opcion == "📋 Dictamen del Girador":
                             }])
                             df_dictamenes = pd.concat([df_dictamenes, nuevo_dictamen], ignore_index=True)
                             guardar_dictamenes(df_dictamenes)
-                            st.success("✅ ¡Dictamen guardado con éxito! Se reflejará en la consulta principal.")
+                            st.success("✅ ¡Dictamen guardado con éxito!")
 
-# --- MÓDULO 3: CARGAR BASE MENSUAL ---
+# --- MÓDULO 3: GENERADOR DE FLYERS ---
+elif opcion == "🎨 Generador de Flyers (E-Commerce)":
+    st.subheader("🎨 Creador Inteligente de Flyers Publicitarios")
+    file_producto = st.file_uploader("1. Foto del Producto (JPG/PNG) *", type=["jpg", "jpeg", "png"])
+    file_logo = st.file_uploader("2. Logo de la Tienda (Opcional)", type=["jpg", "jpeg", "png"])
+    titulo_prod = st.text_input("Nombre / Título del Producto:", placeholder="Ej: Auriculares Bluetooth Pro")
+    caracteristicas_prod = st.text_area("Características principales:", placeholder="Cancelación de ruido\nBatería hasta 24hs")
+    precio_prod = st.text_input("Precio de Venta (Gs.):", placeholder="Ej: 180.000")
+    wa_prod = st.text_input("Número de WhatsApp:", placeholder="Ej: 0981 123 456")
+
+# --- MÓDULO 4: CARGAR BASE MENSUAL ---
 elif opcion == "📥 Cargar Base Mensual":
     st.subheader("📥 Cargar Base de Liquidez Mensual de Militares")
-    archivo = st.file_uploader("Seleccioná la planilla en formato Excel, CSV o PDF", type=["xlsx", "xls", "csv", "pdf"])
+    archivo = st.file_uploader("Seleccioná la planilla en formato Excel o CSV", type=["xlsx", "xls", "csv"])
     
     if archivo:
         if st.button("⚠️ Procesar e Importar Base de Datos Mensual"):
             try:
                 ext = archivo.name.lower().split('.')[-1]
-                if ext == 'pdf':
-                    df_cargado = extraer_datos_de_pdf(archivo)
-                elif ext == 'csv':
+                if ext == 'csv':
                     df_cargado = pd.read_csv(archivo, dtype=str)
                 else:
-                    xls = pd.ExcelFile(archivo)
-                    hoja = xls.sheet_names[3] if len(xls.sheet_names) >= 4 else xls.sheet_names[0]
-                    df_cargado = pd.read_excel(xls, sheet_name=hoja, dtype=str)
+                    df_cargado = cargar_excel_inteligente(archivo)
 
-                if df_cargado.empty:
+                df_normalizado = estandarizar_columnas_robusto(df_cargado)
+
+                if df_normalizado.empty:
                     st.warning("No se encontraron datos procesables en el archivo.")
                 else:
-                    guardar_liquidez(df_cargado)
-                    st.success(f"✅ ¡Base de datos importada correctamente! Total de registros procesados: {len(df_cargado):,}")
+                    guardar_liquidez(df_normalizado)
+                    st.success(f"✅ ¡Base de datos importada correctamente! Total de militares registrados: {len(df_normalizado):,}")
             except Exception as e:
                 st.error(f"Error al procesar el archivo: {e}")
-    
