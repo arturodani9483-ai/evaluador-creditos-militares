@@ -7,19 +7,20 @@ from fpdf import FPDF
 
 st.set_page_config(page_title="Evaluador de Créditos - FF.AA.", layout="wide", page_icon="🪖")
 
+EXCEL_PERMANENTE = "base_liquidez.xlsx"
 DB_LIQUIDEZ_FILE = "base_liquidez_militares.csv"
 DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
 
-# --- FUNCIONES DE LECTURA Y LIMPIEZA ---
-def cargar_excel_detectando_cabecera(file_bytes_or_path):
-    df_raw = pd.read_excel(file_bytes_or_path, header=None, dtype=str)
+# --- CARGA INTELIGENTE Y PERMANENTE ---
+def cargar_excel_detectando_cabecera(file_or_path):
+    df_raw = pd.read_excel(file_or_path, header=None, dtype=str)
     header_idx = 0
     for idx, row in df_raw.iterrows():
         row_str = " ".join([str(val).upper() for val in row.values if pd.notna(val)])
         if 'C.I' in row_str or 'CEDULA' in row_str or 'NOMBRE' in row_str:
             header_idx = idx
             break
-    return pd.read_excel(file_bytes_or_path, skiprows=header_idx, dtype=str)
+    return pd.read_excel(file_or_path, skiprows=header_idx, dtype=str)
 
 def estandarizar_columnas(df):
     cols_map = {}
@@ -80,18 +81,24 @@ def formato_guarani(val):
     except:
         return "0"
 
+@st.cache_data(ttl=2592000)
 def cargar_liquidez():
     if os.path.exists(DB_LIQUIDEZ_FILE):
         try:
-            df = pd.read_csv(DB_LIQUIDEZ_FILE, dtype=str)
-            if 'emp_ci' in df.columns:
-                return df
+            return pd.read_csv(DB_LIQUIDEZ_FILE, dtype=str)
+        except:
+            pass
+    if os.path.exists(EXCEL_PERMANENTE):
+        try:
+            df = cargar_excel_detectando_cabecera(EXCEL_PERMANENTE)
+            return estandarizar_columnas(df)
         except:
             pass
     return pd.DataFrame()
 
 def guardar_liquidez(df):
     df.to_csv(DB_LIQUIDEZ_FILE, index=False)
+    st.cache_data.clear()
 
 def cargar_dictamenes():
     if os.path.exists(DB_DICTAMENES_FILE):
@@ -101,22 +108,17 @@ def cargar_dictamenes():
 def guardar_dictamenes(df):
     df.to_csv(DB_DICTAMENES_FILE, index=False)
 
-# --- FUNCIÓN GENERADORA DE PDF FORMAL ---
-def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, liquido, limite, cuota, estado, obs=""):
+def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubilacion, tot_desc, liquido, limite, cuota, estado, obs=""):
     pdf = FPDF()
     pdf.add_page()
-    
-    # Encabezado Institucional
     pdf.set_font("Helvetica", "B", 14)
     pdf.cell(0, 10, "SISTEMA EVALUADOR DE CAPACIDAD CREDITICIA - FF.AA.", border=0, ln=True, align="C")
     pdf.set_font("Helvetica", "I", 10)
     pdf.cell(0, 6, f"Constancia Oficial de {tipo_reporte}", border=0, ln=True, align="C")
     pdf.ln(5)
-    
     pdf.line(10, 28, 200, 28)
     pdf.ln(5)
 
-    # Datos del Militar
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 8, "1. DATOS DEL MILITAR / SOCIO", ln=True)
     pdf.set_font("Helvetica", "", 10)
@@ -125,16 +127,16 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, liqu
     pdf.cell(100, 6, f"Unidad / Dependencia: {unidad}", ln=True)
     pdf.ln(4)
 
-    # Desglose Financiero
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 8, "2. RESUMEN DE LIQUIDEZ Y HABERES", ln=True)
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(100, 6, f"Sueldo Presupuestado: Gs. {formato_guarani(presupuestado)}")
+    pdf.cell(90, 6, f"Descuento Jubilación: Gs. {formato_guarani(jubilacion)}", ln=True)
+    pdf.cell(100, 6, f"Total Descuentos: Gs. {formato_guarani(tot_desc)}")
     pdf.cell(90, 6, f"Líquido Real Actual: Gs. {formato_guarani(liquido)}", ln=True)
     pdf.cell(100, 6, f"Límite Disponible (50%): Gs. {formato_guarani(limite)}", ln=True)
     pdf.ln(4)
 
-    # Dictamen / Evaluación
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 8, "3. EVALUACIÓN DE CRÉDITO Y DICTAMEN", ln=True)
     pdf.set_font("Helvetica", "", 10)
@@ -205,7 +207,10 @@ if opcion == "🔍 Simular / Consultar Crédito":
             
             total_descuentos = jubilacion + giraduria + desc_cf2 + judicial
             liquido_real = presupuestado - total_descuentos if total_descuentos > 0 else limpiar_monto(row.get('liquido', 0))
-            limite_50 = liquido_real / 2.0
+            
+            # CÁLCULO BASE REGLAMENTARIA: Presupuestado - Jubilación
+            base_imponible = presupuestado - jubilacion
+            limite_50 = base_imponible / 2.0
 
             st.markdown("---")
             st.success(f"👤 **Militar:** {nombre} | **C.I.:** {cedula_militar} | **Categoría:** {categoria}")
@@ -218,10 +223,11 @@ if opcion == "🔍 Simular / Consultar Crédito":
             c3.metric("Giraduría", f"Gs. {formato_guarani(giraduria)}")
             c4.metric("Descuento CF2", f"Gs. {formato_guarani(desc_cf2)}")
 
-            c5, c6, c7 = st.columns(3)
+            c5, c6, c7, c8 = st.columns(4)
             c5.metric("Judicial", f"Gs. {formato_guarani(judicial)}")
-            c6.metric("Líquido Real", f"Gs. {formato_guarani(liquido_real)}")
-            c7.metric("Límite Cuota (50%)", f"Gs. {formato_guarani(limite_50)}")
+            c6.metric("Total Descuentos", f"Gs. {formato_guarani(total_descuentos)}")
+            c7.metric("Líquido Real", f"Gs. {formato_guarani(liquido_real)}")
+            c8.metric("Límite Cuota (50%)", f"Gs. {formato_guarani(limite_50)}")
 
             st.markdown("---")
             st.subheader("💳 Evaluación del Nuevo Crédito")
@@ -235,9 +241,9 @@ if opcion == "🔍 Simular / Consultar Crédito":
                     st.success("✅ **CRÉDITO FACTIBLE (APROBADO)**")
                     st.write(f"La cuota entra dentro del límite del 50%. Margen disponible: **Gs. {formato_guarani(diferencia)}**")
                 else:
-                    estado_eval = "RECHAZADO (SUPERA EL 50% DE LIQUIDEZ)"
-                    st.error("⚠️ **RECHAZADO POR LÍMITE DE LIQUIDEZ DEL 50% - HABLAR CON SU GIRADURÍA**")
-                    st.write(f"La cuota supera el límite del 50% por **Gs. {formato_guarani(abs(diferencia))}**.")
+                    estado_eval = "RECHAZADO - HABLAR CON CF2"
+                    st.error("⚠️ **RECHAZADO POR LÍMITE DE LIQUIDEZ DEL 50% - HABLAR CON CF2**")
+                    st.write(f"La cuota supera el límite del 50% por **Gs. {formato_guarani(abs(diferencia))}**. Se debe consultar con CF2 por margen de beneficios.")
 
             dict_match = df_dictamenes[df_dictamenes['CEDULA'].apply(limpiar_ci) == cedula_militar]
             obs_dictamen = dict_match.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_match.empty else "Sin observaciones previas."
@@ -246,9 +252,8 @@ if opcion == "🔍 Simular / Consultar Crédito":
                 st.markdown("---")
                 st.warning(f"📌 **Dictamen Registrado por Giraduría:** {obs_dictamen}")
 
-            # BOTÓN PARA GENERAR Y DESCARGAR PDF
             st.markdown("---")
-            pdf_bytes = generar_pdf_constancia("Simulación de Crédito", nombre, cedula_militar, unidad, presupuestado, liquido_real, limite_50, cuota_solicitada, estado_eval, obs_dictamen)
+            pdf_bytes = generar_pdf_constancia("Simulación de Crédito", nombre, cedula_militar, unidad, presupuestado, jubilacion, total_descuentos, liquido_real, limite_50, cuota_solicitada, estado_eval, obs_dictamen)
             
             st.download_button(
                 label="📄 Descargar / Imprimir Constancia de Evaluación (PDF)",
@@ -292,9 +297,10 @@ elif opcion == "📋 Dictamen del Girador":
             unidad_g = row_g.get('UNIDAD', '-')
             
             presupuestado_g = limpiar_monto(row_g.get('presupuestado', 0))
-            tot_desc_g = limpiar_monto(row_g.get('jubilacion', 0)) + limpiar_monto(row_g.get('giraduria', 0)) + limpiar_monto(row_g.get('descuento_cf2', 0)) + limpiar_monto(row_g.get('judicial', 0))
+            jubilacion_g = limpiar_monto(row_g.get('jubilacion', 0))
+            tot_desc_g = jubilacion_g + limpiar_monto(row_g.get('giraduria', 0)) + limpiar_monto(row_g.get('descuento_cf2', 0)) + limpiar_monto(row_g.get('judicial', 0))
             liquido_real_g = presupuestado_g - tot_desc_g if tot_desc_g > 0 else limpiar_monto(row_g.get('liquido', 0))
-            limite_50_g = liquido_real_g / 2.0
+            limite_50_g = (presupuestado_g - jubilacion_g) / 2.0
 
             st.markdown("---")
             st.write("### Datos de Solo Lectura:")
@@ -313,7 +319,7 @@ elif opcion == "📋 Dictamen del Girador":
             with st.form("form_dictamen"):
                 st.subheader("📝 Editar Dictamen / Observación de Giraduría")
                 cuota_evaluando = st.number_input("Monto de Cuota Solicitada (Gs.):", min_value=0.0, step=50000.0, format="%.0f")
-                obs_girador = st.text_area("Observaciones / Respuesta del Girador:", value=obs_inicial, placeholder="Ej: Compra de deuda aprobada / Rechazado definitivo")
+                obs_girador = st.text_area("Observaciones / Respuesta del Girador:", value=obs_inicial, placeholder="Ej: Compra de deuda aprobada / Hablar con CF2")
                 
                 btn_guardar_dictamen = st.form_submit_button("💾 Guardar Dictamen")
 
@@ -332,9 +338,8 @@ elif opcion == "📋 Dictamen del Girador":
                         guardar_dictamenes(df_dictamenes)
                         st.success("✅ ¡Dictamen guardado con éxito!")
 
-            # BOTÓN DE IMPRESIÓN / PDF EN DICTAMENES
             st.markdown("---")
-            pdf_bytes_g = generar_pdf_constancia("Dictamen de Giraduría", nombre_g, ci_g, unidad_g, presupuestado_g, liquido_real_g, limite_50_g, cuota_evaluando, "EVALUADO POR GIRADOR", obs_inicial)
+            pdf_bytes_g = generar_pdf_constancia("Dictamen de Giraduría", nombre_g, ci_g, unidad_g, presupuestado_g, jubilacion_g, tot_desc_g, liquido_real_g, limite_50_g, cuota_evaluando, "EVALUADO POR GIRADOR", obs_inicial)
             
             st.download_button(
                 label="📄 Descargar / Imprimir Dictamen de Giraduría (PDF)",
