@@ -211,6 +211,10 @@ if opcion == "🔍 Simular / Consultar Crédito":
             # CÁLCULO BASE REGLAMENTARIA: Presupuestado - Jubilación
             base_imponible = presupuestado - jubilacion
             limite_50 = base_imponible / 2.0
+            
+            # Suma de deudas financieras (Giraduría + CF2 + Judicial)
+            total_deudas_actuales = giraduria + desc_cf2 + judicial
+            margen_deuda_restante = limite_50 - total_deudas_actuales
 
             st.markdown("---")
             st.success(f"👤 **Militar:** {nombre} | **C.I.:** {cedula_militar} | **Categoría:** {categoria}")
@@ -229,21 +233,30 @@ if opcion == "🔍 Simular / Consultar Crédito":
             c7.metric("Líquido Real", f"Gs. {formato_guarani(liquido_real)}")
             c8.metric("Límite Cuota (50%)", f"Gs. {formato_guarani(limite_50)}")
 
+            # DETECCIÓN DE EXCESO DE DEUDAS ACTUALES (ENFOCADO EN CF2 / GIRADURÍA)
             st.markdown("---")
+            if total_deudas_actuales > limite_50:
+                exceso_actual = total_deudas_actuales - limite_50
+                st.warning(
+                    f"⚠️ **ATENCIÓN: Los descuentos de deudas actuales (Gs. {formato_guarani(total_deudas_actuales)}) "
+                    f"ya superan el límite del 50% por Gs. {formato_guarani(exceso_actual)}.**\n\n"
+                    f"📌 **RECOMENDACIÓN:** Consultar disponibilidad con **CF2** para evaluar margen o beneficios especiales."
+                )
+            else:
+                st.info(f"💡 **Margen disponible para nuevos descuentos:** Gs. {formato_guarani(margen_deuda_restante)}")
+
             st.subheader("💳 Evaluación del Nuevo Crédito")
             cuota_solicitada = st.number_input("Ingresá el Monto de la Cuota para el Nuevo Crédito (Gs.):", min_value=0.0, step=50000.0, format="%.0f")
 
             estado_eval = "SIN EVALUAR"
             if cuota_solicitada > 0:
-                diferencia = limite_50 - cuota_solicitada
-                if cuota_solicitada <= limite_50:
+                if total_deudas_actuales + cuota_solicitada <= limite_50:
                     estado_eval = "APROBADO (DENTRO DEL MARGEN DEL 50%)"
                     st.success("✅ **CRÉDITO FACTIBLE (APROBADO)**")
-                    st.write(f"La cuota entra dentro del límite del 50%. Margen disponible: **Gs. {formato_guarani(diferencia)}**")
+                    st.write(f"La cuota entra dentro del límite del 50%. Margen restante: **Gs. {formato_guarani(margen_deuda_restante - cuota_solicitada)}**")
                 else:
-                    estado_eval = "RECHAZADO - HABLAR CON CF2"
-                    st.error("⚠️ **RECHAZADO POR LÍMITE DE LIQUIDEZ DEL 50% - HABLAR CON CF2**")
-                    st.write(f"La cuota supera el límite del 50% por **Gs. {formato_guarani(abs(diferencia))}**. Se debe consultar con CF2 por margen de beneficios.")
+                    estado_eval = "RECHAZADO - CONSULTAR DISPONIBILIDAD CON CF2"
+                    st.error("⚠️ **RECHAZADO POR LÍMITE DE LIQUIDEZ DEL 50% - CONSULTAR DISPONIBILIDAD CON CF2**")
 
             dict_match = df_dictamenes[df_dictamenes['CEDULA'].apply(limpiar_ci) == cedula_militar]
             obs_dictamen = dict_match.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_match.empty else "Sin observaciones previas."
@@ -319,7 +332,7 @@ elif opcion == "📋 Dictamen del Girador":
             with st.form("form_dictamen"):
                 st.subheader("📝 Editar Dictamen / Observación de Giraduría")
                 cuota_evaluando = st.number_input("Monto de Cuota Solicitada (Gs.):", min_value=0.0, step=50000.0, format="%.0f")
-                obs_girador = st.text_area("Observaciones / Respuesta del Girador:", value=obs_inicial, placeholder="Ej: Compra de deuda aprobada / Hablar con CF2")
+                obs_girador = st.text_area("Observaciones / Respuesta del Girador:", value=obs_inicial, placeholder="Ej: Compra de deuda aprobada / Consultar disponibilidad con CF2")
                 
                 btn_guardar_dictamen = st.form_submit_button("💾 Guardar Dictamen")
 
