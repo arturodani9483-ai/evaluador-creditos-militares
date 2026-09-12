@@ -7,11 +7,10 @@ from fpdf import FPDF
 
 st.set_page_config(page_title="Evaluador de Créditos - FF.AA.", layout="wide", page_icon="🪖")
 
-EXCEL_PERMANENTE = "base_liquidez.xlsx"
 DB_LIQUIDEZ_FILE = "base_liquidez_militares.csv"
 DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
 
-# --- CARGA INTELIGENTE Y PERMANENTE ---
+# --- CARGA AUTOMÁTICA DE CUALQUIER EXCEL EN EL REPOSITORIO ---
 def cargar_excel_detectando_cabecera(file_or_path):
     df_raw = pd.read_excel(file_or_path, header=None, dtype=str)
     header_idx = 0
@@ -83,17 +82,27 @@ def formato_guarani(val):
 
 @st.cache_data(ttl=2592000)
 def cargar_liquidez():
+    # 1. Revisa si hay CSV en disco local/repositorio
     if os.path.exists(DB_LIQUIDEZ_FILE):
         try:
-            return pd.read_csv(DB_LIQUIDEZ_FILE, dtype=str)
+            df = pd.read_csv(DB_LIQUIDEZ_FILE, dtype=str)
+            if 'emp_ci' in df.columns:
+                return df
         except:
             pass
-    if os.path.exists(EXCEL_PERMANENTE):
+            
+    # 2. Revisa automáticos todos los archivos Excel en el repositorio de GitHub
+    archivos_carpeta = os.listdir('.')
+    archivos_excel = [f for f in archivos_carpeta if f.lower().endswith(('.xlsx', '.xls')) and not f.startswith('~$')]
+    
+    if archivos_excel:
         try:
-            df = cargar_excel_detectando_cabecera(EXCEL_PERMANENTE)
+            excel_encontrado = archivos_excel[0]
+            df = cargar_excel_detectando_cabecera(excel_encontrado)
             return estandarizar_columnas(df)
-        except:
+        except Exception as e:
             pass
+
     return pd.DataFrame()
 
 def guardar_liquidez(df):
