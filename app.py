@@ -19,8 +19,11 @@ USUARIOS_AUTORIZADOS = {
     "martin": "mllamas"
 }
 
-# Usuarios autorizados a EDITAR / GUARDAR dictámenes de Giraduría
+# Permisos de edición de Dictamen
 USUARIOS_EDITORES_DICTAMEN = ["arthuro", "estela", "martin"]
+
+# Permiso exclusivo para Cargar Base Mensual (SOLO ARTHURO)
+USUARIO_ADMIN_BASE = "arthuro"
 
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
@@ -58,10 +61,11 @@ if not st.session_state["autenticado"]:
 # ==========================================
 usuario_actual = st.session_state['usuario_actual'].lower()
 es_editor = usuario_actual in USUARIOS_EDITORES_DICTAMEN
+es_admin_base = (usuario_actual == USUARIO_ADMIN_BASE)
 
 st.sidebar.markdown(f"👤 **Usuario:** `{usuario_actual.capitalize()}`")
 if not es_editor:
-    st.sidebar.caption("🔒 Acceso en modo consulta (sin permisos de edición de dictamen)")
+    st.sidebar.caption("🔒 Acceso en modo consulta de dictamen")
 
 if st.sidebar.button("🚪 Cerrar Sesión"):
     st.session_state["autenticado"] = False
@@ -397,7 +401,6 @@ elif opcion == "📋 Dictamen del Girador":
             dict_previo = df_dictamenes[df_dictamenes['CEDULA'].apply(limpiar_ci) == ci_g]
             obs_inicial = dict_previo.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_previo.empty else "Sin dictamen registrado."
 
-            # CONTROL DE EDICIÓN SEGÚN USUARIO
             if es_editor:
                 st.info("✍️ **Modo Edición Habilitado:** Podés agregar o modificar la observación del Girador.")
                 with st.form("form_dictamen"):
@@ -457,7 +460,14 @@ elif opcion == "🧮 Calculadora de Préstamos":
     col_c1, col_c2 = st.columns(2)
 
     with col_c1:
-        monto_capital = st.number_input("Monto Capital (Gs.):", min_value=0.0, value=10000000.0, step=500000.0, format="%.0f")
+        # Entrada de texto con formato automático de miles y valor inicial en "0"
+        monto_input_raw = st.text_input("Monto Capital (Gs.):", value="0", placeholder="Ej: 2.000.000")
+        monto_capital = limpiar_monto(monto_input_raw)
+        
+        # Muestra el monto formateado al instante abajo del campo
+        if monto_capital > 0:
+            st.caption(f"💵 **Monto ingresado:** Gs. {formato_guarani(monto_capital)}")
+
         plazo = st.number_input("Plazo (meses):", min_value=1, value=12, step=1)
         
         codigo_p = st.selectbox(
@@ -499,128 +509,136 @@ elif opcion == "🧮 Calculadora de Préstamos":
         else:
             comision_val = 0.0
 
-        comision = st.number_input("Comisión (Gs.):", value=comision_val, disabled=True)
+        st.text_input("Comisión (Gs.):", value=f"Gs. {formato_guarani(comision_val)}", disabled=True)
 
         fecha_desembolso = st.date_input("Fecha Desembolso:", value=datetime.now().date())
         fecha_primer_venc = st.date_input("Fecha 1er Vencimiento:", value=datetime.now().date() + timedelta(days=30))
 
     if st.button("🚀 Calcular Plan de Pagos", use_container_width=True):
-        capital_con_gastos = monto_capital + (monto_capital * (gastos_admin / 100.0)) + (monto_capital * (fondo_proteccion / 100.0)) + comision
-        diff_days = (fecha_primer_venc - fecha_desembolso).days
-        
-        plus = 0.0
-        if diff_days > 30:
-            plus = (capital_con_gastos * (tasa_interes / 100.0) / 365.0) * (diff_days - 30)
-
-        tasa_mensual = (tasa_interes / 100.0) / 12.0
-
-        if tasa_mensual > 0:
-            cuota = capital_con_gastos * (tasa_mensual * ((1 + tasa_mensual) ** plazo)) / (((1 + tasa_mensual) ** plazo) - 1)
+        if monto_capital <= 0:
+            st.error("Por favor ingresá un Monto Capital mayor a 0 para calcular el plan de pagos.")
         else:
-            cuota = capital_con_gastos / plazo
-
-        plan_pagos = []
-        saldo_restante = capital_con_gastos
-        total_pagar = 0.0
-
-        intereses_1 = saldo_restante * tasa_mensual
-        amort_1 = cuota - intereses_1
-        cuota_final_1 = cuota + plus
-        saldo_restante -= amort_1
-        total_pagar += cuota_final_1
-
-        plan_pagos.append({
-            'Nro. Cuota': 1,
-            'Fecha Vencimiento': fecha_primer_venc.strftime('%d/%m/%Y'),
-            'Cuota (Gs.)': formato_guarani(cuota_final_1),
-            'Amortización': formato_guarani(amort_1),
-            'Intereses': formato_guarani(intereses_1),
-            'Plus (Gs.)': formato_guarani(plus),
-            'Saldo (Gs.)': formato_guarani(saldo_restante),
-            'Ahorro (Gs.)': '0'
-        })
-
-        curr_venc = fecha_primer_venc
-        for i in range(2, plazo + 1):
-            next_m = curr_venc.month + 1
-            next_y = curr_venc.year
-            if next_m > 12:
-                next_m = 1
-                next_y += 1
+            capital_con_gastos = monto_capital + (monto_capital * (gastos_admin / 100.0)) + (monto_capital * (fondo_proteccion / 100.0)) + comision_val
+            diff_days = (fecha_primer_venc - fecha_desembolso).days
             
-            import calendar
-            max_d = calendar.monthrange(next_y, next_m)[1]
-            day = min(curr_venc.day, max_d)
-            curr_venc = datetime(next_y, next_m, day).date()
+            plus = 0.0
+            if diff_days > 30:
+                plus = (capital_con_gastos * (tasa_interes / 100.0) / 365.0) * (diff_days - 30)
 
-            intereses = saldo_restante * tasa_mensual
-            amort = cuota - intereses
-            saldo_restante -= amort
-            cuota_final = cuota
+            tasa_mensual = (tasa_interes / 100.0) / 12.0
 
-            if i == plazo:
-                if saldo_restante < 0:
-                    amort += saldo_restante
-                    cuota_final = amort + intereses
-                saldo_restante = 0.0
+            if tasa_mensual > 0:
+                cuota = capital_con_gastos * (tasa_mensual * ((1 + tasa_mensual) ** plazo)) / (((1 + tasa_mensual) ** plazo) - 1)
+            else:
+                cuota = capital_con_gastos / plazo
 
-            total_pagar += cuota_final
+            plan_pagos = []
+            saldo_restante = capital_con_gastos
+            total_pagar = 0.0
+
+            intereses_1 = saldo_restante * tasa_mensual
+            amort_1 = cuota - intereses_1
+            cuota_final_1 = cuota + plus
+            saldo_restante -= amort_1
+            total_pagar += cuota_final_1
 
             plan_pagos.append({
-                'Nro. Cuota': i,
-                'Fecha Vencimiento': curr_venc.strftime('%d/%m/%Y'),
-                'Cuota (Gs.)': formato_guarani(cuota_final),
-                'Amortización': formato_guarani(amort),
-                'Intereses': formato_guarani(intereses),
-                'Plus (Gs.)': '0',
+                'Nro. Cuota': 1,
+                'Fecha Vencimiento': fecha_primer_venc.strftime('%d/%m/%Y'),
+                'Cuota (Gs.)': formato_guarani(cuota_final_1),
+                'Amortización': formato_guarani(amort_1),
+                'Intereses': formato_guarani(intereses_1),
+                'Plus (Gs.)': formato_guarani(plus),
                 'Saldo (Gs.)': formato_guarani(saldo_restante),
                 'Ahorro (Gs.)': '0'
             })
 
-        df_plan = pd.DataFrame(plan_pagos)
+            curr_venc = fecha_primer_venc
+            for i in range(2, plazo + 1):
+                next_m = curr_venc.month + 1
+                next_y = curr_venc.year
+                if next_m > 12:
+                    next_m = 1
+                    next_y += 1
+                
+                import calendar
+                max_d = calendar.monthrange(next_y, next_m)[1]
+                day = min(curr_venc.day, max_d)
+                curr_venc = datetime(next_y, next_m, day).date()
 
-        st.markdown("---")
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Capital con Gastos", f"Gs. {formato_guarani(capital_con_gastos)}")
-        m2.metric("Plus Primera Cuota", f"Gs. {formato_guarani(plus)}")
-        m3.metric("Total a Pagar", f"Gs. {formato_guarani(total_pagar)}")
+                intereses = saldo_restante * tasa_mensual
+                amort = cuota - intereses
+                saldo_restante -= amort
+                cuota_final = cuota
 
-        st.subheader("📋 Tabla Amortización de Pagos")
-        st.dataframe(df_plan, use_container_width=True)
+                if i == plazo:
+                    if saldo_restante < 0:
+                        amort += saldo_restante
+                        cuota_final = amort + intereses
+                    saldo_restante = 0.0
 
-        out_plan = io.BytesIO()
-        with pd.ExcelWriter(out_plan, engine='openpyxl') as writer:
-            df_plan.to_excel(writer, sheet_name='Simulacion_Prestamo', index=False)
-        
-        st.download_button(
-            label="📥 Descargar Simulación de Préstamo (Excel)",
-            data=out_plan.getvalue(),
-            file_name=f"Simulacion_Prestamo_{int(monto_capital)}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
+                total_pagar += cuota_final
 
-# --- MÓDULO 4: CARGAR BASE MENSUAL ---
+                plan_pagos.append({
+                    'Nro. Cuota': i,
+                    'Fecha Vencimiento': curr_venc.strftime('%d/%m/%Y'),
+                    'Cuota (Gs.)': formato_guarani(cuota_final),
+                    'Amortización': formato_guarani(amort),
+                    'Intereses': formato_guarani(intereses),
+                    'Plus (Gs.)': '0',
+                    'Saldo (Gs.)': formato_guarani(saldo_restante),
+                    'Ahorro (Gs.)': '0'
+                })
+
+            df_plan = pd.DataFrame(plan_pagos)
+
+            st.markdown("---")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Capital con Gastos", f"Gs. {formato_guarani(capital_con_gastos)}")
+            m2.metric("Plus Primera Cuota", f"Gs. {formato_guarani(plus)}")
+            m3.metric("Total a Pagar", f"Gs. {formato_guarani(total_pagar)}")
+
+            st.subheader("📋 Tabla Amortización de Pagos")
+            st.dataframe(df_plan, use_container_width=True)
+
+            out_plan = io.BytesIO()
+            with pd.ExcelWriter(out_plan, engine='openpyxl') as writer:
+                df_plan.to_excel(writer, sheet_name='Simulacion_Prestamo', index=False)
+            
+            st.download_button(
+                label="📥 Descargar Simulación de Préstamo (Excel)",
+                data=out_plan.getvalue(),
+                file_name=f"Simulacion_Prestamo_{int(monto_capital)}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+
+# --- MÓDULO 4: CARGAR BASE MENSUAL (EXCLUSIVO ADMINISTRADOR) ---
 elif opcion == "📥 Cargar Base Mensual":
     st.subheader("📥 Cargar Base de Liquidez Mensual de Militares")
-    archivo = st.file_uploader("Seleccioná la planilla en formato Excel o CSV", type=["xlsx", "xls", "csv"])
     
-    if archivo:
-        if st.button("⚠️ Procesar e Importar Base de Datos Mensual"):
-            try:
-                ext = archivo.name.lower().split('.')[-1]
-                if ext == 'csv':
-                    df_cargado = pd.read_csv(archivo, dtype=str)
-                else:
-                    df_cargado = cargar_excel_detectando_cabecera(archivo)
+    if not es_admin_base:
+        st.error("🔒 **Acceso denegado:** Este módulo es reservado únicamente para el usuario Administrador (`Arthuro`).")
+    else:
+        st.success("🔑 **Permisos de Administrador Verificados:** Podés subir o actualizar la base mensual.")
+        archivo = st.file_uploader("Seleccioná la planilla en formato Excel o CSV", type=["xlsx", "xls", "csv"])
+        
+        if archivo:
+            if st.button("⚠️ Procesar e Importar Base de Datos Mensual"):
+                try:
+                    ext = archivo.name.lower().split('.')[-1]
+                    if ext == 'csv':
+                        df_cargado = pd.read_csv(archivo, dtype=str)
+                    else:
+                        df_cargado = cargar_excel_detectando_cabecera(archivo)
 
-                df_normalizado = estandarizar_columnas(df_cargado)
+                    df_normalizado = estandarizar_columnas(df_cargado)
 
-                if df_normalizado.empty:
-                    st.warning("No se encontraron datos procesables en el archivo.")
-                else:
-                    guardar_liquidez(df_normalizado)
-                    st.success(f"✅ ¡Base de datos importada correctamente! Total de militares registrados: {len(df_normalizado):,}")
-                    st.rerun()
-            except Exception as e:
-                st.error(f"Error al procesar el archivo: {e}")
+                    if df_normalizado.empty:
+                        st.warning("No se encontraron datos procesables en el archivo.")
+                    else:
+                        guardar_liquidez(df_normalizado)
+                        st.success(f"✅ ¡Base de datos importada correctamente! Total de militares registrados: {len(df_normalizado):,}")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Error al procesar el archivo: {e}")
