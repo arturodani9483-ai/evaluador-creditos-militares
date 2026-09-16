@@ -6,19 +6,6 @@ import re
 from datetime import datetime, timedelta
 from fpdf import FPDF
 
-# Librerías para lectura de PDF
-try:
-    import pdfplumber
-    HAS_PDFPLUMBER = True
-except ImportError:
-    HAS_PDFPLUMBER = False
-
-try:
-    import pypdf
-    HAS_PYPDF = True
-except ImportError:
-    HAS_PYPDF = False
-
 st.set_page_config(
     page_title="SICOC - Sistema Integrado de Control Operativo y Crediticio", 
     layout="wide", 
@@ -51,16 +38,6 @@ if "total_monto_auditoria" not in st.session_state:
     st.session_state["total_monto_auditoria"] = 0.0
 if "total_beneficiarios_auditoria" not in st.session_state:
     st.session_state["total_beneficiarios_auditoria"] = 0
-
-# Variables de estado para los extractos procesados
-if "saldo_capital_ext" not in st.session_state:
-    st.session_state["saldo_capital_ext"] = 0.0
-if "interes_devengado_ext" not in st.session_state:
-    st.session_state["interes_devengado_ext"] = 0.0
-if "mora_ext" not in st.session_state:
-    st.session_state["mora_ext"] = 0.0
-if "puni_ext" not in st.session_state:
-    st.session_state["puni_ext"] = 0.0
 
 def pantalla_login():
     st.markdown("# 🏛️ SICOC")
@@ -120,7 +97,7 @@ opcion = st.sidebar.radio("Navegación de Módulos:", [
     "🔍 Evaluador de Liquidez (FF.AA.)", 
     "📋 Dictamen del Girador",
     "🛡️ Auditoría y Cruce de Planillas",
-    "🧮 Calculadora y Estado de Cuenta",
+    "🧮 Calculadora de Préstamos",
     "📥 Cargar Base Mensual"
 ])
 
@@ -269,64 +246,6 @@ def cargar_archivo_universal(file_uploader):
         except:
             file_uploader.seek(0)
             return pd.read_csv(file_uploader, dtype=str, sep=None, engine='python', encoding='latin1')
-
-def extraer_texto_pdf(pdf_file):
-    texto = ""
-    pdf_file.seek(0)
-    if HAS_PDFPLUMBER:
-        try:
-            with pdfplumber.open(pdf_file) as pdf:
-                for page in pdf.pages:
-                    texto += (page.extract_text() or "") + "\n"
-            return texto
-        except:
-            pass
-            
-    pdf_file.seek(0)
-    if HAS_PYPDF:
-        try:
-            reader = pypdf.PdfReader(pdf_file)
-            for page in reader.pages:
-                texto += (page.extract_text() or "") + "\n"
-            return texto
-        except:
-            pass
-            
-    return texto
-
-def procesar_extracto_cooperativa(texto_pdf):
-    s_cap, i_dev, i_mor, i_pun = 0.0, 0.0, 0.0, 0.0
-    
-    # 1. Saldo Capital e Interes Devengado en pie de extracto
-    match_saldo = re.search(r'SALDO\s*:\s*([\d\.]+)\s+([\d\.]+)', texto_pdf)
-    if match_saldo:
-        s_cap = float(match_saldo.group(1).replace('.', ''))
-        i_dev = float(match_saldo.group(2).replace('.', ''))
-    else:
-        # Alternativa de búsqueda si hay saltos de línea
-        lineas = texto_pdf.split('\n')
-        for idx, line in enumerate(lineas):
-            if 'SALDO' in line.upper():
-                bloque = " ".join(lineas[idx:idx+3])
-                nums = re.findall(r'\b\d{1,3}(?:\.\d{3})+\b', bloque)
-                if len(nums) >= 1:
-                    s_cap = float(nums[0].replace('.', ''))
-                if len(nums) >= 2:
-                    i_dev = float(nums[1].replace('.', ''))
-
-    # 2. Moratorios y Punitorios de cuotas pendientes con atraso
-    for line in texto_pdf.split('\n'):
-        if re.search(r'\b\d{2}/\d{2}/\d{2}\b', line):
-            importes = re.findall(r'\b\d{1,3}(?:\.\d{3})+\b', line)
-            if 'PP' in line or len(importes) > 3:
-                if len(importes) == 6:
-                    i_mor += float(importes[3].replace('.', ''))
-                    i_pun += float(importes[4].replace('.', ''))
-                elif len(importes) == 5:
-                    i_mor += float(importes[2].replace('.', ''))
-                    i_pun += float(importes[3].replace('.', ''))
-
-    return s_cap, i_dev, i_mor, i_pun
 
 @st.cache_data(ttl=2592000)
 def cargar_liquidez():
@@ -1032,261 +951,177 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
                 st.button("📄 Descargar Nota Oficial de Presentación en PDF (.PDF MEF)", disabled=True, use_container_width=True)
 
 # ==========================================
-# 🧮 MÓDULO 4: CALCULADORA Y ESTADO DE CUENTA DE PRÉSTAMOS
+# 🧮 MÓDULO 4: CALCULADORA FINANCIERA DE PRÉSTAMOS
 # ==========================================
-elif opcion == "🧮 Calculadora y Estado de Cuenta":
-    st.subheader("🧮 Módulo de Préstamos y Estados de Cuenta")
+elif opcion == "🧮 Calculadora de Préstamos":
+    st.subheader("🧮 Calculadora Financiera y Simulador de Préstamos")
     
-    sub_tab1, sub_tab2 = st.tabs(["🧮 Calculadora Financiera de Préstamos", "📑 Estado de Cuenta de Créditos (PDF INFOCOOP)"])
+    tipos_prestamo = {
+        '1': {'nombre': 'Préstamo Ordinario', 'comision': 0},
+        '19': {'nombre': 'Préstamo Cumpleaños', 'comision': 0},
+        '9': {'nombre': 'Consumo Electrodoméstico', 'comision': '5%'},
+        '71': {'nombre': 'Refinanciación Especial', 'comision': 100000},
+        '21': {'nombre': 'Consumo Celular', 'comision': '5%'},
+        '8': {'nombre': 'Premium', 'comision': 0},
+        '65': {'nombre': 'Crédito Aniversario', 'comision': 0}, 
+        '18': {'nombre': 'Credito Amigo', 'comision': 0},
+        '78': {'nombre': 'Crédito Vehículo', 'comision': '2%'}, 
+        '33': {'nombre': 'Prestamo Jubilados', 'comision': 0}
+    }
 
-    with sub_tab1:
-        tipos_prestamo = {
-            '1': {'nombre': 'Préstamo Ordinario', 'comision': 0},
-            '19': {'nombre': 'Préstamo Cumpleaños', 'comision': 0},
-            '9': {'nombre': 'Consumo Electrodoméstico', 'comision': '5%'},
-            '71': {'nombre': 'Refinanciación Especial', 'comision': 100000},
-            '21': {'nombre': 'Consumo Celular', 'comision': '5%'},
-            '8': {'nombre': 'Premium', 'comision': 0},
-            '65': {'nombre': 'Crédito Aniversario', 'comision': 0}, 
-            '18': {'nombre': 'Credito Amigo', 'comision': 0},
-            '78': {'nombre': 'Crédito Vehículo', 'comision': '2%'}, 
-            '33': {'nombre': 'Prestamo Jubilados', 'comision': 0}
-        }
+    col_c1, col_c2 = st.columns(2)
 
-        col_c1, col_c2 = st.columns(2)
+    with col_c1:
+        monto_input_raw = st.text_input("Monto Capital (Gs.):", value="0", placeholder="Ej: 2.000.000")
+        monto_capital = limpiar_monto(monto_input_raw)
+        
+        if monto_capital > 0:
+            st.caption(f"💵 **Monto ingresado:** Gs. {formato_guarani(monto_capital)}")
 
-        with col_c1:
-            monto_input_raw = st.text_input("Monto Capital (Gs.):", value="0", placeholder="Ej: 2.000.000")
-            monto_capital = limpiar_monto(monto_input_raw)
-            
-            if monto_capital > 0:
-                st.caption(f"💵 **Monto ingresado:** Gs. {formato_guarani(monto_capital)}")
+        plazo = st.number_input("Plazo (meses):", min_value=1, value=12, step=1)
+        
+        codigo_p = st.selectbox(
+            "Código / Tipo de Préstamo:", 
+            options=list(tipos_prestamo.keys()),
+            format_func=lambda x: f"Código {x}: {tipos_prestamo[x]['nombre']}"
+        )
+        nombre_p = tipos_prestamo[codigo_p]['nombre']
 
-            plazo = st.number_input("Plazo (meses):", min_value=1, value=12, step=1)
-            
-            codigo_p = st.selectbox(
-                "Código / Tipo de Préstamo:", 
-                options=list(tipos_prestamo.keys()),
-                format_func=lambda x: f"Código {x}: {tipos_prestamo[x]['nombre']}"
-            )
-            nombre_p = tipos_prestamo[codigo_p]['nombre']
-
+        tasa_auto = 20.0
+        if nombre_p == 'Préstamo Ordinario':
+            tasa_auto = 26.0
+        elif nombre_p == 'Premium':
+            tasa_auto = 24.0
+        elif nombre_p in ['Préstamo Cumpleaños', 'Consumo Electrodoméstico', 'Consumo Celular', 'Credito Amigo']:
             tasa_auto = 20.0
-            if nombre_p == 'Préstamo Ordinario':
-                tasa_auto = 26.0
-            elif nombre_p == 'Premium':
-                tasa_auto = 24.0
-            elif nombre_p in ['Préstamo Cumpleaños', 'Consumo Electrodoméstico', 'Consumo Celular', 'Credito Amigo']:
-                tasa_auto = 20.0
-            elif nombre_p == 'Crédito Aniversario':
-                if 1 <= plazo <= 12: tasa_auto = 9.0
-                elif 13 <= plazo <= 18: tasa_auto = 12.0
-                elif 19 <= plazo <= 24: tasa_auto = 14.0
-                elif 25 <= plazo <= 36: tasa_auto = 16.0
-            elif nombre_p == 'Crédito Vehículo':
-                tasa_auto = 18.0 if 0 < plazo <= 48 else 20.0
-            elif nombre_p == 'Refinanciación Especial':
-                tasa_auto = 18.0
+        elif nombre_p == 'Crédito Aniversario':
+            if 1 <= plazo <= 12: tasa_auto = 9.0
+            elif 13 <= plazo <= 18: tasa_auto = 12.0
+            elif 19 <= plazo <= 24: tasa_auto = 14.0
+            elif 25 <= plazo <= 36: tasa_auto = 16.0
+        elif nombre_p == 'Crédito Vehículo':
+            tasa_auto = 18.0 if 0 < plazo <= 48 else 20.0
+        elif nombre_p == 'Refinanciación Especial':
+            tasa_auto = 18.0
 
-            tasa_interes = st.number_input("Tasa de Interés Anual (%):", value=tasa_auto, step=0.5)
+        tasa_interes = st.number_input("Tasa de Interés Anual (%):", value=tasa_auto, step=0.5)
 
-        with col_c2:
-            gastos_admin = st.number_input("Gastos Administrativos (%):", value=2.5, step=0.1)
-            fondo_proteccion = st.number_input("Fondo de Protección (%):", value=1.0, step=0.1)
+    with col_c2:
+        gastos_admin = st.number_input("Gastos Administrativos (%):", value=2.5, step=0.1)
+        fondo_proteccion = st.number_input("Fondo de Protección (%):", value=1.0, step=0.1)
 
-            com_def = tipos_prestamo[codigo_p]['comision']
-            if isinstance(com_def, (int, float)):
-                comision_val = float(com_def)
-            elif isinstance(com_def, str) and com_def.endswith('%'):
-                pct = float(com_def.replace('%', '')) / 100.0
-                comision_val = monto_capital * pct
+        com_def = tipos_prestamo[codigo_p]['comision']
+        if isinstance(com_def, (int, float)):
+            comision_val = float(com_def)
+        elif isinstance(com_def, str) and com_def.endswith('%'):
+            pct = float(com_def.replace('%', '')) / 100.0
+            comision_val = monto_capital * pct
+        else:
+            comision_val = 0.0
+
+        st.text_input("Comisión (Gs.):", value=f"Gs. {formato_guarani(comision_val)}", disabled=True)
+
+        fecha_desembolso = st.date_input("Fecha Desembolso:", value=datetime.now().date())
+        fecha_primer_venc = st.date_input("Fecha 1er Vencimiento:", value=datetime.now().date() + timedelta(days=30))
+
+    if st.button("🚀 Calcular Plan de Pagos", use_container_width=True):
+        if monto_capital <= 0:
+            st.error("Por favor ingresá un Monto Capital mayor a 0 para calcular el plan de pagos.")
+        else:
+            capital_con_gastos = monto_capital + (monto_capital * (gastos_admin / 100.0)) + (monto_capital * (fondo_proteccion / 100.0)) + comision_val
+            diff_days = (fecha_primer_venc - fecha_desembolso).days
+            
+            plus = 0.0
+            if diff_days > 30:
+                plus = (capital_con_gastos * (tasa_interes / 100.0) / 365.0) * (diff_days - 30)
+
+            tasa_mensual = (tasa_interes / 100.0) / 12.0
+
+            if tasa_mensual > 0:
+                cuota = capital_con_gastos * (tasa_mensual * ((1 + tasa_mensual) ** plazo)) / (((1 + tasa_mensual) ** plazo) - 1)
             else:
-                comision_val = 0.0
+                cuota = capital_con_gastos / plazo
 
-            st.text_input("Comisión (Gs.):", value=f"Gs. {formato_guarani(comision_val)}", disabled=True)
+            plan_pagos = []
+            saldo_restante = capital_con_gastos
+            total_pagar = 0.0
 
-            fecha_desembolso = st.date_input("Fecha Desembolso:", value=datetime.now().date())
-            fecha_primer_venc = st.date_input("Fecha 1er Vencimiento:", value=datetime.now().date() + timedelta(days=30))
+            intereses_1 = saldo_restante * tasa_mensual
+            amort_1 = cuota - intereses_1
+            cuota_final_1 = cuota + plus
+            saldo_restante -= amort_1
+            total_pagar += cuota_final_1
 
-        if st.button("🚀 Calcular Plan de Pagos", use_container_width=True):
-            if monto_capital <= 0:
-                st.error("Por favor ingresá un Monto Capital mayor a 0 para calcular el plan de pagos.")
-            else:
-                capital_con_gastos = monto_capital + (monto_capital * (gastos_admin / 100.0)) + (monto_capital * (fondo_proteccion / 100.0)) + comision_val
-                diff_days = (fecha_primer_venc - fecha_desembolso).days
+            plan_pagos.append({
+                'Nro. Cuota': 1,
+                'Fecha Vencimiento': fecha_primer_venc.strftime('%d/%m/%Y'),
+                'Cuota (Gs.)': formato_guarani(cuota_final_1),
+                'Amortización': formato_guarani(amort_1),
+                'Intereses': formato_guarani(intereses_1),
+                'Plus (Gs.)': formato_guarani(plus),
+                'Saldo (Gs.)': formato_guarani(saldo_restante),
+                'Ahorro (Gs.)': '0'
+            })
+
+            curr_venc = fecha_primer_venc
+            for i in range(2, plazo + 1):
+                next_m = curr_venc.month + 1
+                next_y = curr_venc.year
+                if next_m > 12:
+                    next_m = 1
+                    next_y += 1
                 
-                plus = 0.0
-                if diff_days > 30:
-                    plus = (capital_con_gastos * (tasa_interes / 100.0) / 365.0) * (diff_days - 30)
+                import calendar
+                max_d = calendar.monthrange(next_y, next_m)[1]
+                day = min(curr_venc.day, max_d)
+                curr_venc = datetime(next_y, next_m, day).date()
 
-                tasa_mensual = (tasa_interes / 100.0) / 12.0
+                intereses = saldo_restante * tasa_mensual
+                amort = cuota - intereses
+                saldo_restante -= amort
+                cuota_final = cuota
 
-                if tasa_mensual > 0:
-                    cuota = capital_con_gastos * (tasa_mensual * ((1 + tasa_mensual) ** plazo)) / (((1 + tasa_mensual) ** plazo) - 1)
-                else:
-                    cuota = capital_con_gastos / plazo
+                if i == plazo:
+                    if saldo_restante < 0:
+                        amort += saldo_restante
+                        cuota_final = amort + intereses
+                    saldo_restante = 0.0
 
-                plan_pagos = []
-                saldo_restante = capital_con_gastos
-                total_pagar = 0.0
-
-                intereses_1 = saldo_restante * tasa_mensual
-                amort_1 = cuota - intereses_1
-                cuota_final_1 = cuota + plus
-                saldo_restante -= amort_1
-                total_pagar += cuota_final_1
+                total_pagar += cuota_final
 
                 plan_pagos.append({
-                    'Nro. Cuota': 1,
-                    'Fecha Vencimiento': fecha_primer_venc.strftime('%d/%m/%Y'),
-                    'Cuota (Gs.)': formato_guarani(cuota_final_1),
-                    'Amortización': formato_guarani(amort_1),
-                    'Intereses': formato_guarani(intereses_1),
-                    'Plus (Gs.)': formato_guarani(plus),
+                    'Nro. Cuota': i,
+                    'Fecha Vencimiento': curr_venc.strftime('%d/%m/%Y'),
+                    'Cuota (Gs.)': formato_guarani(cuota_final),
+                    'Amortización': formato_guarani(amort),
+                    'Intereses': formato_guarani(intereses),
+                    'Plus (Gs.)': '0',
                     'Saldo (Gs.)': formato_guarani(saldo_restante),
                     'Ahorro (Gs.)': '0'
                 })
 
-                curr_venc = fecha_primer_venc
-                for i in range(2, plazo + 1):
-                    next_m = curr_venc.month + 1
-                    next_y = curr_venc.year
-                    if next_m > 12:
-                        next_m = 1
-                        next_y += 1
-                    
-                    import calendar
-                    max_d = calendar.monthrange(next_y, next_m)[1]
-                    day = min(curr_venc.day, max_d)
-                    curr_venc = datetime(next_y, next_m, day).date()
+            df_plan = pd.DataFrame(plan_pagos)
 
-                    intereses = saldo_restante * tasa_mensual
-                    amort = cuota - intereses
-                    saldo_restante -= amort
-                    cuota_final = cuota
+            st.markdown("---")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Capital con Gastos", f"Gs. {formato_guarani(capital_con_gastos)}")
+            m2.metric("Plus Primera Cuota", f"Gs. {formato_guarani(plus)}")
+            m3.metric("Total a Pagar", f"Gs. {formato_guarani(total_pagar)}")
 
-                    if i == plazo:
-                        if saldo_restante < 0:
-                            amort += saldo_restante
-                            cuota_final = amort + intereses
-                        saldo_restante = 0.0
+            st.subheader("📋 Tabla Amortización de Pagos")
+            st.dataframe(df_plan, use_container_width=True)
 
-                    total_pagar += cuota_final
-
-                    plan_pagos.append({
-                        'Nro. Cuota': i,
-                        'Fecha Vencimiento': curr_venc.strftime('%d/%m/%Y'),
-                        'Cuota (Gs.)': formato_guarani(cuota_final),
-                        'Amortización': formato_guarani(amort),
-                        'Intereses': formato_guarani(intereses),
-                        'Plus (Gs.)': '0',
-                        'Saldo (Gs.)': formato_guarani(saldo_restante),
-                        'Ahorro (Gs.)': '0'
-                    })
-
-                df_plan = pd.DataFrame(plan_pagos)
-
-                st.markdown("---")
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Capital con Gastos", f"Gs. {formato_guarani(capital_con_gastos)}")
-                m2.metric("Plus Primera Cuota", f"Gs. {formato_guarani(plus)}")
-                m3.metric("Total a Pagar", f"Gs. {formato_guarani(total_pagar)}")
-
-                st.subheader("📋 Tabla Amortización de Pagos")
-                st.dataframe(df_plan, use_container_width=True)
-
-                out_plan = io.BytesIO()
-                with pd.ExcelWriter(out_plan, engine='openpyxl') as writer:
-                    df_plan.to_excel(writer, sheet_name='Simulacion_Prestamo', index=False)
-                
-                st.download_button(
-                    label="📥 Descargar Simulación de Préstamo (Excel)",
-                    data=out_plan.getvalue(),
-                    file_name=f"Simulacion_Prestamo_{int(monto_capital)}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
-                )
-
-    with sub_tab2:
-        st.subheader("📑 Estado de Cuenta de Créditos y Liquidación (INFOCOOP)")
-        st.info("Subí uno o más extractos en PDF y hacé clic en 'Procesar Extracto(s)' para cargar los valores automáticamente.")
-
-        files_extracto = st.file_uploader("📥 Cargar Extracto(s) INFOCOOP (.pdf)", type=["pdf"], accept_multiple_files=True)
-
-        if files_extracto:
-            if st.button("⚙️ Procesar Extracto(s)", use_container_width=True):
-                s_cap_tot, i_dev_tot, i_mor_tot, i_pun_tot = 0.0, 0.0, 0.0, 0.0
-                
-                for pdf_f in files_extracto:
-                    texto_pdf = extraer_texto_pdf(pdf_f)
-                    c, d, m, p = procesar_extracto_cooperativa(texto_pdf)
-                    s_cap_tot += c
-                    i_dev_tot += d
-                    i_mor_tot += m
-                    i_pun_tot += p
-
-                st.session_state["saldo_capital_ext"] = s_cap_tot
-                st.session_state["interes_devengado_ext"] = i_dev_tot
-                st.session_state["mora_ext"] = i_mor_tot
-                st.session_state["puni_ext"] = i_pun_tot
-                
-                if s_cap_tot == 0 and i_dev_tot == 0 and i_mor_tot == 0 and i_pun_tot == 0:
-                    st.warning("⚠️ No se pudieron extraer datos numéricos automáticamente. Podés cargarlos manualmente en los casilleros de abajo.")
-                else:
-                    st.success(f"✅ Extracto(s) procesado(s) exitosamente! Saldo Capital: Gs. {formato_guarani(s_cap_tot)}")
-                st.rerun()
-
-        st.markdown("---")
-        st.markdown("### 💳 1. Deuda de Crédito(s)")
-        
-        col_v1, col_v2, col_v3, col_v4 = st.columns(4)
-        with col_v1:
-            v_saldo = st.number_input("Saldo de Capital (Gs.):", value=st.session_state["saldo_capital_ext"], step=50000.0, format="%.0f")
-        with col_v2:
-            v_interes_devengado = st.number_input("Intereses Préstamos (Gs.):", value=st.session_state["interes_devengado_ext"], step=10000.0, format="%.0f", help="Suma de intereses devengados pendientes hasta el mes actual de liquidación.")
-        with col_v3:
-            v_mora = st.number_input("Interés Moratorio (Gs.):", value=st.session_state["mora_ext"], step=1000.0, format="%.0f")
-        with col_v4:
-            v_puni = st.number_input("Interés Punitorio (Gs.):", value=st.session_state["puni_ext"], step=1000.0, format="%.0f")
-
-        st.markdown("---")
-        st.markdown("### 🏛️ 2. Cuotas Sociales Pendientes")
-
-        col_s1, col_s2, col_s3, col_s4 = st.columns(4)
-        with col_s1:
-            soc_aporte = st.number_input("Aporte (Gs.):", value=0.0, step=5000.0, format="%.0f")
-        with col_s2:
-            soc_mantenimiento = st.number_input("Mantenimiento (Gs.):", value=0.0, step=5000.0, format="%.0f")
-        with col_s3:
-            soc_solidaridad = st.number_input("Solidaridad (Gs.):", value=0.0, step=5000.0, format="%.0f")
-        with col_s4:
-            soc_sorteo = st.number_input("Sorteo (Gs.):", value=0.0, step=5000.0, format="%.0f")
-
-        subtotal_sociales = soc_aporte + soc_mantenimiento + soc_solidaridad + soc_sorteo
-        subtotal_creditos = v_saldo + v_interes_devengado + v_mora + v_puni
-        total_liquidacion_general = subtotal_creditos + subtotal_sociales
-
-        st.markdown("---")
-        st.markdown("### 📊 Resumen Total Consolidado a Pagar / Cancelar")
-        
-        k1, k2, k3, k4 = st.columns(4)
-        k1.metric("Subtotal Créditos", f"Gs. {formato_guarani(subtotal_creditos)}")
-        k2.metric("Subtotal Cuotas Sociales", f"Gs. {formato_guarani(subtotal_sociales)}")
-        k3.metric("Intereses + Moras", f"Gs. {formato_guarani(v_interes_devengado + v_mora + v_puni)}")
-        k4.metric("💰 TOTAL A PAGAR SOCIO", f"Gs. {formato_guarani(total_liquidacion_general)}")
-
-        df_facturacion = pd.DataFrame([
-            {"Concepto / Rubro": "Crédito Principal (Saldo Capital)", "Monto Deuda (Gs.)": formato_guarani(v_saldo)},
-            {"Concepto / Rubro": "INTERESES DE PRESTAMOS", "Monto Deuda (Gs.)": formato_guarani(v_interes_devengado)},
-            {"Concepto / Rubro": "INTERES MORATORIO COBRADO S/ PRESTA", "Monto Deuda (Gs.)": formato_guarani(v_mora)},
-            {"Concepto / Rubro": "INTERES PUNITORIO COBRADO S/ PRESTA", "Monto Deuda (Gs.)": formato_guarani(v_puni)},
-            {"Concepto / Rubro": "Cuota Social - Aporte", "Monto Deuda (Gs.)": formato_guarani(soc_aporte)},
-            {"Concepto / Rubro": "Cuota Social - Mantenimiento", "Monto Deuda (Gs.)": formato_guarani(soc_mantenimiento)},
-            {"Concepto / Rubro": "Cuota Social - Solidaridad", "Monto Deuda (Gs.)": formato_guarani(soc_solidaridad)},
-            {"Concepto / Rubro": "Cuota Social - Sorteo", "Monto Deuda (Gs.)": formato_guarani(soc_sorteo)},
-        ])
-        
-        st.table(df_facturacion)
+            out_plan = io.BytesIO()
+            with pd.ExcelWriter(out_plan, engine='openpyxl') as writer:
+                df_plan.to_excel(writer, sheet_name='Simulacion_Prestamo', index=False)
+            
+            st.download_button(
+                label="📥 Descargar Simulación de Préstamo (Excel)",
+                data=out_plan.getvalue(),
+                file_name=f"Simulacion_Prestamo_{int(monto_capital)}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
 
 # ==========================================
 # 📥 MÓDULO 5: CARGAR BASE MENSUAL (ADMIN)
