@@ -320,6 +320,88 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
 
     return bytes(pdf.output())
 
+def generar_pdf_nota_hacienda(fecha_nota, mes_eval, anio_eval, monto_tot, cant_benef, c1=False, c2=False, c3=False, c4=False, c5=False):
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Membrete
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 6, 'Cooperativa "24 DE OCTUBRE" Ltda.', border=0, ln=True, align="L")
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.cell(0, 5, 'Promoviendo Desarrollo - CATEGORIA A', border=0, ln=True, align="L")
+    pdf.ln(8)
+
+    # Fecha
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 6, f"Asunción, {fecha_nota} -", border=0, ln=True, align="L")
+    pdf.ln(6)
+
+    # Destinatario
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 5, "Sr. Director General", border=0, ln=True)
+    pdf.cell(0, 5, "Dirección General de Jubilaciones y Pensiones", border=0, ln=True)
+    pdf.cell(0, 5, "Ministerio de Economía y Finanzas", border=0, ln=True)
+    pdf.set_font("Helvetica", "I", 10)
+    pdf.cell(0, 5, "Presente", border=0, ln=True)
+    pdf.ln(6)
+
+    # Cuerpo
+    pdf.set_font("Helvetica", "", 10)
+    cuerpo1 = (
+        f"En nombre y representación de Cooperativa 24 de Octubre Ltda., solicitamos la "
+        f"ejecución de los descuentos convencionales para los beneficiarios de la Caja Fiscal "
+        f"correspondientes al mes {mes_eval} del año {anio_eval}, debidamente autorizados. Esta solicitud se "
+        f"presenta en carácter de Declaración Jurada, conforme a la Resolución M.E.F. N° 342 del 2025.\n\n"
+        f"Para tal efecto, remitimos la siguiente información, enviada por expediente SIME y al correo "
+        f"educacion@cooperativa24.coop.py, según corresponda:\n"
+        f"(Marque si la planilla será presentada y deje la casilla en blanco para aquellas no presentadas)"
+    )
+    pdf.multi_cell(0, 5, cuerpo1)
+    pdf.ln(4)
+
+    # Casillas de Verificación
+    chk1 = "[X]" if c1 else "[  ]"
+    chk2 = "[X]" if c2 else "[  ]"
+    chk3 = "[X]" if c3 else "[  ]"
+    chk4 = "[X]" if c4 else "[  ]"
+    chk5 = "[X]" if c5 else "[  ]"
+
+    pdf.cell(0, 5, f"{chk1} 1- Planilla de Descuentos: (Obligatorio): Archivo .txt, con un monto total de Gs. {formato_guarani(monto_tot)} y de {cant_benef} beneficiarios.", ln=True)
+    pdf.cell(0, 5, f"{chk2} 2- Nómina de Nuevos Asociados: Archivo TXT y cédulas en PDF. Total de socios.", ln=True)
+    pdf.cell(0, 5, f"{chk3} 3- Planilla de Nuevas Autorizaciones: Archivo CSV con la nómina de nuevos autorizantes.", ln=True)
+    pdf.cell(0, 5, f"{chk4} 4- Planilla de Bajas por fallecimiento: Anexo PDF con los datos de socios fallecidos.", ln=True)
+    pdf.cell(0, 5, f"{chk5} 5- Planilla de Información: (Obligatorio) Archivo TXT/CSV con los datos referentes a los descuentos.", ln=True)
+    pdf.ln(6)
+
+    cuerpo2 = (
+        "Certificamos que los datos y cifras consignadas se encuentran respaldadas por documentos, bajo "
+        "el resguardo de nuestra entidad, deslindando de toda responsabilidad a la Dirección General de "
+        "Jubilaciones y Pensiones por los descuentos realizados.\n\n"
+        "Sin otro particular, le saludamos atentamente."
+    )
+    pdf.multi_cell(0, 5, cuerpo2)
+    pdf.ln(18)
+
+    # Firmas
+    pdf.set_font("Helvetica", "B", 9)
+    col_w = 90
+    y_start = pdf.get_y()
+    
+    pdf.set_xy(15, y_start)
+    pdf.cell(col_w, 4, "CIRILO VENTURA FRANCO ZAVALA", border=0, align="C", ln=True)
+    pdf.set_xy(15, y_start + 4)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.cell(col_w, 4, "Presidente / Rep. Legal", border=0, align="C")
+
+    pdf.set_xy(110, y_start)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(col_w, 4, "JULIO CESAR RAMIREZ ROLON", border=0, align="C", ln=True)
+    pdf.set_xy(110, y_start + 4)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.cell(col_w, 4, "Secretario / Rep. Legal", border=0, align="C")
+
+    return bytes(pdf.output())
+
 def generar_pdf_tabla_consolidada(df_agg, titulo="REPORTE CONSOLIDADO DE DESCUENTOS"):
     pdf = FPDF()
     pdf.add_page()
@@ -329,7 +411,6 @@ def generar_pdf_tabla_consolidada(df_agg, titulo="REPORTE CONSOLIDADO DE DESCUEN
     pdf.cell(0, 5, f"Fecha de generación: {datetime.now().strftime('%d/%m/%Y %H:%M')}", border=0, ln=True, align="C")
     pdf.ln(5)
 
-    # Cabecera de Tabla
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(45, 7, "N° BENEFICIARIO", border=1, align="C")
     pdf.cell(45, 7, "CÉDULA", border=1, align="C")
@@ -557,7 +638,7 @@ elif opcion == "📋 Dictamen del Girador":
             )
 
 # ==========================================
-# 🛡️ MÓDULO 3: AUDITORÍA Y CRUCE DE PLANILLAS (RESTRINGIDO)
+# 🛡️ MÓDULO 3: AUDITORÍA Y NOTA DE HACIENDA (RESTRINGIDO)
 # ==========================================
 elif opcion == "🛡️ Auditoría y Cruce de Planillas":
     st.subheader("🛡️ Sistema de Auditoría y Cruce de Planillas (Hacienda)")
@@ -565,227 +646,299 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
     if not es_auditor_hacienda:
         st.error("🔒 **Acceso denegado:** Este módulo es exclusivo para los usuarios autorizados (`Arthuro` y `Martín`).")
     else:
-        st.markdown("Subí las planillas en formato **Excel (.xlsx / .xls)** o **CSV (.csv)**.")
+        tab1, tab2 = st.tabs(["🔍 Ejecutar Cruce y Auditoría", "✉️ Generar Nota Oficial (MEF)"])
 
-        col1, col2 = st.columns(2)
-        with col1:
-            files_anteriores = st.file_uploader(
-                "📥 Planilla(s) Mes Anterior (Referencia - Podés subir 1 o más archivos)", 
-                type=["xlsx", "xls", "csv"], 
-                accept_multiple_files=True
-            )
-        with col2:
-            file_actual = st.file_uploader(
-                "📥 Planilla Mes Actual (A Auditar)", 
-                type=["xlsx", "xls", "csv"]
-            )
+        with tab1:
+            st.markdown("Subí las planillas en formato **Excel (.xlsx / .xls)** o **CSV (.csv)**.")
 
-        if files_anteriores and file_actual:
-            if st.button("🚀 Ejecutar Cruce y Auditoría de Planillas", use_container_width=True):
-                try:
-                    dfs_ref_list = []
-                    for f in files_anteriores:
-                        df_temp_raw = cargar_archivo_universal(f)
-                        df_temp = mapear_y_desduplicar_columnas_auditoria(df_temp_raw)
-                        dfs_ref_list.append(df_temp)
-                    
-                    df_prev = pd.concat(dfs_ref_list, ignore_index=True)
-                    
-                    df_curr_raw = cargar_archivo_universal(file_actual)
-                    df_curr = mapear_y_desduplicar_columnas_auditoria(df_curr_raw)
+            col1, col2 = st.columns(2)
+            with col1:
+                files_anteriores = st.file_uploader(
+                    "📥 Planilla(s) Mes Anterior (Referencia - Podés subir 1 o más archivos)", 
+                    type=["xlsx", "xls", "csv"], 
+                    accept_multiple_files=True
+                )
+            with col2:
+                file_actual = st.file_uploader(
+                    "📥 Planilla Mes Actual (A Auditar)", 
+                    type=["xlsx", "xls", "csv"]
+                )
 
-                    req_cols = ['cedula', 'operacion', 'fecha_deuda']
-                    missing_prev = [c for c in req_cols if c not in df_prev.columns]
-                    missing_curr = [c for c in req_cols if c not in df_curr.columns]
+            if files_anteriores and file_actual:
+                if st.button("🚀 Ejecutar Cruce y Auditoría de Planillas", use_container_width=True):
+                    try:
+                        dfs_ref_list = []
+                        for f in files_anteriores:
+                            df_temp_raw = cargar_archivo_universal(f)
+                            df_temp = mapear_y_desduplicar_columnas_auditoria(df_temp_raw)
+                            dfs_ref_list.append(df_temp)
+                        
+                        df_prev = pd.concat(dfs_ref_list, ignore_index=True)
+                        
+                        df_curr_raw = cargar_archivo_universal(file_actual)
+                        df_curr = mapear_y_desduplicar_columnas_auditoria(df_curr_raw)
 
-                    if missing_prev or missing_curr:
-                        st.error("No se pudieron identificar las columnas requeridas ('Cédula', 'Número de la Operación', 'Fecha de la Deuda') en uno o varios de los archivos.")
-                    else:
-                        ref_operaciones = {}
-                        for idx, row in df_prev.iterrows():
-                            c_val = limpiar_texto(row.get('cedula'))
-                            o_val = limpiar_texto(row.get('operacion'))
-                            f_val = limpiar_texto(row.get('fecha_deuda'))
-                            if c_val and o_val:
-                                key = f"{c_val}_{o_val}"
-                                ref_operaciones[key] = {
-                                    'str': f_val,
-                                    'dt': parsear_fecha(f_val)
-                                }
+                        req_cols = ['cedula', 'operacion', 'fecha_deuda']
+                        missing_prev = [c for c in req_cols if c not in df_prev.columns]
+                        missing_curr = [c for c in req_cols if c not in df_curr.columns]
 
-                        errores = []
-                        nuevos_registros = []
+                        if missing_prev or missing_curr:
+                            st.error("No se pudieron identificar las columnas requeridas ('Cédula', 'Número de la Operación', 'Fecha de la Deuda') en uno o varios de los archivos.")
+                        else:
+                            ref_operaciones = {}
+                            for idx, row in df_prev.iterrows():
+                                c_val = limpiar_texto(row.get('cedula'))
+                                o_val = limpiar_texto(row.get('operacion'))
+                                f_val = limpiar_texto(row.get('fecha_deuda'))
+                                m_val = limpiar_monto(row.get('monto_desconto', 0))
+                                if c_val and o_val:
+                                    key = f"{c_val}_{o_val}"
+                                    ref_operaciones[key] = {
+                                        'str': f_val,
+                                        'dt': parsear_fecha(f_val),
+                                        'monto': m_val,
+                                        'row_full': row
+                                    }
 
-                        for idx, row in df_curr.iterrows():
-                            cedula = limpiar_texto(row.get('cedula', ''))
-                            nombre = limpiar_texto(row.get('nombre', 'S/D'))
-                            concepto = limpiar_texto(row.get('concepto', ''))
-                            operacion = limpiar_texto(row.get('operacion', ''))
-                            fecha_deuda_str = limpiar_texto(row.get('fecha_deuda', ''))
-                            num_cuota_str = limpiar_texto(row.get('num_cuota', ''))
-                            tot_cuota_str = limpiar_texto(row.get('total_cuota', ''))
-                            monto_desc = limpiar_monto(row.get('monto_desconto', 0))
-                            saldo_deuda = limpiar_monto(row.get('saldo_deuda', 0))
-                            fecha_comp_str = limpiar_texto(row.get('fecha_comprobante', ''))
+                            errores = []
+                            nuevos_registros = []
 
-                            if not cedula or not operacion:
-                                continue
+                            for idx, row in df_curr.iterrows():
+                                cedula = limpiar_texto(row.get('cedula', ''))
+                                nombre = limpiar_texto(row.get('nombre', 'S/D'))
+                                concepto = limpiar_texto(row.get('concepto', ''))
+                                operacion = limpiar_texto(row.get('operacion', ''))
+                                fecha_deuda_str = limpiar_texto(row.get('fecha_deuda', ''))
+                                num_cuota_str = limpiar_texto(row.get('num_cuota', ''))
+                                tot_cuota_str = limpiar_texto(row.get('total_cuota', ''))
+                                monto_desc = limpiar_monto(row.get('monto_desconto', 0))
+                                saldo_deuda = limpiar_monto(row.get('saldo_deuda', 0))
+                                fecha_comp_str = limpiar_texto(row.get('fecha_comprobante', ''))
 
-                            key_op = f"{cedula}_{operacion}"
-                            es_nuevo = key_op not in ref_operaciones
+                                if not cedula or not operacion:
+                                    continue
 
-                            dt_deuda = parsear_fecha(fecha_deuda_str)
-                            dt_comp = parsear_fecha(fecha_comp_str)
+                                key_op = f"{cedula}_{operacion}"
+                                es_nuevo = key_op not in ref_operaciones
 
-                            # 1. DETECCIÓN DE NUEVAS OPERACIONES
-                            if es_nuevo:
-                                nuevos_registros.append({
-                                    'Cédula Beneficiario': cedula,
-                                    'Nombre y Apellido': nombre,
-                                    'Concepto': concepto,
-                                    'N° Operación': operacion,
-                                    'Fecha Deuda': fecha_deuda_str,
-                                    'Cuota Actual': num_cuota_str,
-                                    'Total Cuota': tot_cuota_str,
-                                    'Monto Descuento': monto_desc,
-                                    'Saldo Deuda': saldo_deuda,
-                                    'Fecha Comprobante Anterior': fecha_comp_str
-                                })
+                                dt_deuda = parsear_fecha(fecha_deuda_str)
+                                dt_comp = parsear_fecha(fecha_comp_str)
 
-                            # 2. REGLA 1: Fecha de Deuda modificada
-                            if not es_nuevo:
-                                ref_info = ref_operaciones[key_op]
-                                fecha_ref_str = ref_info['str']
-                                dt_ref = ref_info['dt']
+                                if es_nuevo:
+                                    nuevos_registros.append({
+                                        'Cédula Beneficiario': cedula,
+                                        'Nombre y Apellido': nombre,
+                                        'Concepto': concepto,
+                                        'N° Operación': operacion,
+                                        'Fecha Deuda': fecha_deuda_str,
+                                        'Cuota Actual': num_cuota_str,
+                                        'Total Cuota': tot_cuota_str,
+                                        'Monto Descuento': monto_desc,
+                                        'Saldo Deuda': saldo_deuda,
+                                        'Fecha Comprobante Anterior': fecha_comp_str
+                                    })
 
-                                if dt_deuda is not None and dt_ref is not None:
-                                    difiere = (dt_deuda != dt_ref)
-                                else:
-                                    difiere = (fecha_deuda_str != fecha_ref_str)
+                                if not es_nuevo:
+                                    ref_info = ref_operaciones[key_op]
+                                    fecha_ref_str = ref_info['str']
+                                    dt_ref = ref_info['dt']
+                                    monto_ref = ref_info['monto']
 
-                                if difiere:
+                                    # REGLA 1: Fecha de Deuda modificada
+                                    if dt_deuda is not None and dt_ref is not None:
+                                        difiere_fecha = (dt_deuda != dt_ref)
+                                    else:
+                                        difiere_fecha = (fecha_deuda_str != fecha_ref_str)
+
+                                    if difiere_fecha:
+                                        errores.append({
+                                            'Cédula Beneficiario': cedula,
+                                            'Nombre y Apellido': nombre,
+                                            'N° Operación': operacion,
+                                            'Concepto': concepto,
+                                            'Tipo de Inconsistencia': 'Fecha de la deuda no coincide con lo informado previamente',
+                                            'Dato Mes Actual': fecha_deuda_str,
+                                            'Dato Correcto (Mes Anterior)': fecha_ref_str
+                                        })
+
+                                    # NUEVA REGLA: Alerta si el monto a descontar es MAYOR en el mes actual
+                                    if monto_desc > monto_ref:
+                                        errores.append({
+                                            'Cédula Beneficiario': cedula,
+                                            'Nombre y Apellido': nombre,
+                                            'N° Operación': operacion,
+                                            'Concepto': concepto,
+                                            'Tipo de Inconsistencia': f'Monto a descontar aumentó respecto al mes anterior (Monto Actual > Anterior)',
+                                            'Dato Mes Actual': f"Gs. {formato_guarani(monto_desc)}",
+                                            'Dato Correcto (Mes Anterior)': f"Gs. {formato_guarani(monto_ref)}"
+                                        })
+
+                                # REGLA 2: Fecha comprobante anterior inferior a Fecha de Deuda
+                                if dt_deuda is not None and dt_comp is not None and dt_comp < dt_deuda:
                                     errores.append({
                                         'Cédula Beneficiario': cedula,
                                         'Nombre y Apellido': nombre,
                                         'N° Operación': operacion,
-                                        'Tipo de Inconsistencia': 'Fecha de la deuda no coincide con lo informado previamente',
-                                        'Dato Mes Actual': fecha_deuda_str,
-                                        'Dato Correcto (Mes Anterior)': fecha_ref_str
+                                        'Concepto': concepto,
+                                        'Tipo de Inconsistencia': 'Fecha comprobante anterior es inferior a la fecha de la deuda',
+                                        'Dato Mes Actual': f"Comprobante: {fecha_comp_str}",
+                                        'Dato Correcto (Mes Anterior)': f"Fecha Deuda: {fecha_deuda_str}"
                                     })
 
-                            # 3. REGLA 2: Fecha comprobante anterior inferior a Fecha de Deuda
-                            if dt_deuda is not None and dt_comp is not None and dt_comp < dt_deuda:
-                                errores.append({
-                                    'Cédula Beneficiario': cedula,
-                                    'Nombre y Apellido': nombre,
-                                    'N° Operación': operacion,
-                                    'Tipo de Inconsistencia': 'Fecha comprobante anterior es inferior a la fecha de la deuda',
-                                    'Dato Mes Actual': f"Comprobante: {fecha_comp_str}",
-                                    'Dato Correcto (Mes Anterior)': f"Fecha Deuda: {fecha_deuda_str}"
-                                })
+                                # REGLA 3: Última cuota -> Monto descuento debe ser igual al Saldo
+                                if num_cuota_str.isdigit() and tot_cuota_str.isdigit() and int(num_cuota_str) == int(tot_cuota_str):
+                                    if abs(monto_desc - saldo_deuda) > 1.0:
+                                        errores.append({
+                                            'Cédula Beneficiario': cedula,
+                                            'Nombre y Apellido': nombre,
+                                            'N° Operación': operacion,
+                                            'Concepto': concepto,
+                                            'Tipo de Inconsistencia': 'Monto a descontar en última cuota difiere del saldo pendiente',
+                                            'Dato Mes Actual': f"Monto Descuento: Gs. {formato_guarani(monto_desc)}",
+                                            'Dato Correcto (Mes Anterior)': f"Saldo Pendiente: Gs. {formato_guarani(saldo_deuda)}"
+                                        })
 
-                            # 4. REGLA 3: Última cuota -> Monto descuento debe ser igual al Saldo
-                            if num_cuota_str.isdigit() and tot_cuota_str.isdigit() and int(num_cuota_str) == int(tot_cuota_str):
-                                if abs(monto_desc - saldo_deuda) > 1.0:
-                                    errores.append({
-                                        'Cédula Beneficiario': cedula,
-                                        'Nombre y Apellido': nombre,
-                                        'N° Operación': operacion,
-                                        'Tipo de Inconsistencia': 'Monto a descontar en última cuota difiere del saldo pendiente',
-                                        'Dato Mes Actual': f"Monto Descuento: Gs. {int(monto_desc):,}",
-                                        'Dato Correcto (Mes Anterior)': f"Saldo Pendiente: Gs. {int(saldo_deuda):,}"
-                                    })
+                            df_errores = pd.DataFrame(errores)
+                            df_nuevos = pd.DataFrame(nuevos_registros)
 
-                        df_errores = pd.DataFrame(errores)
-                        df_nuevos = pd.DataFrame(nuevos_registros)
+                            st.markdown("---")
+                            c1, c2 = st.columns(2)
 
-                        st.markdown("---")
-                        c1, c2 = st.columns(2)
-
-                        with c1:
-                            st.subheader("🔴 Inconsistencias Encontradas")
-                            if df_errores.empty:
-                                st.success("✅ ¡Sin errores detectados! La planilla está limpia.")
-                                
-                                # GENERACIÓN DE CONSOLIDADO Y DESCARGA (TXT Y PDF)
-                                # Prepara agrupación única por beneficiario/cédula
-                                df_curr['monto_num'] = df_curr['monto_desconto'].apply(limpiar_monto)
-                                if 'beneficiario' not in df_curr.columns:
-                                    df_curr['beneficiario'] = df_curr.get('cedula', '')
-
-                                df_agg = df_curr.groupby(['beneficiario', 'cedula'], as_index=False)['monto_num'].sum()
-                                df_agg.rename(columns={'monto_num': 'monto_total'}, inplace=True)
-
-                                # 1. Construcción del archivo TXT con formato exacto de columnas
-                                txt_lines = []
-                                for _, row_a in df_agg.iterrows():
-                                    b_str = str(row_a['beneficiario']).strip()
-                                    c_str = str(row_a['cedula']).strip()
-                                    m_str = str(int(round(row_a['monto_total']))).strip()
+                            with c1:
+                                st.subheader("🔴 Inconsistencias / Alertas Encontradas")
+                                if df_errores.empty:
+                                    st.success("✅ ¡Sin errores detectados! La planilla está limpia.")
                                     
-                                    # Alineación oficial: Beneficiario 14 char left, Cédula 10 char left, Monto 7 char right
-                                    linea_fmt = f"{b_str:<14}{c_str:<10}{m_str:>7}"
-                                    txt_lines.append(linea_fmt)
-                                
-                                txt_content = "\n".join(txt_lines)
+                                    df_curr['monto_num'] = df_curr['monto_desconto'].apply(limpiar_monto)
+                                    if 'beneficiario' not in df_curr.columns:
+                                        df_curr['beneficiario'] = df_curr.get('cedula', '')
 
-                                st.markdown("#### 📄 Archivos Consolidados Generados (Sin Errores):")
+                                    df_agg = df_curr.groupby(['beneficiario', 'cedula'], as_index=False)['monto_num'].sum()
+                                    df_agg.rename(columns={'monto_num': 'monto_total'}, inplace=True)
 
-                                col_d1, col_d2 = st.columns(2)
-                                with col_d1:
+                                    st.session_state['total_monto_auditoria'] = df_agg['monto_total'].sum()
+                                    st.session_state['total_beneficiarios_auditoria'] = len(df_agg)
+
+                                    # Generar TXT
+                                    txt_lines = []
+                                    for _, row_a in df_agg.iterrows():
+                                        b_str = str(row_a['beneficiario']).strip()
+                                        c_str = str(row_a['cedula']).strip()
+                                        m_str = str(int(round(row_a['monto_total']))).strip()
+                                        linea_fmt = f"{b_str:<14}{c_str:<10}{m_str:>7}"
+                                        txt_lines.append(linea_fmt)
+                                    
+                                    txt_content = "\n".join(txt_lines)
+
+                                    st.markdown("#### 📄 Descarga de Archivos Oficiales:")
+
+                                    col_d1, col_d2 = st.columns(2)
+                                    with col_d1:
+                                        st.download_button(
+                                            label="📥 Descargar Consolidado (.TXT Oficial)",
+                                            data=txt_content.encode('latin1'),
+                                            file_name="COD_96_COOP_24_DE_OCTUBRE.TXT",
+                                            mime="text/plain",
+                                            use_container_width=True
+                                        )
+                                    with col_d2:
+                                        pdf_agg_bytes = generar_pdf_tabla_consolidada(df_agg)
+                                        st.download_button(
+                                            label="📄 Descargar Consolidado (.PDF)",
+                                            data=pdf_agg_bytes,
+                                            file_name="Reporte_Consolidado_Hacienda.pdf",
+                                            mime="application/pdf",
+                                            use_container_width=True
+                                        )
+
+                                else:
+                                    st.warning(f"Se encontraron {len(df_errores)} alertas/errores.")
+                                    st.dataframe(df_errores, use_container_width=True)
+
+                                    out_e = io.BytesIO()
+                                    with pd.ExcelWriter(out_e, engine='openpyxl') as writer:
+                                        df_errores.to_excel(writer, sheet_name='Errores', index=False)
                                     st.download_button(
-                                        label="📥 Descargar Consolidado (.TXT Oficial)",
-                                        data=txt_content.encode('latin1'),
-                                        file_name="COD_96_COOP_24_DE_OCTUBRE.TXT",
-                                        mime="text/plain",
+                                        label="📥 Descargar Excel de Inconsistencias (.xlsx)",
+                                        data=out_e.getvalue(),
+                                        file_name="Reporte_Inconsistencias_Hacienda.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                         use_container_width=True
                                     )
-                                with col_d2:
-                                    pdf_agg_bytes = generar_pdf_tabla_consolidada(df_agg)
+
+                            with c2:
+                                st.subheader("🟢 Nuevos Registros / Operaciones")
+                                if df_nuevos.empty:
+                                    st.info("No hay nuevas operaciones registradas.")
+                                else:
+                                    st.success(f"Se encontraron {len(df_nuevos)} nuevos registros.")
+                                    st.dataframe(df_nuevos, use_container_width=True)
+
+                                    out_n = io.BytesIO()
+                                    with pd.ExcelWriter(out_n, engine='openpyxl') as writer:
+                                        df_nuevos.to_excel(writer, sheet_name='Nuevos_Registros', index=False)
                                     st.download_button(
-                                        label="📄 Descargar Consolidado (.PDF)",
-                                        data=pdf_agg_bytes,
-                                        file_name="Reporte_Consolidado_Hacienda.pdf",
-                                        mime="application/pdf",
+                                        label="📥 Descargar Excel de Nuevos Registros (.xlsx)",
+                                        data=out_n.getvalue(),
+                                        file_name="Reporte_Nuevos_Registros_Hacienda.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                         use_container_width=True
                                     )
 
-                            else:
-                                st.warning(f"Se encontraron {len(df_errores)} errores reales.")
-                                st.dataframe(df_errores, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Error al procesar las planillas: {e}")
 
-                                out_e = io.BytesIO()
-                                with pd.ExcelWriter(out_e, engine='openpyxl') as writer:
-                                    df_errores.to_excel(writer, sheet_name='Errores', index=False)
-                                st.download_button(
-                                    label="📥 Descargar Excel de Errores (.xlsx)",
-                                    data=out_e.getvalue(),
-                                    file_name="Reporte_Inconsistencias_Hacienda.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                    use_container_width=True
-                                )
+        with tab2:
+            st.subheader("✉️ Generador de Nota Oficial para Hacienda (MEF)")
+            st.info("Completá o modificá los campos de fecha, período y anexos para generar el documento oficial en PDF.")
 
-                        with c2:
-                            st.subheader("🟢 Nuevos Registros / Operaciones")
-                            if df_nuevos.empty:
-                                st.info("No hay nuevas operaciones registradas.")
-                            else:
-                                st.success(f"Se encontraron {len(df_nuevos)} nuevos registros.")
-                                st.dataframe(df_nuevos, use_container_width=True)
+            m_tot = st.session_state.get('total_monto_auditoria', 213112995.0)
+            c_ben = st.session_state.get('total_beneficiarios_auditoria', 224)
 
-                                out_n = io.BytesIO()
-                                with pd.ExcelWriter(out_n, engine='openpyxl') as writer:
-                                    df_nuevos.to_excel(writer, sheet_name='Nuevos_Registros', index=False)
-                                st.download_button(
-                                    label="📥 Descargar Excel de Nuevos Registros (.xlsx)",
-                                    data=out_n.getvalue(),
-                                    file_name="Reporte_Nuevos_Registros_Hacienda.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                    use_container_width=True
-                                )
+            col_f1, col_f2, col_f3 = st.columns(3)
+            with col_f1:
+                fecha_nota_input = st.text_input("Fecha de Presentación:", value=f"{datetime.now().day:02d} de {datetime.now().strftime('%B').capitalize()} de {datetime.now().year}")
+            with col_f2:
+                mes_eval_input = st.text_input("Mes Evaluado:", value="abril")
+            with col_f3:
+                anio_eval_input = st.text_input("Año Evaluado:", value=str(datetime.now().year))
 
-                except Exception as e:
-                    st.error(f"Error al procesar las planillas: {e}")
+            st.markdown("---")
+            st.markdown("#### 📋 Marque las casillas que corresponden a los anexos presentados:")
+
+            # Casillas totalmente configurables (inician desmarcadas por defecto según preferencia)
+            c_chk1, c_chk2 = st.columns(2)
+            with c_chk1:
+                chk_1 = st.checkbox("1- Planilla de Descuentos (Obligatorio: Archivo .txt)", value=True)
+                chk_2 = st.checkbox("2- Nómina de Nuevos Asociados (Archivo TXT y cédulas en PDF)", value=False)
+                chk_3 = st.checkbox("3- Planilla de Nuevas Autorizaciones (Archivo CSV)", value=False)
+            with c_chk2:
+                chk_4 = st.checkbox("4- Planilla de Bajas por Fallecimiento (Anexo PDF)", value=False)
+                chk_5 = st.checkbox("5- Planilla de Información (Obligatorio: Archivo TXT/CSV)", value=True)
+
+            st.markdown("---")
+            st.write(f"📊 **Totales calculados para la Nota:** Monto Gs. `{formato_guarani(m_tot)}` | Beneficiarios: `{c_ben}`")
+
+            pdf_nota_final = generar_pdf_nota_hacienda(
+                fecha_nota_input, 
+                mes_eval_input, 
+                anio_eval_input, 
+                m_tot, 
+                c_ben,
+                c1=chk_1,
+                c2=chk_2,
+                c3=chk_3,
+                c4=chk_4,
+                c5=chk_5
+            )
+
+            st.download_button(
+                label="📄 Descargar Nota Oficial de Presentación en PDF (.PDF MEF)",
+                data=pdf_nota_final,
+                file_name=f"Nota_Oficial_MEF_{mes_eval_input}_{anio_eval_input}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
 
 # ==========================================
 # 🧮 MÓDULO 4: CALCULADORA DE PRÉSTAMOS
