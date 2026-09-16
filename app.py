@@ -52,6 +52,16 @@ if "total_monto_auditoria" not in st.session_state:
 if "total_beneficiarios_auditoria" not in st.session_state:
     st.session_state["total_beneficiarios_auditoria"] = 0
 
+# Variables de estado para los extractos procesados
+if "saldo_capital_ext" not in st.session_state:
+    st.session_state["saldo_capital_ext"] = 0.0
+if "interes_devengado_ext" not in st.session_state:
+    st.session_state["interes_devengado_ext"] = 0.0
+if "mora_ext" not in st.session_state:
+    st.session_state["mora_ext"] = 0.0
+if "puni_ext" not in st.session_state:
+    st.session_state["puni_ext"] = 0.0
+
 def pantalla_login():
     st.markdown("# 🏛️ SICOC")
     st.markdown("### Sistema Integrado de Control Operativo y Crediticio")
@@ -1165,44 +1175,55 @@ elif opcion == "🧮 Calculadora y Estado de Cuenta":
 
     with sub_tab2:
         st.subheader("📑 Estado de Cuenta de Créditos y Liquidación (INFOCOOP)")
-        st.info("Subí uno o más extractos en PDF. Todos los valores inician por defecto en 0 Gs. hasta procesar los archivos.")
+        st.info("Subí uno o más extractos en PDF y hacé clic en 'Procesar Extracto(s)' para cargar los valores automáticamente.")
 
         files_extracto = st.file_uploader("📥 Cargar Extracto(s) INFOCOOP (.pdf)", type=["pdf"], accept_multiple_files=True)
 
-        saldo_capital_ext = 0.0
-        mora_ext = 0.0
-        puni_ext = 0.0
-        devengado_ext = 0.0
-
         if files_extracto:
-            st.success(f"📄 Se recibieron {len(files_extracto)} archivo(s) PDF.")
-            for pdf_f in files_extracto:
-                texto_pdf = extraer_texto_pdf(pdf_f)
+            btn_procesar = st.button("⚙️ Procesar Extracto(s)", use_container_width=True)
+            if btn_procesar:
+                s_cap = 0.0
+                i_dev = 0.0
+                i_mor = 0.0
+                i_pun = 0.0
 
-                match_saldo = re.search(r'SALDO\s*:\s*([\d\.]+)', texto_pdf)
-                if match_saldo:
-                    saldo_capital_ext += limpiar_monto(match_saldo.group(1))
+                for pdf_f in files_extracto:
+                    texto_pdf = extraer_texto_pdf(pdf_f)
 
-                match_mora = re.search(r'INTERES\s+MORATORIO\s*([\d\.]+)', texto_pdf)
-                if match_mora:
-                    mora_ext += limpiar_monto(match_mora.group(1))
-                
-                match_puni = re.search(r'INTERES\s+PUNITORIO\s*([\d\.]+)', texto_pdf)
-                if match_puni:
-                    puni_ext += limpiar_monto(match_puni.group(1))
+                    match_saldo = re.search(r'SALDO\s*:\s*([\d\.]+)', texto_pdf)
+                    if match_saldo:
+                        s_cap += limpiar_monto(match_saldo.group(1))
+
+                    match_dev = re.search(r'INTERES\s+DEVENGADO\s*([\d\.]+)', texto_pdf)
+                    if match_dev:
+                        i_dev += limpiar_monto(match_dev.group(1))
+
+                    match_mora = re.search(r'INTERES\s+MORATORIO\s*([\d\.]+)', texto_pdf)
+                    if match_mora:
+                        i_mor += limpiar_monto(match_mora.group(1))
+
+                    match_puni = re.search(r'INTERES\s+PUNITORIO\s*([\d\.]+)', texto_pdf)
+                    if match_puni:
+                        i_pun += limpiar_monto(match_puni.group(1))
+
+                st.session_state["saldo_capital_ext"] = s_cap
+                st.session_state["interes_devengado_ext"] = i_dev
+                st.session_state["mora_ext"] = i_mor
+                st.session_state["puni_ext"] = i_pun
+                st.success("✅ Extracto(s) procesado(s) exitosamente.")
 
         st.markdown("---")
         st.markdown("### 💳 1. Deuda de Crédito(s)")
         
         col_v1, col_v2, col_v3, col_v4 = st.columns(4)
         with col_v1:
-            v_saldo = st.number_input("Saldo de Capital (Gs.):", value=saldo_capital_ext, step=50000.0, format="%.0f")
+            v_saldo = st.number_input("Saldo de Capital (Gs.):", value=st.session_state["saldo_capital_ext"], step=50000.0, format="%.0f")
         with col_v2:
-            v_interes_devengado = st.number_input("Intereses Préstamos (Gs.):", value=devengado_ext, step=10000.0, format="%.0f", help="Suma de intereses devengados pendientes hasta el mes actual de liquidación.")
+            v_interes_devengado = st.number_input("Intereses Préstamos (Gs.):", value=st.session_state["interes_devengado_ext"], step=10000.0, format="%.0f", help="Suma de intereses devengados pendientes hasta el mes actual de liquidación.")
         with col_v3:
-            v_mora = st.number_input("Interés Moratorio (Gs.):", value=mora_ext, step=1000.0, format="%.0f")
+            v_mora = st.number_input("Interés Moratorio (Gs.):", value=st.session_state["mora_ext"], step=1000.0, format="%.0f")
         with col_v4:
-            v_puni = st.number_input("Interés Punitorio (Gs.):", value=puni_ext, step=1000.0, format="%.0f")
+            v_puni = st.number_input("Interés Punitorio (Gs.):", value=st.session_state["puni_ext"], step=1000.0, format="%.0f")
 
         st.markdown("---")
         st.markdown("### 🏛️ 2. Cuotas Sociales Pendientes")
