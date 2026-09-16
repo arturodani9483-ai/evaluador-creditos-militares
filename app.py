@@ -6,10 +6,14 @@ import re
 from datetime import datetime, timedelta
 from fpdf import FPDF
 
-st.set_page_config(page_title="Evaluador de Créditos - FF.AA.", layout="wide", page_icon="🪖")
+st.set_page_config(
+    page_title="SICOC - Sistema Integrado de Control Operativo y Crediticio", 
+    layout="wide", 
+    page_icon="🏛️"
+)
 
 # ==========================================
-# 🔐 CONFIGURACIÓN DE USUARIOS AUTORIZADOS
+# 🔐 CONFIGURACIÓN DE USUARIOS Y PERMISOS
 # ==========================================
 USUARIOS_AUTORIZADOS = {
     "arthuro": "19942008",
@@ -19,10 +23,8 @@ USUARIOS_AUTORIZADOS = {
     "martin": "mllamas"
 }
 
-# Permisos de edición de Dictamen
 USUARIOS_EDITORES_DICTAMEN = ["arthuro", "estela", "martin"]
-
-# Permiso exclusivo para Cargar Base Mensual (SOLO ARTHURO)
+USUARIOS_AUDITORIA_HACIENDA = ["arthuro", "martin"]
 USUARIO_ADMIN_BASE = "arthuro"
 
 if "autenticado" not in st.session_state:
@@ -31,8 +33,9 @@ if "usuario_actual" not in st.session_state:
     st.session_state["usuario_actual"] = ""
 
 def pantalla_login():
-    st.markdown("## 🛡️ Acceso Restringido - Evaluador de Créditos FF.AA.")
-    st.info("Ingresá tus credenciales autorizadas para acceder al sistema.")
+    st.markdown("# 🏛️ SICOC")
+    st.markdown("### Sistema Integrado de Control Operativo y Crediticio")
+    st.info("Ingresá tus credenciales autorizadas para acceder a la plataforma.")
     
     with st.form("form_login"):
         col1, col2 = st.columns(2)
@@ -41,13 +44,13 @@ def pantalla_login():
         with col2:
             pass_input = st.text_input("Contraseña:", type="password").strip()
             
-        btn_login = st.form_submit_button("🔑 Iniciar Sesión")
+        btn_login = st.form_submit_button("🔑 Iniciar Sesión", use_container_width=True)
         
         if btn_login:
             if user_input in USUARIOS_AUTORIZADOS and USUARIOS_AUTORIZADOS[user_input] == pass_input:
                 st.session_state["autenticado"] = True
                 st.session_state["usuario_actual"] = user_input
-                st.success(f"Bienvenido/a {user_input.capitalize()}")
+                st.success(f"¡Bienvenido/a {user_input.capitalize()}!")
                 st.rerun()
             else:
                 st.error("⚠️ Usuario o contraseña incorrectos. Verificá con el administrador.")
@@ -61,38 +64,103 @@ if not st.session_state["autenticado"]:
 # ==========================================
 usuario_actual = st.session_state['usuario_actual'].lower()
 es_editor = usuario_actual in USUARIOS_EDITORES_DICTAMEN
+es_auditor_hacienda = usuario_actual in USUARIOS_AUDITORIA_HACIENDA
 es_admin_base = (usuario_actual == USUARIO_ADMIN_BASE)
 
-st.sidebar.markdown(f"👤 **Usuario:** `{usuario_actual.capitalize()}`")
-if not es_editor:
-    st.sidebar.caption("🔒 Acceso en modo consulta de dictamen")
+st.sidebar.title("🏛️ SICOC")
+st.sidebar.markdown(f"👤 **Usuario activo:** `{usuario_actual.capitalize()}`")
 
-if st.sidebar.button("🚪 Cerrar Sesión"):
+if es_admin_base:
+    st.sidebar.caption("⭐ Rol: Administrador General")
+elif es_auditor_hacienda:
+    st.sidebar.caption("🛡️ Rol: Auditor / Evaluador")
+elif es_editor:
+    st.sidebar.caption("✍️ Rol: Editor / Evaluador")
+else:
+    st.sidebar.caption("🔒 Rol: Consulta general")
+
+if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
     st.session_state["autenticado"] = False
     st.session_state["usuario_actual"] = ""
     st.rerun()
 
 st.sidebar.markdown("---")
 
+opcion = st.sidebar.radio("Navegación de Módulos:", [
+    "🔍 Evaluador de Liquidez (FF.AA.)", 
+    "📋 Dictamen del Girador",
+    "🛡️ Auditoría y Cruce de Planillas",
+    "🧮 Calculadora de Préstamos",
+    "📥 Cargar Base Mensual"
+])
+
 DB_LIQUIDEZ_FILE = "base_liquidez_militares.csv"
 DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
 
-# --- FUNCIONES GENERALES ---
+# ==========================================
+# 🛠️ FUNCIONES AUXILIARES Y DE DATOS
+# ==========================================
+def limpiar_texto(val):
+    if pd.isna(val) or val is None:
+        return ""
+    if isinstance(val, pd.Series):
+        val = val.dropna().iloc[0] if not val.dropna().empty else ""
+    return str(val).strip()
+
+def limpiar_ci(val):
+    if pd.isna(val) or val is None:
+        return ""
+    try:
+        s = str(val).split('.')[0].replace('.', '').replace(',', '').strip()
+        numeros = re.findall(r'\d+', s)
+        return str(numeros[0]) if numeros else ""
+    except:
+        return str(val).strip()
+
+def limpiar_monto(val):
+    if pd.isna(val) or val is None:
+        return 0.0
+    if isinstance(val, pd.Series):
+        val = val.dropna().iloc[0] if not val.dropna().empty else 0.0
+    try:
+        return float(val)
+    except:
+        s = str(val).replace('.', '').replace(',', '.').strip()
+        numeros = re.findall(r'[-+]?\d*\.\d+|\d+', s)
+        return float(numeros[0]) if numeros else 0.0
+
+def formato_guarani(val):
+    try:
+        return f"{int(round(val)):,}".replace(',', '.')
+    except:
+        return "0"
+
+def parsear_fecha(d_str):
+    d_clean = limpiar_texto(d_str)
+    if not d_clean:
+        return None
+    s = d_clean.split(' ')[0]
+    for fmt in ('%d/%m/%Y', '%d/%m/%y', '%Y-%m-%d', '%d-%m-%Y', '%Y/%m/%d', '%d/%m/%Y %H:%M:%S'):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            pass
+    return None
+
 def cargar_excel_detectando_cabecera(file_or_path):
     df_raw = pd.read_excel(file_or_path, header=None, dtype=str)
     header_idx = 0
     for idx, row in df_raw.iterrows():
         row_str = " ".join([str(val).upper() for val in row.values if pd.notna(val)])
-        if 'C.I' in row_str or 'CEDULA' in row_str or 'NOMBRE' in row_str:
+        if 'C.I' in row_str or 'CEDULA' in row_str or 'NOMBRE' in row_str or 'BENEFICIARIO' in row_str:
             header_idx = idx
             break
     return pd.read_excel(file_or_path, skiprows=header_idx, dtype=str)
 
-def estandarizar_columnas(df):
+def estandarizar_columnas_ffaa(df):
     cols_map = {}
     for c in df.columns:
         c_clean = str(c).strip().upper().replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
-        
         if 'N° C.I' in c_clean or 'C.I' in c_clean or 'CEDULA' in c_clean or 'EMP_CI' in c_clean or c_clean == 'CI':
             cols_map[c] = 'emp_ci'
         elif 'NOMBRE' in c_clean or 'APELLIDO' in c_clean or 'NOMAPE' in c_clean:
@@ -121,31 +189,56 @@ def estandarizar_columnas(df):
         df_renamed['emp_ci'] = df_renamed.iloc[:, 0]
     return df_renamed
 
-def limpiar_ci(val):
-    if pd.isna(val) or val is None:
-        return ""
-    try:
-        s = str(val).split('.')[0].replace('.', '').replace(',', '').strip()
-        numeros = re.findall(r'\d+', s)
-        return str(numeros[0]) if numeros else ""
-    except:
-        return str(val).strip()
+def mapear_y_desduplicar_columnas_auditoria(df):
+    cols_map = {}
+    for c in df.columns:
+        c_clean = str(c).strip().upper().replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
+        if 'CEDULA' in c_clean or 'N° DE CEDULE' in c_clean or 'CEDULA DE IDENTIDAD' in c_clean:
+            cols_map[c] = 'cedula'
+        elif 'NÚMERO DEL BENEFICIARIO' in c_clean or 'NUMERO DEL BENEFICIARIO' in c_clean:
+            cols_map[c] = 'beneficiario'
+        elif 'NOMBRES Y APELLIDOS' in c_clean or 'BENEFICIARIO' in c_clean:
+            cols_map[c] = 'nombre'
+        elif 'CONCEPTO' in c_clean and 'CONCEPTO DEL DESCUENTO' in c_clean:
+            cols_map[c] = 'concepto'
+        elif 'OPERACION' in c_clean or 'NUMERO DE LA OPERACION' in c_clean:
+            cols_map[c] = 'operacion'
+        elif 'FECHA DE LA DEUDA' in c_clean:
+            cols_map[c] = 'fecha_deuda'
+        elif 'NUMERO DE CUOTA' in c_clean:
+            cols_map[c] = 'num_cuota'
+        elif 'TOTAL CUOTA' in c_clean:
+            cols_map[c] = 'total_cuota'
+        elif 'MONTO POR DESCONTARSE' in c_clean or 'DESCONTARSE' in c_clean:
+            cols_map[c] = 'monto_desconto'
+        elif 'SALDO (DEUDA)' in c_clean or 'SALDO' in c_clean:
+            cols_map[c] = 'saldo_deuda'
+        elif 'FECHA COMPROBANTE' in c_clean or 'FACTURA CREDITO' in c_clean:
+            cols_map[c] = 'fecha_comprobante'
+            
+    df_ren = df.rename(columns=cols_map)
+    df_ren = df_ren.loc[:, ~df_ren.columns.duplicated()]
+    return df_ren
 
-def limpiar_monto(val):
-    if pd.isna(val) or val is None:
-        return 0.0
-    try:
-        return float(val)
-    except:
-        s = str(val).replace('.', '').replace(',', '.').strip()
-        numeros = re.findall(r'[-+]?\d*\.\d+|\d+', s)
-        return float(numeros[0]) if numeros else 0.0
-
-def formato_guarani(val):
-    try:
-        return f"{int(round(val)):,}".replace(',', '.')
-    except:
-        return "0"
+def cargar_archivo_universal(file_uploader):
+    ext = file_uploader.name.lower().split('.')[-1]
+    file_uploader.seek(0)
+    if ext in ['xlsx', 'xls']:
+        df_raw = pd.read_excel(file_uploader, header=None, dtype=str)
+        header_idx = 0
+        for idx, row in df_raw.iterrows():
+            row_str = " ".join([str(val).upper() for val in row.values if pd.notna(val)])
+            if 'CEDULA' in row_str or 'C.I' in row_str or 'BENEFICIARIO' in row_str or 'OPERACION' in row_str:
+                header_idx = idx
+                break
+        file_uploader.seek(0)
+        return pd.read_excel(file_uploader, skiprows=header_idx, dtype=str)
+    else:
+        try:
+            return pd.read_csv(file_uploader, dtype=str, sep=None, engine='python', encoding='utf-8')
+        except:
+            file_uploader.seek(0)
+            return pd.read_csv(file_uploader, dtype=str, sep=None, engine='python', encoding='latin1')
 
 @st.cache_data(ttl=2592000)
 def cargar_liquidez():
@@ -164,8 +257,8 @@ def cargar_liquidez():
         try:
             excel_encontrado = archivos_excel[0]
             df = cargar_excel_detectando_cabecera(excel_encontrado)
-            return estandarizar_columnas(df)
-        except Exception as e:
+            return estandarizar_columnas_ffaa(df)
+        except Exception:
             pass
 
     return pd.DataFrame()
@@ -186,7 +279,7 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(0, 10, "SISTEMA EVALUADOR DE CAPACIDAD CREDITICIA - FF.AA.", border=0, ln=True, align="C")
+    pdf.cell(0, 10, "SICOC - EVALUADOR DE CAPACIDAD CREDITICIA", border=0, ln=True, align="C")
     pdf.set_font("Helvetica", "I", 10)
     pdf.cell(0, 6, f"Constancia Oficial de {tipo_reporte}", border=0, ln=True, align="C")
     pdf.ln(5)
@@ -207,7 +300,7 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
     pdf.cell(100, 6, f"Sueldo Presupuestado: Gs. {formato_guarani(presupuestado)}")
     pdf.cell(90, 6, f"Descuento Jubilación: Gs. {formato_guarani(jubilacion)}", ln=True)
     pdf.cell(100, 6, f"Total Descuentos: Gs. {formato_guarani(tot_desc)}")
-    pdf.cell(90, 6, f"Líquido Real Actual: Gs. {formato_guarani(liquido)}", ln=True)
+    pdf.cell(90, 6, f"Líquido Real Actual: Gs. {formato_guarani(liquido)}")
     pdf.cell(100, 6, f"Límite Disponible (50%): Gs. {formato_guarani(limite)}", ln=True)
     pdf.ln(4)
 
@@ -227,44 +320,65 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
 
     return bytes(pdf.output())
 
+def generar_pdf_tabla_consolidada(df_agg, titulo="REPORTE CONSOLIDADO DE DESCUENTOS"):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.cell(0, 10, f"SICOC - {titulo}", border=0, ln=True, align="C")
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.cell(0, 5, f"Fecha de generación: {datetime.now().strftime('%d/%m/%Y %H:%M')}", border=0, ln=True, align="C")
+    pdf.ln(5)
+
+    # Cabecera de Tabla
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(45, 7, "N° BENEFICIARIO", border=1, align="C")
+    pdf.cell(45, 7, "CÉDULA", border=1, align="C")
+    pdf.cell(60, 7, "MONTO A DESCONTAR", border=1, align="C")
+    pdf.ln()
+
+    pdf.set_font("Helvetica", "", 9)
+    for idx, row in df_agg.iterrows():
+        b_val = str(row.get('beneficiario', '-'))
+        c_val = str(row.get('cedula', '-'))
+        m_val = f"Gs. {formato_guarani(row.get('monto_total', 0))}"
+        
+        pdf.cell(45, 6, b_val, border=1, align="C")
+        pdf.cell(45, 6, c_val, border=1, align="C")
+        pdf.cell(60, 6, m_val, border=1, align="R")
+        pdf.ln()
+
+    return bytes(pdf.output())
+
 df_liquidez = cargar_liquidez()
 df_dictamenes = cargar_dictamenes()
 
-st.title("🪖 Sistema Evaluador de Capacidad Crediticia (FF.AA.)")
-
-st.sidebar.header("⚙️ Menú Principal")
-opcion = st.sidebar.radio("Navegación:", [
-    "🔍 Simular / Consultar Crédito", 
-    "📋 Dictamen del Girador",
-    "🧮 Calculadora de Préstamos",
-    "📥 Cargar Base Mensual"
-])
-
-# --- MÓDULO 1: SIMULAR / CONSULTAR CRÉDITO ---
-if opcion == "🔍 Simular / Consultar Crédito":
-    st.subheader("🔍 Buscador de Liquidez de Personal")
+# ==========================================
+# 🪖 MÓDULO 1: EVALUADOR DE LIQUIDEZ (FF.AA.)
+# ==========================================
+if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
+    st.subheader("🔍 Buscador de Liquidez de Personal Militar")
     
     if df_liquidez.empty:
-        st.info("👈 La base de datos está vacía. Carga la planilla mensual desde 'Cargar Base Mensual'.")
+        st.info("👈 La base de datos está vacía. El administrador puede cargar la planilla desde 'Cargar Base Mensual'.")
     else:
-        tipo_busqueda = st.radio("Seleccioná el método de búsqueda:", ["💳 Por Número de Cédula", "👤 Por Nombre / Apellido"], horizontal=True)
+        tipo_busqueda = st.radio("Método de búsqueda:", ["💳 Por Número de Cédula", "👤 Por Nombre / Apellido"], horizontal=True)
         matches = pd.DataFrame()
         
         if tipo_busqueda == "💳 Por Número de Cédula":
-            ci_input = st.text_input("Ingresá el Número de Cédula (C.I.):", placeholder="Ej: 5511820").strip().replace('.', '')
+            ci_input = st.text_input("Número de Cédula (C.I.):", placeholder="Ej: 5511820").strip().replace('.', '')
             if ci_input:
                 matches = df_liquidez[df_liquidez['emp_ci'].apply(limpiar_ci) == ci_input]
         else:
-            nombre_input = st.text_input("Ingresá el Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
+            nombre_input = st.text_input("Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
             if nombre_input:
                 matches = df_liquidez[df_liquidez['emp_nomape'].astype(str).str.contains(nombre_input, case=False, na=False)]
 
         if not matches.empty:
             if len(matches) > 1:
                 st.warning(f"Se encontraron {len(matches)} coincidencias:")
-                opciones = [f"{row['emp_nomape']} (C.I.: {row['emp_ci']}) - {row.get('UNIDAD', '-')}" for idx, row in matches.iterrows()]
-                seleccion = st.selectbox("Seleccionar Militar:", opciones)
-                idx_sel = opciones.index(seleccion)
+                opciones_m = [f"{row['emp_nomape']} (C.I.: {row['emp_ci']}) - {row.get('UNIDAD', '-')}" for idx, row in matches.iterrows()]
+                seleccion = st.selectbox("Seleccionar Militar:", opciones_m)
+                idx_sel = opciones_m.index(seleccion)
                 row = matches.iloc[idx_sel]
             else:
                 row = matches.iloc[0]
@@ -318,7 +432,7 @@ if opcion == "🔍 Simular / Consultar Crédito":
                 st.info(f"💡 **Margen disponible para nuevos descuentos:** Gs. {formato_guarani(margen_deuda_restante)}")
 
             st.subheader("💳 Evaluación del Nuevo Crédito")
-            cuota_solicitada = st.number_input("Ingresá el Monto de la Cuota para el Nuevo Crédito (Gs.):", min_value=0.0, step=50000.0, format="%.0f")
+            cuota_solicitada = st.number_input("Monto de la Cuota para el Nuevo Crédito (Gs.):", min_value=0.0, step=50000.0, format="%.0f")
 
             estado_eval = "SIN EVALUAR"
             if cuota_solicitada > 0:
@@ -348,7 +462,9 @@ if opcion == "🔍 Simular / Consultar Crédito":
                 use_container_width=True
             )
 
-# --- MÓDULO 2: DICTAMEN DEL GIRADOR ---
+# ==========================================
+# 📋 MÓDULO 2: DICTAMEN DEL GIRADOR
+# ==========================================
 elif opcion == "📋 Dictamen del Girador":
     st.subheader("📋 Módulo de Registro de Dictamen de Giraduría")
     
@@ -440,7 +556,240 @@ elif opcion == "📋 Dictamen del Girador":
                 use_container_width=True
             )
 
-# --- MÓDULO 3: CALCULADORA DE PRÉSTAMOS ---
+# ==========================================
+# 🛡️ MÓDULO 3: AUDITORÍA Y CRUCE DE PLANILLAS (RESTRINGIDO)
+# ==========================================
+elif opcion == "🛡️ Auditoría y Cruce de Planillas":
+    st.subheader("🛡️ Sistema de Auditoría y Cruce de Planillas (Hacienda)")
+    
+    if not es_auditor_hacienda:
+        st.error("🔒 **Acceso denegado:** Este módulo es exclusivo para los usuarios autorizados (`Arthuro` y `Martín`).")
+    else:
+        st.markdown("Subí las planillas en formato **Excel (.xlsx / .xls)** o **CSV (.csv)**.")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            files_anteriores = st.file_uploader(
+                "📥 Planilla(s) Mes Anterior (Referencia - Podés subir 1 o más archivos)", 
+                type=["xlsx", "xls", "csv"], 
+                accept_multiple_files=True
+            )
+        with col2:
+            file_actual = st.file_uploader(
+                "📥 Planilla Mes Actual (A Auditar)", 
+                type=["xlsx", "xls", "csv"]
+            )
+
+        if files_anteriores and file_actual:
+            if st.button("🚀 Ejecutar Cruce y Auditoría de Planillas", use_container_width=True):
+                try:
+                    dfs_ref_list = []
+                    for f in files_anteriores:
+                        df_temp_raw = cargar_archivo_universal(f)
+                        df_temp = mapear_y_desduplicar_columnas_auditoria(df_temp_raw)
+                        dfs_ref_list.append(df_temp)
+                    
+                    df_prev = pd.concat(dfs_ref_list, ignore_index=True)
+                    
+                    df_curr_raw = cargar_archivo_universal(file_actual)
+                    df_curr = mapear_y_desduplicar_columnas_auditoria(df_curr_raw)
+
+                    req_cols = ['cedula', 'operacion', 'fecha_deuda']
+                    missing_prev = [c for c in req_cols if c not in df_prev.columns]
+                    missing_curr = [c for c in req_cols if c not in df_curr.columns]
+
+                    if missing_prev or missing_curr:
+                        st.error("No se pudieron identificar las columnas requeridas ('Cédula', 'Número de la Operación', 'Fecha de la Deuda') en uno o varios de los archivos.")
+                    else:
+                        ref_operaciones = {}
+                        for idx, row in df_prev.iterrows():
+                            c_val = limpiar_texto(row.get('cedula'))
+                            o_val = limpiar_texto(row.get('operacion'))
+                            f_val = limpiar_texto(row.get('fecha_deuda'))
+                            if c_val and o_val:
+                                key = f"{c_val}_{o_val}"
+                                ref_operaciones[key] = {
+                                    'str': f_val,
+                                    'dt': parsear_fecha(f_val)
+                                }
+
+                        errores = []
+                        nuevos_registros = []
+
+                        for idx, row in df_curr.iterrows():
+                            cedula = limpiar_texto(row.get('cedula', ''))
+                            nombre = limpiar_texto(row.get('nombre', 'S/D'))
+                            concepto = limpiar_texto(row.get('concepto', ''))
+                            operacion = limpiar_texto(row.get('operacion', ''))
+                            fecha_deuda_str = limpiar_texto(row.get('fecha_deuda', ''))
+                            num_cuota_str = limpiar_texto(row.get('num_cuota', ''))
+                            tot_cuota_str = limpiar_texto(row.get('total_cuota', ''))
+                            monto_desc = limpiar_monto(row.get('monto_desconto', 0))
+                            saldo_deuda = limpiar_monto(row.get('saldo_deuda', 0))
+                            fecha_comp_str = limpiar_texto(row.get('fecha_comprobante', ''))
+
+                            if not cedula or not operacion:
+                                continue
+
+                            key_op = f"{cedula}_{operacion}"
+                            es_nuevo = key_op not in ref_operaciones
+
+                            dt_deuda = parsear_fecha(fecha_deuda_str)
+                            dt_comp = parsear_fecha(fecha_comp_str)
+
+                            # 1. DETECCIÓN DE NUEVAS OPERACIONES
+                            if es_nuevo:
+                                nuevos_registros.append({
+                                    'Cédula Beneficiario': cedula,
+                                    'Nombre y Apellido': nombre,
+                                    'Concepto': concepto,
+                                    'N° Operación': operacion,
+                                    'Fecha Deuda': fecha_deuda_str,
+                                    'Cuota Actual': num_cuota_str,
+                                    'Total Cuota': tot_cuota_str,
+                                    'Monto Descuento': monto_desc,
+                                    'Saldo Deuda': saldo_deuda,
+                                    'Fecha Comprobante Anterior': fecha_comp_str
+                                })
+
+                            # 2. REGLA 1: Fecha de Deuda modificada
+                            if not es_nuevo:
+                                ref_info = ref_operaciones[key_op]
+                                fecha_ref_str = ref_info['str']
+                                dt_ref = ref_info['dt']
+
+                                if dt_deuda is not None and dt_ref is not None:
+                                    difiere = (dt_deuda != dt_ref)
+                                else:
+                                    difiere = (fecha_deuda_str != fecha_ref_str)
+
+                                if difiere:
+                                    errores.append({
+                                        'Cédula Beneficiario': cedula,
+                                        'Nombre y Apellido': nombre,
+                                        'N° Operación': operacion,
+                                        'Tipo de Inconsistencia': 'Fecha de la deuda no coincide con lo informado previamente',
+                                        'Dato Mes Actual': fecha_deuda_str,
+                                        'Dato Correcto (Mes Anterior)': fecha_ref_str
+                                    })
+
+                            # 3. REGLA 2: Fecha comprobante anterior inferior a Fecha de Deuda
+                            if dt_deuda is not None and dt_comp is not None and dt_comp < dt_deuda:
+                                errores.append({
+                                    'Cédula Beneficiario': cedula,
+                                    'Nombre y Apellido': nombre,
+                                    'N° Operación': operacion,
+                                    'Tipo de Inconsistencia': 'Fecha comprobante anterior es inferior a la fecha de la deuda',
+                                    'Dato Mes Actual': f"Comprobante: {fecha_comp_str}",
+                                    'Dato Correcto (Mes Anterior)': f"Fecha Deuda: {fecha_deuda_str}"
+                                })
+
+                            # 4. REGLA 3: Última cuota -> Monto descuento debe ser igual al Saldo
+                            if num_cuota_str.isdigit() and tot_cuota_str.isdigit() and int(num_cuota_str) == int(tot_cuota_str):
+                                if abs(monto_desc - saldo_deuda) > 1.0:
+                                    errores.append({
+                                        'Cédula Beneficiario': cedula,
+                                        'Nombre y Apellido': nombre,
+                                        'N° Operación': operacion,
+                                        'Tipo de Inconsistencia': 'Monto a descontar en última cuota difiere del saldo pendiente',
+                                        'Dato Mes Actual': f"Monto Descuento: Gs. {int(monto_desc):,}",
+                                        'Dato Correcto (Mes Anterior)': f"Saldo Pendiente: Gs. {int(saldo_deuda):,}"
+                                    })
+
+                        df_errores = pd.DataFrame(errores)
+                        df_nuevos = pd.DataFrame(nuevos_registros)
+
+                        st.markdown("---")
+                        c1, c2 = st.columns(2)
+
+                        with c1:
+                            st.subheader("🔴 Inconsistencias Encontradas")
+                            if df_errores.empty:
+                                st.success("✅ ¡Sin errores detectados! La planilla está limpia.")
+                                
+                                # GENERACIÓN DE CONSOLIDADO Y DESCARGA (TXT Y PDF)
+                                # Prepara agrupación única por beneficiario/cédula
+                                df_curr['monto_num'] = df_curr['monto_desconto'].apply(limpiar_monto)
+                                if 'beneficiario' not in df_curr.columns:
+                                    df_curr['beneficiario'] = df_curr.get('cedula', '')
+
+                                df_agg = df_curr.groupby(['beneficiario', 'cedula'], as_index=False)['monto_num'].sum()
+                                df_agg.rename(columns={'monto_num': 'monto_total'}, inplace=True)
+
+                                # 1. Construcción del archivo TXT con formato exacto de columnas
+                                txt_lines = []
+                                for _, row_a in df_agg.iterrows():
+                                    b_str = str(row_a['beneficiario']).strip()
+                                    c_str = str(row_a['cedula']).strip()
+                                    m_str = str(int(round(row_a['monto_total']))).strip()
+                                    
+                                    # Alineación oficial: Beneficiario 14 char left, Cédula 10 char left, Monto 7 char right
+                                    linea_fmt = f"{b_str:<14}{c_str:<10}{m_str:>7}"
+                                    txt_lines.append(linea_fmt)
+                                
+                                txt_content = "\n".join(txt_lines)
+
+                                st.markdown("#### 📄 Archivos Consolidados Generados (Sin Errores):")
+
+                                col_d1, col_d2 = st.columns(2)
+                                with col_d1:
+                                    st.download_button(
+                                        label="📥 Descargar Consolidado (.TXT Oficial)",
+                                        data=txt_content.encode('latin1'),
+                                        file_name="COD_96_COOP_24_DE_OCTUBRE.TXT",
+                                        mime="text/plain",
+                                        use_container_width=True
+                                    )
+                                with col_d2:
+                                    pdf_agg_bytes = generar_pdf_tabla_consolidada(df_agg)
+                                    st.download_button(
+                                        label="📄 Descargar Consolidado (.PDF)",
+                                        data=pdf_agg_bytes,
+                                        file_name="Reporte_Consolidado_Hacienda.pdf",
+                                        mime="application/pdf",
+                                        use_container_width=True
+                                    )
+
+                            else:
+                                st.warning(f"Se encontraron {len(df_errores)} errores reales.")
+                                st.dataframe(df_errores, use_container_width=True)
+
+                                out_e = io.BytesIO()
+                                with pd.ExcelWriter(out_e, engine='openpyxl') as writer:
+                                    df_errores.to_excel(writer, sheet_name='Errores', index=False)
+                                st.download_button(
+                                    label="📥 Descargar Excel de Errores (.xlsx)",
+                                    data=out_e.getvalue(),
+                                    file_name="Reporte_Inconsistencias_Hacienda.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    use_container_width=True
+                                )
+
+                        with c2:
+                            st.subheader("🟢 Nuevos Registros / Operaciones")
+                            if df_nuevos.empty:
+                                st.info("No hay nuevas operaciones registradas.")
+                            else:
+                                st.success(f"Se encontraron {len(df_nuevos)} nuevos registros.")
+                                st.dataframe(df_nuevos, use_container_width=True)
+
+                                out_n = io.BytesIO()
+                                with pd.ExcelWriter(out_n, engine='openpyxl') as writer:
+                                    df_nuevos.to_excel(writer, sheet_name='Nuevos_Registros', index=False)
+                                st.download_button(
+                                    label="📥 Descargar Excel de Nuevos Registros (.xlsx)",
+                                    data=out_n.getvalue(),
+                                    file_name="Reporte_Nuevos_Registros_Hacienda.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    use_container_width=True
+                                )
+
+                except Exception as e:
+                    st.error(f"Error al procesar las planillas: {e}")
+
+# ==========================================
+# 🧮 MÓDULO 4: CALCULADORA DE PRÉSTAMOS
+# ==========================================
 elif opcion == "🧮 Calculadora de Préstamos":
     st.subheader("🧮 Calculadora Financiera de Préstamos")
 
@@ -460,11 +809,9 @@ elif opcion == "🧮 Calculadora de Préstamos":
     col_c1, col_c2 = st.columns(2)
 
     with col_c1:
-        # Entrada de texto con formato automático de miles y valor inicial en "0"
         monto_input_raw = st.text_input("Monto Capital (Gs.):", value="0", placeholder="Ej: 2.000.000")
         monto_capital = limpiar_monto(monto_input_raw)
         
-        # Muestra el monto formateado al instante abajo del campo
         if monto_capital > 0:
             st.caption(f"💵 **Monto ingresado:** Gs. {formato_guarani(monto_capital)}")
 
@@ -613,9 +960,11 @@ elif opcion == "🧮 Calculadora de Préstamos":
                 use_container_width=True
             )
 
-# --- MÓDULO 4: CARGAR BASE MENSUAL (EXCLUSIVO ADMINISTRADOR) ---
+# ==========================================
+# 📥 MÓDULO 5: CARGAR BASE MENSUAL (ADMIN)
+# ==========================================
 elif opcion == "📥 Cargar Base Mensual":
-    st.subheader("📥 Cargar Base de Liquidez Mensual de Militares")
+    st.subheader("📥 Cargar Base de Liquidez Mensual (FF.AA.)")
     
     if not es_admin_base:
         st.error("🔒 **Acceso denegado:** Este módulo es reservado únicamente para el usuario Administrador (`Arthuro`).")
@@ -624,7 +973,7 @@ elif opcion == "📥 Cargar Base Mensual":
         archivo = st.file_uploader("Seleccioná la planilla en formato Excel o CSV", type=["xlsx", "xls", "csv"])
         
         if archivo:
-            if st.button("⚠️ Procesar e Importar Base de Datos Mensual"):
+            if st.button("⚠️ Procesar e Importar Base de Datos Mensual", use_container_width=True):
                 try:
                     ext = archivo.name.lower().split('.')[-1]
                     if ext == 'csv':
@@ -632,7 +981,7 @@ elif opcion == "📥 Cargar Base Mensual":
                     else:
                         df_cargado = cargar_excel_detectando_cabecera(archivo)
 
-                    df_normalizado = estandarizar_columnas(df_cargado)
+                    df_normalizado = estandarizar_columnas_ffaa(df_cargado)
 
                     if df_normalizado.empty:
                         st.warning("No se encontraron datos procesables en el archivo.")
