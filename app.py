@@ -296,37 +296,35 @@ def extraer_texto_pdf(pdf_file):
 
 def procesar_extracto_cooperativa(texto_pdf):
     s_cap, i_dev, i_mor, i_pun = 0.0, 0.0, 0.0, 0.0
-    lineas = texto_pdf.split('\n')
+    
+    # 1. Saldo Capital e Interes Devengado en pie de extracto
+    match_saldo = re.search(r'SALDO\s*:\s*([\d\.]+)\s+([\d\.]+)', texto_pdf)
+    if match_saldo:
+        s_cap = float(match_saldo.group(1).replace('.', ''))
+        i_dev = float(match_saldo.group(2).replace('.', ''))
+    else:
+        # Alternativa de búsqueda si hay saltos de línea
+        lineas = texto_pdf.split('\n')
+        for idx, line in enumerate(lineas):
+            if 'SALDO' in line.upper():
+                bloque = " ".join(lineas[idx:idx+3])
+                nums = re.findall(r'\b\d{1,3}(?:\.\d{3})+\b', bloque)
+                if len(nums) >= 1:
+                    s_cap = float(nums[0].replace('.', ''))
+                if len(nums) >= 2:
+                    i_dev = float(nums[1].replace('.', ''))
 
-    # 1. Buscar línea de SALDO final
-    for idx, line in enumerate(lineas):
-        if 'SALDO:' in line.upper():
-            # Buscar números en esta línea y las 2 líneas siguientes
-            bloque = " ".join(lineas[idx:idx+3])
-            m_nums = re.findall(r'\b\d{1,3}(?:\.\d{3})+\b|\b\d{4,9}\b', bloque)
-            if len(m_nums) >= 1:
-                s_cap = limpiar_monto(m_nums[0])
-            if len(m_nums) >= 2:
-                i_dev = limpiar_monto(m_nums[1])
-
-    # 2. Sumar Moratorios y Punitorios si existen cuotas en mora
-    for line in lineas:
-        # Detectar líneas de cuotas vencidas/pagadas que contienen moratorios/punitorios
+    # 2. Moratorios y Punitorios de cuotas pendientes con atraso
+    for line in texto_pdf.split('\n'):
         if re.search(r'\b\d{2}/\d{2}/\d{2}\b', line):
-            # Extraer importes en formato con punto de miles
             importes = re.findall(r'\b\d{1,3}(?:\.\d{3})+\b', line)
-            # En el reporte oficial de 24 de Octubre:
-            # Moratorio y Punitorio están en las posiciones penúltima y previa si hay mora
-            if len(importes) >= 5:
-                # Se escanean números menores a 100.000 como posibles intereses moratorios/punitorios
-                vals = [limpiar_monto(x) for x in importes]
-                for v in vals:
-                    if 500 <= v <= 200000:
-                        # Si es múltiplo razonable o bajo, categorizar
-                        if v > 15000:
-                            i_mor += v
-                        elif v <= 15000 and v > 0:
-                            i_pun += v
+            if 'PP' in line or len(importes) > 3:
+                if len(importes) == 6:
+                    i_mor += float(importes[3].replace('.', ''))
+                    i_pun += float(importes[4].replace('.', ''))
+                elif len(importes) == 5:
+                    i_mor += float(importes[2].replace('.', ''))
+                    i_pun += float(importes[3].replace('.', ''))
 
     return s_cap, i_dev, i_mor, i_pun
 
@@ -1235,7 +1233,7 @@ elif opcion == "🧮 Calculadora y Estado de Cuenta":
                 if s_cap_tot == 0 and i_dev_tot == 0 and i_mor_tot == 0 and i_pun_tot == 0:
                     st.warning("⚠️ No se pudieron extraer datos numéricos automáticamente. Podés cargarlos manualmente en los casilleros de abajo.")
                 else:
-                    st.success("✅ ¡Extracto(s) procesado(s) e importado(s) exitosamente!")
+                    st.success(f"✅ Extracto(s) procesado(s) exitosamente! Saldo Capital: Gs. {formato_guarani(s_cap_tot)}")
                 st.rerun()
 
         st.markdown("---")
