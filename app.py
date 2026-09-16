@@ -294,6 +294,30 @@ def extraer_texto_pdf(pdf_file):
             
     return texto
 
+def procesar_texto_infocoop(texto_pdf):
+    # Detección flexible mediante búsquedas genéricas de patrones numéricos tras palabras clave
+    s_cap, i_dev, i_mor, i_pun = 0.0, 0.0, 0.0, 0.0
+
+    # Normalizar espacios
+    t = re.sub(r'\s+', ' ', texto_pdf.upper())
+
+    # Patrones flexibles para capturar importes
+    patron_cap = re.findall(r'(?:SALDO|CAPITAL|SALDO CAPITAL|SALDO DEUDOR)[:\s]*([\d\.,]+)', t)
+    patron_dev = re.findall(r'(?:INTERES DEVENGADO|INTERESES PRESTAMOS|INT\. DEV\.)[:\s]*([\d\.,]+)', t)
+    patron_mor = re.findall(r'(?:INTERES MORATORIO|MORATORIO|INT\. MORA)[:\s]*([\d\.,]+)', t)
+    patron_pun = re.findall(r'(?:INTERES PUNITORIO|PUNITORIO|INT\. PUNI)[:\s]*([\d\.,]+)', t)
+
+    if patron_cap:
+        s_cap = limpiar_monto(patron_cap[0])
+    if patron_dev:
+        i_dev = limpiar_monto(patron_dev[0])
+    if patron_mor:
+        i_mor = limpiar_monto(patron_mor[0])
+    if patron_pun:
+        i_pun = limpiar_monto(patron_pun[0])
+
+    return s_cap, i_dev, i_mor, i_pun
+
 @st.cache_data(ttl=2592000)
 def cargar_liquidez():
     if os.path.exists(DB_LIQUIDEZ_FILE):
@@ -1180,37 +1204,27 @@ elif opcion == "🧮 Calculadora y Estado de Cuenta":
         files_extracto = st.file_uploader("📥 Cargar Extracto(s) INFOCOOP (.pdf)", type=["pdf"], accept_multiple_files=True)
 
         if files_extracto:
-            btn_procesar = st.button("⚙️ Procesar Extracto(s)", use_container_width=True)
-            if btn_procesar:
-                s_cap = 0.0
-                i_dev = 0.0
-                i_mor = 0.0
-                i_pun = 0.0
-
+            if st.button("⚙️ Procesar Extracto(s)", use_container_width=True):
+                s_cap_tot, i_dev_tot, i_mor_tot, i_pun_tot = 0.0, 0.0, 0.0, 0.0
+                
                 for pdf_f in files_extracto:
                     texto_pdf = extraer_texto_pdf(pdf_f)
+                    c, d, m, p = procesar_texto_infocoop(texto_pdf)
+                    s_cap_tot += c
+                    i_dev_tot += d
+                    i_mor_tot += m
+                    i_pun_tot += p
 
-                    match_saldo = re.search(r'SALDO\s*:\s*([\d\.]+)', texto_pdf)
-                    if match_saldo:
-                        s_cap += limpiar_monto(match_saldo.group(1))
-
-                    match_dev = re.search(r'INTERES\s+DEVENGADO\s*([\d\.]+)', texto_pdf)
-                    if match_dev:
-                        i_dev += limpiar_monto(match_dev.group(1))
-
-                    match_mora = re.search(r'INTERES\s+MORATORIO\s*([\d\.]+)', texto_pdf)
-                    if match_mora:
-                        i_mor += limpiar_monto(match_mora.group(1))
-
-                    match_puni = re.search(r'INTERES\s+PUNITORIO\s*([\d\.]+)', texto_pdf)
-                    if match_puni:
-                        i_pun += limpiar_monto(match_puni.group(1))
-
-                st.session_state["saldo_capital_ext"] = s_cap
-                st.session_state["interes_devengado_ext"] = i_dev
-                st.session_state["mora_ext"] = i_mor
-                st.session_state["puni_ext"] = i_pun
-                st.success("✅ Extracto(s) procesado(s) exitosamente.")
+                st.session_state["saldo_capital_ext"] = s_cap_tot
+                st.session_state["interes_devengado_ext"] = i_dev_tot
+                st.session_state["mora_ext"] = i_mor_tot
+                st.session_state["puni_ext"] = i_pun_tot
+                
+                if s_cap_tot == 0 and i_dev_tot == 0 and i_mor_tot == 0 and i_pun_tot == 0:
+                    st.warning("⚠️ No se pudieron extraer datos numéricos automáticamente. Podés cargarlos manualmente en los casilleros de abajo.")
+                else:
+                    st.success("✅ ¡Extracto(s) procesado(s) e importado(s) exitosamente!")
+                st.rerun()
 
         st.markdown("---")
         st.markdown("### 💳 1. Deuda de Crédito(s)")
