@@ -6,7 +6,7 @@ import re
 from datetime import datetime, timedelta
 from fpdf import FPDF
 
-# Librerías de procesamiento de PDF
+# Librerías para lectura de PDF
 try:
     import pdfplumber
     HAS_PDFPLUMBER = True
@@ -923,8 +923,8 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
                                         use_container_width=True
                                     )
 
-                except Exception as e:
-                    st.error(f"Error al procesar las planillas: {e}")
+                    except Exception as e:
+                        st.error(f"Error al procesar las planillas: {e}")
 
         with tab2:
             st.subheader("✉️ Generador de Nota Oficial para Hacienda (MEF)")
@@ -1167,10 +1167,8 @@ elif opcion == "🧮 Calculadora y Estado de Cuenta":
         st.subheader("📑 Estado de Cuenta de Créditos y Liquidación (INFOCOOP)")
         st.info("Subí uno o más extractos en PDF. Todos los valores inician por defecto en 0 Gs. hasta procesar los archivos.")
 
-        # Carga múltiple de archivos PDF
         files_extracto = st.file_uploader("📥 Cargar Extracto(s) INFOCOOP (.pdf)", type=["pdf"], accept_multiple_files=True)
 
-        # Variables inicializadas estrictamente EN CERO
         saldo_capital_ext = 0.0
         mora_ext = 0.0
         puni_ext = 0.0
@@ -1232,7 +1230,6 @@ elif opcion == "🧮 Calculadora y Estado de Cuenta":
         k3.metric("Intereses + Moras", f"Gs. {formato_guarani(v_interes_devengado + v_mora + v_puni)}")
         k4.metric("💰 TOTAL A PAGAR SOCIO", f"Gs. {formato_guarani(total_liquidacion_general)}")
 
-        # Simulación de Tabla de Facturación
         df_facturacion = pd.DataFrame([
             {"Concepto / Rubro": "Crédito Principal (Saldo Capital)", "Monto Deuda (Gs.)": formato_guarani(v_saldo)},
             {"Concepto / Rubro": "INTERESES DE PRESTAMOS", "Monto Deuda (Gs.)": formato_guarani(v_interes_devengado)},
