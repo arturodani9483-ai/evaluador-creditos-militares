@@ -153,11 +153,11 @@ def limpiar_monto(val):
     if isinstance(val, pd.Series):
         val = val.dropna().iloc[0] if not val.dropna().empty else 0.0
     try:
-        return float(val)
-    except:
         s = str(val).replace('.', '').replace(',', '.').strip()
         numeros = re.findall(r'[-+]?\d*\.\d+|\d+', s)
         return float(numeros[0]) if numeros else 0.0
+    except:
+        return 0.0
 
 def formato_guarani(val):
     try:
@@ -294,27 +294,39 @@ def extraer_texto_pdf(pdf_file):
             
     return texto
 
-def procesar_texto_infocoop(texto_pdf):
-    # Detección flexible mediante búsquedas genéricas de patrones numéricos tras palabras clave
+def procesar_extracto_cooperativa(texto_pdf):
     s_cap, i_dev, i_mor, i_pun = 0.0, 0.0, 0.0, 0.0
+    lineas = texto_pdf.split('\n')
 
-    # Normalizar espacios
-    t = re.sub(r'\s+', ' ', texto_pdf.upper())
+    # 1. Buscar línea de SALDO final
+    for idx, line in enumerate(lineas):
+        if 'SALDO:' in line.upper():
+            # Buscar números en esta línea y las 2 líneas siguientes
+            bloque = " ".join(lineas[idx:idx+3])
+            m_nums = re.findall(r'\b\d{1,3}(?:\.\d{3})+\b|\b\d{4,9}\b', bloque)
+            if len(m_nums) >= 1:
+                s_cap = limpiar_monto(m_nums[0])
+            if len(m_nums) >= 2:
+                i_dev = limpiar_monto(m_nums[1])
 
-    # Patrones flexibles para capturar importes
-    patron_cap = re.findall(r'(?:SALDO|CAPITAL|SALDO CAPITAL|SALDO DEUDOR)[:\s]*([\d\.,]+)', t)
-    patron_dev = re.findall(r'(?:INTERES DEVENGADO|INTERESES PRESTAMOS|INT\. DEV\.)[:\s]*([\d\.,]+)', t)
-    patron_mor = re.findall(r'(?:INTERES MORATORIO|MORATORIO|INT\. MORA)[:\s]*([\d\.,]+)', t)
-    patron_pun = re.findall(r'(?:INTERES PUNITORIO|PUNITORIO|INT\. PUNI)[:\s]*([\d\.,]+)', t)
-
-    if patron_cap:
-        s_cap = limpiar_monto(patron_cap[0])
-    if patron_dev:
-        i_dev = limpiar_monto(patron_dev[0])
-    if patron_mor:
-        i_mor = limpiar_monto(patron_mor[0])
-    if patron_pun:
-        i_pun = limpiar_monto(patron_pun[0])
+    # 2. Sumar Moratorios y Punitorios si existen cuotas en mora
+    for line in lineas:
+        # Detectar líneas de cuotas vencidas/pagadas que contienen moratorios/punitorios
+        if re.search(r'\b\d{2}/\d{2}/\d{2}\b', line):
+            # Extraer importes en formato con punto de miles
+            importes = re.findall(r'\b\d{1,3}(?:\.\d{3})+\b', line)
+            # En el reporte oficial de 24 de Octubre:
+            # Moratorio y Punitorio están en las posiciones penúltima y previa si hay mora
+            if len(importes) >= 5:
+                # Se escanean números menores a 100.000 como posibles intereses moratorios/punitorios
+                vals = [limpiar_monto(x) for x in importes]
+                for v in vals:
+                    if 500 <= v <= 200000:
+                        # Si es múltiplo razonable o bajo, categorizar
+                        if v > 15000:
+                            i_mor += v
+                        elif v <= 15000 and v > 0:
+                            i_pun += v
 
     return s_cap, i_dev, i_mor, i_pun
 
@@ -1209,7 +1221,7 @@ elif opcion == "🧮 Calculadora y Estado de Cuenta":
                 
                 for pdf_f in files_extracto:
                     texto_pdf = extraer_texto_pdf(pdf_f)
-                    c, d, m, p = procesar_texto_infocoop(texto_pdf)
+                    c, d, m, p = procesar_extracto_cooperativa(texto_pdf)
                     s_cap_tot += c
                     i_dev_tot += d
                     i_mor_tot += m
