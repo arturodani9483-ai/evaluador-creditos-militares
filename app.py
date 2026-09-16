@@ -32,6 +32,14 @@ if "autenticado" not in st.session_state:
 if "usuario_actual" not in st.session_state:
     st.session_state["usuario_actual"] = ""
 
+# Inicialización de estado para la Nota de Hacienda (inician en 0 y bloqueados)
+if "auditoria_ejecutada_limpia" not in st.session_state:
+    st.session_state["auditoria_ejecutada_limpia"] = False
+if "total_monto_auditoria" not in st.session_state:
+    st.session_state["total_monto_auditoria"] = 0.0
+if "total_beneficiarios_auditoria" not in st.session_state:
+    st.session_state["total_beneficiarios_auditoria"] = 0
+
 def pantalla_login():
     st.markdown("# 🏛️ SICOC")
     st.markdown("### Sistema Integrado de Control Operativo y Crediticio")
@@ -275,7 +283,7 @@ def cargar_dictamenes():
 def guardar_dictamenes(df):
     df.to_csv(DB_DICTAMENES_FILE, index=False)
 
-def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubilacion, tot_desc, liquido, limite, cuota, estado, obs=""):
+def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubilacion, tot_desc, liquido, limite, cuota, estado, obs="", expo_peligro=0.0):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 14)
@@ -298,10 +306,11 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
     pdf.cell(0, 8, "2. RESUMEN DE LIQUIDEZ Y HABERES", ln=True)
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(100, 6, f"Sueldo Presupuestado: Gs. {formato_guarani(presupuestado)}")
-    pdf.cell(90, 6, f"Descuento Jubilación: Gs. {formato_guarani(jubilacion)}", ln=True)
-    pdf.cell(100, 6, f"Total Descuentos: Gs. {formato_guarani(tot_desc)}")
-    pdf.cell(90, 6, f"Líquido Real Actual: Gs. {formato_guarani(liquido)}")
-    pdf.cell(100, 6, f"Límite Disponible (50%): Gs. {formato_guarani(limite)}", ln=True)
+    pdf.cell(90, 6, f"Exposición al Peligro (10.7% CF2): Gs. {formato_guarani(expo_peligro)}", ln=True)
+    pdf.cell(100, 6, f"Descuento Jubilación: Gs. {formato_guarani(jubilacion)}")
+    pdf.cell(90, 6, f"Total Descuentos: Gs. {formato_guarani(tot_desc)}", ln=True)
+    pdf.cell(100, 6, f"Líquido Real Actual: Gs. {formato_guarani(liquido)}")
+    pdf.cell(90, 6, f"Límite Disponible (50%): Gs. {formato_guarani(limite)}", ln=True)
     pdf.ln(4)
 
     pdf.set_font("Helvetica", "B", 11)
@@ -470,6 +479,10 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             categoria = row.get('cat_codigo', '-')
 
             presupuestado = limpiar_monto(row.get('presupuestado', 0))
+            
+            # NUEVO CÁLCULO: Exposición al peligro (10.7% del presupuestado como haber adicional CF2)
+            exposicion_peligro = presupuestado * 0.107
+
             jubilacion = limpiar_monto(row.get('jubilacion', 0))
             giraduria = limpiar_monto(row.get('giraduria', 0))
             desc_cf2 = limpiar_monto(row.get('descuento_cf2', 0))
@@ -491,13 +504,13 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             st.markdown("### 📊 Desglose de Haberes y Descuentos")
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Presupuestado", f"Gs. {formato_guarani(presupuestado)}")
-            c2.metric("Jubilación", f"Gs. {formato_guarani(jubilacion)}")
-            c3.metric("Giraduría", f"Gs. {formato_guarani(giraduria)}")
-            c4.metric("Descuento CF2", f"Gs. {formato_guarani(desc_cf2)}")
+            c2.metric("🛡️ Expo. Peligro (10.7%)", f"Gs. {formato_guarani(exposicion_peligro)}", help="Beneficio adicional descontable vía CF2")
+            c3.metric("Jubilación", f"Gs. {formato_guarani(jubilacion)}")
+            c4.metric("Giraduría", f"Gs. {formato_guarani(giraduria)}")
 
             c5, c6, c7, c8 = st.columns(4)
-            c5.metric("Judicial", f"Gs. {formato_guarani(judicial)}")
-            c6.metric("Total Descuentos", f"Gs. {formato_guarani(total_descuentos)}")
+            c5.metric("Descuento CF2", f"Gs. {formato_guarani(desc_cf2)}")
+            c6.metric("Judicial", f"Gs. {formato_guarani(judicial)}")
             c7.metric("Líquido Real", f"Gs. {formato_guarani(liquido_real)}")
             c8.metric("Límite Cuota (50%)", f"Gs. {formato_guarani(limite_50)}")
 
@@ -507,10 +520,11 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                 st.warning(
                     f"⚠️ **ATENCIÓN: Los descuentos de deudas actuales (Gs. {formato_guarani(total_deudas_actuales)}) "
                     f"ya superan el límite del 50% por Gs. {formato_guarani(exceso_actual)}.**\n\n"
-                    f"📌 **RECOMENDACIÓN:** Consultar disponibilidad con **CF2** para evaluar margen o beneficios especiales."
+                    f"📌 **RECOMENDACIÓN CF2:** El militar cuenta con un beneficio disponible por Exposición al Peligro de "
+                    f"**Gs. {formato_guarani(exposicion_peligro)}** que puede ser utilizado como margen adicional."
                 )
             else:
-                st.info(f"💡 **Margen disponible para nuevos descuentos:** Gs. {formato_guarani(margen_deuda_restante)}")
+                st.info(f"💡 **Margen disponible para nuevos descuentos:** Gs. {formato_guarani(margen_deuda_restante)} (Más Gs. {formato_guarani(exposicion_peligro)} por Exposición al Peligro en CF2)")
 
             st.subheader("💳 Evaluación del Nuevo Crédito")
             cuota_solicitada = st.number_input("Monto de la Cuota para el Nuevo Crédito (Gs.):", min_value=0.0, step=50000.0, format="%.0f")
@@ -521,9 +535,13 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                     estado_eval = "APROBADO (DENTRO DEL MARGEN DEL 50%)"
                     st.success("✅ **CRÉDITO FACTIBLE (APROBADO)**")
                     st.write(f"La cuota entra dentro del límite del 50%. Margen restante: **Gs. {formato_guarani(margen_deuda_restante - cuota_solicitada)}**")
+                elif total_deudas_actuales + cuota_solicitada <= (limite_50 + exposicion_peligro):
+                    estado_eval = "APROBADO VÍA CF2 (EXPOSICIÓN AL PELIGRO)"
+                    st.success("✅ **CRÉDITO FACTIBLE VÍA CF2**")
+                    st.write(f"La cuota supera el 50% pero está cubierta por el margen de Exposición al Peligro (Gs. {formato_guarani(exposicion_peligro)}).")
                 else:
-                    estado_eval = "RECHAZADO - CONSULTAR DISPONIBILIDAD CON CF2"
-                    st.error("⚠️ **RECHAZADO POR LÍMITE DE LIQUIDEZ DEL 50% - CONSULTAR DISPONIBILIDAD CON CF2**")
+                    estado_eval = "RECHAZADO - SUPERA LÍMITE INCLUSO CON EXPOSICIÓN AL PELIGRO"
+                    st.error("⚠️ **RECHAZADO: La cuota solicitada supera el límite legal del 50% y el beneficio de Exposición al Peligro.**")
 
             dict_match = df_dictamenes[df_dictamenes['CEDULA'].apply(limpiar_ci) == cedula_militar]
             obs_dictamen = dict_match.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_match.empty else "Sin observaciones previas."
@@ -533,7 +551,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                 st.warning(f"📌 **Dictamen Registrado por Giraduría:** {obs_dictamen}")
 
             st.markdown("---")
-            pdf_bytes = generar_pdf_constancia("Simulación de Crédito", nombre, cedula_militar, unidad, presupuestado, jubilacion, total_descuentos, liquido_real, limite_50, cuota_solicitada, estado_eval, obs_dictamen)
+            pdf_bytes = generar_pdf_constancia("Simulación de Crédito", nombre, cedula_militar, unidad, presupuestado, jubilacion, total_descuentos, liquido_real, limite_50, cuota_solicitada, estado_eval, obs_dictamen, expo_peligro=exposicion_peligro)
             
             st.download_button(
                 label="📄 Descargar / Imprimir Constancia de Evaluación (PDF)",
@@ -579,6 +597,7 @@ elif opcion == "📋 Dictamen del Girador":
             unidad_g = row_g.get('UNIDAD', '-')
             
             presupuestado_g = limpiar_monto(row_g.get('presupuestado', 0))
+            expo_g = presupuestado_g * 0.107
             jubilacion_g = limpiar_monto(row_g.get('jubilacion', 0))
             tot_desc_g = jubilacion_g + limpiar_monto(row_g.get('giraduria', 0)) + limpiar_monto(row_g.get('descuento_cf2', 0)) + limpiar_monto(row_g.get('judicial', 0))
             liquido_real_g = presupuestado_g - tot_desc_g if tot_desc_g > 0 else limpiar_monto(row_g.get('liquido', 0))
@@ -592,7 +611,7 @@ elif opcion == "📋 Dictamen del Girador":
                 st.text_input("Unidad Militar:", value=unidad_g, disabled=True)
             with col_g2:
                 st.text_input("Cédula N°:", value=ci_g, disabled=True)
-                st.text_input("Límite de Cuota Máxima (50%):", value=f"Gs. {formato_guarani(limite_50_g)}", disabled=True)
+                st.text_input("Límite de Cuota Máxima (50%):", value=f"Gs. {formato_guarani(limite_50_g)} (+ Expo Peligro Gs. {formato_guarani(expo_g)})", disabled=True)
 
             st.markdown("---")
             dict_previo = df_dictamenes[df_dictamenes['CEDULA'].apply(limpiar_ci) == ci_g]
@@ -627,7 +646,7 @@ elif opcion == "📋 Dictamen del Girador":
                 cuota_evaluando = 0.0
 
             st.markdown("---")
-            pdf_bytes_g = generar_pdf_constancia("Dictamen de Giraduría", nombre_g, ci_g, unidad_g, presupuestado_g, jubilacion_g, tot_desc_g, liquido_real_g, limite_50_g, cuota_evaluando, "EVALUADO POR GIRADOR", obs_inicial)
+            pdf_bytes_g = generar_pdf_constancia("Dictamen de Giraduría", nombre_g, ci_g, unidad_g, presupuestado_g, jubilacion_g, tot_desc_g, liquido_real_g, limite_50_g, cuota_evaluando, "EVALUADO POR GIRADOR", obs_inicial, expo_peligro=expo_g)
             
             st.download_button(
                 label="📄 Descargar / Imprimir Dictamen de Giraduría (PDF)",
@@ -761,14 +780,14 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
                                             'Dato Correcto (Mes Anterior)': fecha_ref_str
                                         })
 
-                                    # NUEVA REGLA: Alerta si el monto a descontar es MAYOR en el mes actual
+                                    # ALERTA DE CUOTA MAYOR EN EL MES ACTUAL
                                     if monto_desc > monto_ref:
                                         errores.append({
                                             'Cédula Beneficiario': cedula,
                                             'Nombre y Apellido': nombre,
                                             'N° Operación': operacion,
                                             'Concepto': concepto,
-                                            'Tipo de Inconsistencia': f'Monto a descontar aumentó respecto al mes anterior (Monto Actual > Anterior)',
+                                            'Tipo de Inconsistencia': 'Monto a descontar aumentó respecto al mes anterior (Monto Actual > Anterior)',
                                             'Dato Mes Actual': f"Gs. {formato_guarani(monto_desc)}",
                                             'Dato Correcto (Mes Anterior)': f"Gs. {formato_guarani(monto_ref)}"
                                         })
@@ -816,8 +835,10 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
                                     df_agg = df_curr.groupby(['beneficiario', 'cedula'], as_index=False)['monto_num'].sum()
                                     df_agg.rename(columns={'monto_num': 'monto_total'}, inplace=True)
 
-                                    st.session_state['total_monto_auditoria'] = df_agg['monto_total'].sum()
-                                    st.session_state['total_beneficiarios_auditoria'] = len(df_agg)
+                                    # ACTUALIZACIÓN DE ESTADO SI ESTÁ 100% LIMPIA
+                                    st.session_state['auditoria_ejecutada_limpia'] = True
+                                    st.session_state['total_monto_auditoria'] = float(df_agg['monto_total'].sum())
+                                    st.session_state['total_beneficiarios_auditoria'] = int(len(df_agg))
 
                                     # Generar TXT
                                     txt_lines = []
@@ -852,6 +873,11 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
                                         )
 
                                 else:
+                                    # SI HAY ERRORES, BLOQUEA LA NOTA MEF
+                                    st.session_state['auditoria_ejecutada_limpia'] = False
+                                    st.session_state['total_monto_auditoria'] = 0.0
+                                    st.session_state['total_beneficiarios_auditoria'] = 0
+
                                     st.warning(f"Se encontraron {len(df_errores)} alertas/errores.")
                                     st.dataframe(df_errores, use_container_width=True)
 
@@ -890,10 +916,18 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
 
         with tab2:
             st.subheader("✉️ Generador de Nota Oficial para Hacienda (MEF)")
-            st.info("Completá o modificá los campos de fecha, período y anexos para generar el documento oficial en PDF.")
-
-            m_tot = st.session_state.get('total_monto_auditoria', 213112995.0)
-            c_ben = st.session_state.get('total_beneficiarios_auditoria', 224)
+            
+            # RESTRICCIÓN DE ACCESO Y MONTOS EN 0 SI NO HAY AUDITORÍA LIMPIA
+            if not st.session_state.get('auditoria_ejecutada_limpia', False):
+                st.warning("⚠️ **Nota Oficial Bloqueada:** Aún no se ha ejecutado el cruce de planillas o se detectaron errores en la auditoría.")
+                st.info("📌 **Requisito:** Ejecutá primero la auditoría en la pestaña anterior con planillas 100% limpias (cero errores) para habilitar la generación de la Nota en PDF.")
+                
+                m_tot = 0.0
+                c_ben = 0
+            else:
+                st.success("✅ **Auditoría Limpia Verificada:** Podés ajustar la fecha y los anexos para descargar la Nota Oficial.")
+                m_tot = st.session_state.get('total_monto_auditoria', 0.0)
+                c_ben = st.session_state.get('total_beneficiarios_auditoria', 0)
 
             col_f1, col_f2, col_f3 = st.columns(3)
             with col_f1:
@@ -906,39 +940,42 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
             st.markdown("---")
             st.markdown("#### 📋 Marque las casillas que corresponden a los anexos presentados:")
 
-            # Casillas totalmente configurables (inician desmarcadas por defecto según preferencia)
+            # Casillas desmarcadas por defecto
             c_chk1, c_chk2 = st.columns(2)
             with c_chk1:
-                chk_1 = st.checkbox("1- Planilla de Descuentos (Obligatorio: Archivo .txt)", value=True)
+                chk_1 = st.checkbox("1- Planilla de Descuentos (Obligatorio: Archivo .txt)", value=False)
                 chk_2 = st.checkbox("2- Nómina de Nuevos Asociados (Archivo TXT y cédulas en PDF)", value=False)
                 chk_3 = st.checkbox("3- Planilla de Nuevas Autorizaciones (Archivo CSV)", value=False)
             with c_chk2:
                 chk_4 = st.checkbox("4- Planilla de Bajas por Fallecimiento (Anexo PDF)", value=False)
-                chk_5 = st.checkbox("5- Planilla de Información (Obligatorio: Archivo TXT/CSV)", value=True)
+                chk_5 = st.checkbox("5- Planilla de Información (Obligatorio: Archivo TXT/CSV)", value=False)
 
             st.markdown("---")
             st.write(f"📊 **Totales calculados para la Nota:** Monto Gs. `{formato_guarani(m_tot)}` | Beneficiarios: `{c_ben}`")
 
-            pdf_nota_final = generar_pdf_nota_hacienda(
-                fecha_nota_input, 
-                mes_eval_input, 
-                anio_eval_input, 
-                m_tot, 
-                c_ben,
-                c1=chk_1,
-                c2=chk_2,
-                c3=chk_3,
-                c4=chk_4,
-                c5=chk_5
-            )
+            if st.session_state.get('auditoria_ejecutada_limpia', False):
+                pdf_nota_final = generar_pdf_nota_hacienda(
+                    fecha_nota_input, 
+                    mes_eval_input, 
+                    anio_eval_input, 
+                    m_tot, 
+                    c_ben,
+                    c1=chk_1,
+                    c2=chk_2,
+                    c3=chk_3,
+                    c4=chk_4,
+                    c5=chk_5
+                )
 
-            st.download_button(
-                label="📄 Descargar Nota Oficial de Presentación en PDF (.PDF MEF)",
-                data=pdf_nota_final,
-                file_name=f"Nota_Oficial_MEF_{mes_eval_input}_{anio_eval_input}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
+                st.download_button(
+                    label="📄 Descargar Nota Oficial de Presentación en PDF (.PDF MEF)",
+                    data=pdf_nota_final,
+                    file_name=f"Nota_Oficial_MEF_{mes_eval_input}_{anio_eval_input}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+            else:
+                st.button("📄 Descargar Nota Oficial de Presentación en PDF (.PDF MEF)", disabled=True, use_container_width=True)
 
 # ==========================================
 # 🧮 MÓDULO 4: CALCULADORA DE PRÉSTAMOS
