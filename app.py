@@ -102,6 +102,7 @@ opcion = st.sidebar.radio("Navegación de Módulos:", [
 ])
 
 DB_LIQUIDEZ_FILE = "base_liquidez_militares.csv"
+DB_GIRADURIAS_FILE = "Planilla_Descuentos_Consolidada_Agosto.xlsx"
 DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
 
 # ==========================================
@@ -159,7 +160,7 @@ def cargar_excel_detectando_cabecera(file_or_path):
     header_idx = 0
     for idx, row in df_raw.iterrows():
         row_str = " ".join([str(val).upper() for val in row.values if pd.notna(val)])
-        if 'C.I' in row_str or 'CEDULA' in row_str or 'NOMBRE' in row_str or 'BENEFICIARIO' in row_str:
+        if 'C.I' in row_str or 'CEDULA' in row_str or 'NOMBRE' in row_str or 'BENEFICIARIO' in row_str or 'SOCIO' in row_str:
             header_idx = idx
             break
     return pd.read_excel(file_or_path, skiprows=header_idx, dtype=str)
@@ -195,6 +196,21 @@ def estandarizar_columnas_ffaa(df):
     if 'emp_ci' not in df_renamed.columns and len(df_renamed.columns) > 0:
         df_renamed['emp_ci'] = df_renamed.iloc[:, 0]
     return df_renamed
+
+def estandarizar_columnas_giradurias(df):
+    cols_map = {}
+    for c in df.columns:
+        c_clean = str(c).strip().upper().replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
+        if 'SOCIO' in c_clean or 'NRO_SOCIO' in c_clean or 'N° SOCIO' in c_clean:
+            cols_map[c] = 'nro_socio'
+        elif 'C.I' in c_clean or 'CEDULA' in c_clean:
+            cols_map[c] = 'emp_ci'
+        elif 'MONTO' in c_clean or 'ENVIADO' in c_clean or 'COBRADO' in c_clean:
+            cols_map[c] = 'monto_enviado'
+        elif 'UNIDAD' in c_clean or 'GIRADURIA' in c_clean:
+            cols_map[c] = 'unidad_giraduria'
+            
+    return df.rename(columns=cols_map)
 
 def mapear_y_desduplicar_columnas_auditoria(df):
     cols_map = {}
@@ -272,6 +288,19 @@ def cargar_liquidez():
 
 def guardar_liquidez(df):
     df.to_csv(DB_LIQUIDEZ_FILE, index=False)
+    st.cache_data.clear()
+
+@st.cache_data(ttl=2592000)
+def cargar_giradurias():
+    if os.path.exists(DB_GIRADURIAS_FILE):
+        try:
+            return pd.read_excel(DB_GIRADURIAS_FILE, dtype=str)
+        except:
+            pass
+    return pd.DataFrame()
+
+def guardar_giradurias(df):
+    df.to_excel(DB_GIRADURIAS_FILE, index=False)
     st.cache_data.clear()
 
 def cargar_dictamenes():
@@ -432,6 +461,7 @@ def generar_pdf_tabla_consolidada(df_agg, titulo="REPORTE CONSOLIDADO DE DESCUEN
     return bytes(pdf.output())
 
 df_liquidez = cargar_liquidez()
+df_giradurias = cargar_giradurias()
 df_dictamenes = cargar_dictamenes()
 
 # ==========================================
@@ -1124,33 +1154,71 @@ elif opcion == "🧮 Calculadora de Préstamos":
             )
 
 # ==========================================
-# 📥 MÓDULO 5: CARGAR BASE MENSUAL (ADMIN)
+# 📥 MÓDULO 5: CARGAR BASES MENSUALES (ADMIN)
 # ==========================================
 elif opcion == "📥 Cargar Base Mensual":
-    st.subheader("📥 Cargar Base de Liquidez Mensual (FF.AA.)")
+    st.subheader("📥 Administración y Carga de Bases Mensuales")
     
     if not es_admin_base:
         st.error("🔒 **Acceso denegado:** Este módulo es reservado únicamente para el usuario Administrador (`Arthuro`).")
     else:
-        st.success("🔑 **Permisos de Administrador Verificados:** Podés subir o actualizar la base mensual.")
-        archivo = st.file_uploader("Seleccioná la planilla en formato Excel o CSV", type=["xlsx", "xls", "csv"])
+        st.success("🔑 **Permisos de Administrador Verificados:** Podés subir o actualizar las bases de datos permanentes.")
         
-        if archivo:
-            if st.button("⚠️ Procesar e Importar Base de Datos Mensual", use_container_width=True):
-                try:
-                    ext = archivo.name.lower().split('.')[-1]
-                    if ext == 'csv':
-                        df_cargado = pd.read_csv(archivo, dtype=str)
-                    else:
-                        df_cargado = cargar_excel_detectando_cabecera(archivo)
+        tab_b1, tab_b2 = st.tabs(["🪖 Base de Liquidez (FF.AA.)", "🏛️ Base Enviado / Cobrado (Giradurías)"])
 
-                    df_normalizado = estandarizar_columnas_ffaa(df_cargado)
+        with tab_b1:
+            st.markdown("#### 1. Planilla de Liquidez Militar (FF.AA.)")
+            st.caption("Esta base reemplaza el archivo `base_liquidez_militares.csv` permanentemente.")
+            
+            if not df_liquidez.empty:
+                st.info(f"📊 **Estado actual:** {len(df_liquidez):,} registros cargados.")
+            else:
+                st.warning("⚠️ Sin datos cargados actualmente.")
 
-                    if df_normalizado.empty:
-                        st.warning("No se encontraron datos procesables en el archivo.")
-                    else:
-                        guardar_liquidez(df_normalizado)
-                        st.success(f"✅ ¡Base de datos importada correctamente! Total de militares registrados: {len(df_normalizado):,}")
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"Error al procesar el archivo: {e}")
+            archivo_l = st.file_uploader("Seleccioná la planilla de Liquidez (.xlsx / .xls / .csv)", type=["xlsx", "xls", "csv"], key="u_liquidez")
+            
+            if archivo_l:
+                if st.button("⚠️ Procesar e Importar Base de Liquidez", use_container_width=True):
+                    try:
+                        ext = archivo_l.name.lower().split('.')[-1]
+                        if ext == 'csv':
+                            df_cargado = pd.read_csv(archivo_l, dtype=str)
+                        else:
+                            df_cargado = cargar_excel_detectando_cabecera(archivo_l)
+
+                        df_normalizado = estandarizar_columnas_ffaa(df_cargado)
+
+                        if df_normalizado.empty:
+                            st.warning("No se encontraron datos procesables en el archivo.")
+                        else:
+                            guardar_liquidez(df_normalizado)
+                            st.success(f"✅ ¡Base de liquidez importada y guardada permanentemente! Total militares: {len(df_normalizado):,}")
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al procesar la planilla: {e}")
+
+        with tab_b2:
+            st.markdown("#### 2. Base Enviado / Cobrado Giradurías")
+            st.caption("Esta base almacena el archivo `Planilla_Descuentos_Consolidada_Agosto.xlsx` permanentemente.")
+            
+            if not df_giradurias.empty:
+                st.info(f"📊 **Estado actual:** {len(df_giradurias):,} registros de socios/giradurías cargados.")
+            else:
+                st.warning("⚠️ Sin datos de giradurías cargados actualmente.")
+
+            archivo_g = st.file_uploader("📥 Cargar Base Enviado / Cobrado Giradurías (.xlsx / .xls)", type=["xlsx", "xls"], key="u_giradurias")
+            
+            if archivo_g:
+                if st.button("⚠️ Procesar e Importar Base de Giradurías", use_container_width=True):
+                    try:
+                        df_cargado_g = cargar_excel_detectando_cabecera(archivo_g)
+                        df_norm_g = estandarizar_columnas_giradurias(df_cargado_g)
+
+                        if df_norm_g.empty:
+                            st.warning("No se encontraron datos procesables en el archivo de giradurías.")
+                        else:
+                            guardar_giradurias(df_norm_g)
+                            st.success(f"✅ ¡Base de Giradurías guardada correctamente como 'Planilla_Descuentos_Consolidada_Agosto.xlsx'! Total socios registrados: {len(df_norm_g):,}")
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al procesar la planilla de giradurías: {e}")
