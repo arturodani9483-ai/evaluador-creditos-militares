@@ -133,7 +133,8 @@ def limpiar_texto(val):
         return ""
     if isinstance(val, pd.Series):
         val = val.dropna().iloc[0] if not val.dropna().empty else ""
-    return str(val).strip()
+    s = str(val).strip()
+    return "" if s.upper() == "NAN" or s.upper() == "NONE" else s
 
 def limpiar_ci(val):
     if pd.isna(val) or val is None:
@@ -175,27 +176,46 @@ def parsear_fecha(d_str):
             pass
     return None
 
-def cargar_excel_detectando_cabecera(file_or_path):
-    df_raw = pd.read_excel(file_or_path, header=None, dtype=str)
-    header_idx = 0
-    for idx, row in df_raw.iterrows():
-        row_str = " ".join([str(val).upper() for val in row.values if pd.notna(val)])
-        if 'C.I' in row_str or 'CEDULA' in row_str or 'NOMBRE' in row_str or 'BENEFICIARIO' in row_str or 'SOCIO' in row_str:
-            header_idx = idx
-            break
-    return pd.read_excel(file_or_path, skiprows=header_idx, dtype=str)
+def estandarizar_columnas_giradurias(df):
+    cols_map = {}
+    for c in df.columns:
+        c_clean = str(c).strip().upper().replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
+        if 'SOCIO' in c_clean:
+            cols_map[c] = 'nro_socio'
+        elif 'C.I' in c_clean or 'CEDULA' in c_clean or 'CI' in c_clean:
+            cols_map[c] = 'emp_ci'
+        elif 'APELLIDO' in c_clean or 'NOMBRE' in c_clean:
+            cols_map[c] = 'emp_nomape'
+        elif 'TOTAL DESCUENTOS' in c_clean or 'ENVIADO' in c_clean:
+            cols_map[c] = 'monto_enviado'
+        elif 'COBRADO' in c_clean:
+            cols_map[c] = 'monto_cobrado'
+        elif 'RECHAZADO' in c_clean:
+            cols_map[c] = 'monto_rechazado'
+            
+    df_ren = df.rename(columns=cols_map)
+    return df_ren
 
 def unificar_hojas_excel(file_or_path):
+    """Lee todas las pestañas de un Excel (omitiendo 'Hoja1') y las unifica asignando la unidad correspondiente."""
     xls = pd.ExcelFile(file_or_path)
     dfs = []
     
     for sheet in xls.sheet_names:
+        # IGNORAR HOJA 1 TAL COMO SE SOLICITÓ
+        if sheet.strip().lower() in ['hoja1', 'hoja 1', 'consolidado']:
+            continue
+
         num_m = re.findall(r'\d+', str(sheet))
         num_str = num_m[0] if num_m else ""
         nombre_unidad = MAPEO_UNIDADES.get(num_str, sheet)
         
         try:
-            df_s = cargar_excel_detectando_cabecera(io.BytesIO(xls.parse(sheet, header=None).to_csv(index=False).encode('utf-8')) if hasattr(file_or_path, 'read') else sheet)
+            df_s = pd.read_excel(xls, sheet_name=sheet, dtype=str)
+            # Eliminar la fila final de Totales si existe
+            if 'N°' in df_s.columns:
+                df_s = df_s[df_s['N°'].astype(str).str.upper() != 'TOTAL GENERAL:']
+            
             df_s = estandarizar_columnas_giradurias(df_s)
             df_s['unidad_nombre_oficial'] = nombre_unidad
             df_s['hoja_origen'] = sheet
@@ -238,23 +258,6 @@ def estandarizar_columnas_ffaa(df):
     if 'emp_ci' not in df_renamed.columns and len(df_renamed.columns) > 0:
         df_renamed['emp_ci'] = df_renamed.iloc[:, 0]
     return df_renamed
-
-def estandarizar_columnas_giradurias(df):
-    cols_map = {}
-    for c in df.columns:
-        c_clean = str(c).strip().upper().replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
-        if 'SOCIO' in c_clean or 'NRO_SOCIO' in c_clean or 'N° SOCIO' in c_clean:
-            cols_map[c] = 'nro_socio'
-        elif 'C.I' in c_clean or 'CEDULA' in c_clean:
-            cols_map[c] = 'emp_ci'
-        elif 'ENVIADO' in c_clean or 'MONTO ENVIADO' in c_clean:
-            cols_map[c] = 'monto_enviado'
-        elif 'COBRADO' in c_clean or 'MONTO COBRADO' in c_clean:
-            cols_map[c] = 'monto_cobrado'
-        elif 'UNIDAD' in c_clean or 'GIRADURIA' in c_clean:
-            cols_map[c] = 'unidad_giraduria'
-            
-    return df.rename(columns=cols_map)
 
 def mapear_y_desduplicar_columnas_auditoria(df):
     cols_map = {}
@@ -323,7 +326,7 @@ def cargar_liquidez():
     if archivos_excel:
         try:
             excel_encontrado = archivos_excel[0]
-            df = cargar_excel_detectando_cabecera(excel_encontrado)
+            df = pd.read_excel(excel_encontrado, dtype=str)
             return estandarizar_columnas_ffaa(df)
         except Exception:
             pass
@@ -435,13 +438,13 @@ df_giradurias = cargar_giradurias()
 df_dictamenes = cargar_dictamenes()
 
 # ==========================================
-# 🪖 MÓDULO 1: EVALUADOR DE LIQUIDEZ CON DIAGNÓSTICO INTEGRAL DE SOCIO
+# 🪖 MÓDULO 1: EVALUADOR DE LIQUIDEZ Y DIAGNÓSTICO INTEGRAL DE SOCIO
 # ==========================================
 if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
     st.subheader("🔍 Buscador de Liquidez y Estado de Socio")
     
     if df_liquidez.empty:
-        st.info("👈 La base de datos está vacía. El administrador puede cargar la planilla desde 'Cargar Base Mensual'.")
+        st.info("👈 La base de liquidez está vacía. Cárguela desde 'Cargar Base Mensual'.")
     else:
         tipo_busqueda = st.radio("Método de búsqueda:", ["💳 Por Número de Cédula", "👤 Por Nombre / Apellido"], horizontal=True)
         matches = pd.DataFrame()
@@ -501,7 +504,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                     nro_socio = nro_socio_val if nro_socio_val else "Socio Registrado"
                     monto_enviado = limpiar_monto(row_socio.get('monto_enviado', 0))
                     monto_cobrado = limpiar_monto(row_socio.get('monto_cobrado', 0))
-                    unidad_enviada_giraduria = limpiar_texto(row_socio.get('unidad_nombre_oficial', row_socio.get('unidad_giraduria', '')))
+                    unidad_enviada_giraduria = limpiar_texto(row_socio.get('unidad_nombre_oficial', ''))
 
             st.markdown("---")
             
@@ -525,7 +528,6 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                 saldo_pendiente = monto_enviado - monto_cobrado
                 c_e3.metric("Diferencia / Pendiente", f"Gs. {formato_guarani(saldo_pendiente)}")
 
-                # 🚨 CRUCE INTELIGENTE DE ANALISIS DE COBRANZA
                 if monto_cobrado == 0:
                     st.error("🚨 **ALERTA DE DESCUENTO RECHAZADO ($0 COBRADO)**")
                     if unidad_enviada_giraduria and unidad_militar.upper() not in unidad_enviada_giraduria.upper():
@@ -538,7 +540,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                     else:
                         st.markdown(
                             f"⚠️ **DIAGNÓSTICO DE CAPACIDAD DE PAGO:**\n"
-                            f"El descuento fue rechazado en la giraduría origen por falta de margen de liquidez disponible "
+                            f"El descuento fue rechazado en la giraduría por falta de margen de liquidez disponible "
                             f"o afectación de embargos judiciales prioritarios."
                         )
 
@@ -612,7 +614,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             )
 
 # ==========================================
-# 📊 MÓDULO NUEVO: GESTIÓN Y DIAGNÓSTICO DE COBRANZAS (GRAFICOS E INFORMES)
+# 📊 MÓDULO: GESTIÓN Y DIAGNÓSTICO DE COBRANZAS (GRAFICOS E INFORMES)
 # ==========================================
 elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
     st.subheader("📊 Módulo de Diagnóstico de Cobranzas, Estadísticas y Reportes")
@@ -620,7 +622,6 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
     if df_giradurias.empty:
         st.info("👈 Por favor cargá la `Planilla_Descuentos_Consolidada.xlsx` en 'Cargar Base Mensual' para habilitar los reportes.")
     else:
-        # Generar análisis automatizado
         reporte_list = []
 
         for idx, row in df_giradurias.iterrows():
@@ -628,7 +629,7 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
             socio = limpiar_texto(row.get('nro_socio', 'No socio'))
             enviado = limpiar_monto(row.get('monto_enviado', 0))
             cobrado = limpiar_monto(row.get('monto_cobrado', 0))
-            unidad_giraduria = limpiar_texto(row.get('unidad_nombre_oficial', row_socio.get('unidad_giraduria', 'Sin Unidad')))
+            unidad_giraduria = limpiar_texto(row.get('unidad_nombre_oficial', 'Sin Unidad'))
 
             if not ci or enviado == 0:
                 continue
@@ -680,7 +681,7 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
             st.caption("Filtro automático de socios con descuentos parciales o nulos ($0 cobrado).")
 
             if df_incidencias.empty:
-                st.success("✅ ¡Felicitaciones! No se encontraron descalces o pagos parciales en la planilla.")
+                st.success("✅ ¡Sin incidencias! No se encontraron pagos parciales o rechazados.")
             else:
                 st.warning(f"Se encontraron **{len(df_incidencias)}** socios con observaciones de cobro.")
                 st.dataframe(df_incidencias, use_container_width=True)
@@ -710,24 +711,22 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
         with tab_r2:
             st.markdown("### 📊 Porcentaje de Efectividad de Cobro por Unidad")
             
-            if 'unidad_nombre_oficial' in df_giradurias.columns or 'unidad_giraduria' in df_giradurias.columns:
-                col_u = 'unidad_nombre_oficial' if 'unidad_nombre_oficial' in df_giradurias.columns else 'unidad_giraduria'
-                
+            if 'unidad_nombre_oficial' in df_giradurias.columns:
                 df_g_copy = df_giradurias.copy()
                 df_g_copy['monto_enviado_num'] = df_g_copy['monto_enviado'].apply(limpiar_monto)
                 df_g_copy['monto_cobrado_num'] = df_g_copy['monto_cobrado'].apply(limpiar_monto)
 
-                df_metrics = df_g_copy.groupby(col_u, as_index=False)[['monto_enviado_num', 'monto_cobrado_num']].sum()
+                df_metrics = df_g_copy.groupby('unidad_nombre_oficial', as_index=False)[['monto_enviado_num', 'monto_cobrado_num']].sum()
                 df_metrics['% Cobrado'] = (df_metrics['monto_cobrado_num'] / df_metrics['monto_enviado_num'] * 100).fillna(0).round(1)
 
                 st.dataframe(df_metrics.rename(columns={
-                    col_u: 'Unidad / Giraduría',
+                    'unidad_nombre_oficial': 'Unidad / Giraduría',
                     'monto_enviado_num': 'Monto Total Enviado',
                     'monto_cobrado_num': 'Monto Total Cobrado'
                 }), use_container_width=True)
 
                 st.markdown("#### 📈 Gráfico de Porcentaje de Efectividad de Cobro")
-                st.bar_chart(data=df_metrics, x=col_u, y='% Cobrado')
+                st.bar_chart(data=df_metrics, x='unidad_nombre_oficial', y='% Cobrado')
 
 # ==========================================
 # 📋 MÓDULO 3: DICTAMEN DEL GIRADOR
@@ -1339,7 +1338,7 @@ elif opcion == "📥 Cargar Base Mensual":
                         if ext == 'csv':
                             df_cargado = pd.read_csv(archivo_l, dtype=str)
                         else:
-                            df_cargado = cargar_excel_detectando_cabecera(archivo_l)
+                            df_cargado = pd.read_excel(archivo_l, dtype=str)
 
                         df_normalizado = estandarizar_columnas_ffaa(df_cargado)
 
@@ -1354,7 +1353,7 @@ elif opcion == "📥 Cargar Base Mensual":
 
         with tab_b2:
             st.markdown("#### 2. Base Enviado / Cobrado Giradurías")
-            st.caption("Esta base unifica automáticamente todas las pestañas de `Planilla_Descuentos_Consolidada.xlsx` asignando su nombre de unidad oficial.")
+            st.caption("Esta base unifica automáticamente todas las pestañas de `Planilla_Descuentos_Consolidada.xlsx` (omitiendo 'Hoja1') y asignando el nombre oficial de la unidad.")
             
             if not df_giradurias.empty:
                 st.info(f"📊 **Estado actual:** {len(df_giradurias):,} registros de socios/giradurías cargados.")
@@ -1372,7 +1371,7 @@ elif opcion == "📥 Cargar Base Mensual":
                             st.warning("No se encontraron datos procesables en las pestañas de la planilla de giradurías.")
                         else:
                             guardar_giradurias(df_norm_g)
-                            st.success(f"✅ ¡Todas las pestañas fueron unificadas y guardadas correctamente como 'Planilla_Descuentos_Consolidada.xlsx'! Total socios: {len(df_norm_g):,}")
+                            st.success(f"✅ ¡Se unificaron correctamente las 40 pestañas de giradurías! Total socios: {len(df_norm_g):,}")
                             st.rerun()
                     except Exception as e:
                         st.error(f"Error al procesar la planilla de giradurías: {e}")
