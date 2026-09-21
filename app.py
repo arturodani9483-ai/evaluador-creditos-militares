@@ -95,6 +95,7 @@ st.sidebar.markdown("---")
 
 opcion = st.sidebar.radio("Navegación de Módulos:", [
     "🔍 Evaluador de Liquidez (FF.AA.)", 
+    "📊 Gestión y Diagnóstico de Cobranzas",
     "📋 Dictamen del Girador",
     "🛡️ Auditoría y Cruce de Planillas",
     "🧮 Calculadora de Préstamos",
@@ -102,8 +103,27 @@ opcion = st.sidebar.radio("Navegación de Módulos:", [
 ])
 
 DB_LIQUIDEZ_FILE = "base_liquidez_militares.csv"
-DB_GIRADURIAS_FILE = "Planilla_Descuentos_Consolidada_Agosto.xlsx"
+DB_GIRADURIAS_FILE = "Planilla_Descuentos_Consolidada.xlsx"
 DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
+
+# ==========================================
+# 🗺️ DICCIONARIO DE CORRESPONDENCIA DE UNIDADES
+# ==========================================
+MAPEO_UNIDADES = {
+    "1": "1RA DC", "2": "2da DC", "3": "3ra Dc", "4": "Epoe", "5": "I CE",
+    "6": "Cimee", "7": "TEE", "8": "Ejercito", "9": "Edefisfa", "10": "Jubilados",
+    "12": "Eceme", "13": "Academil", "14": "FFMM", "15": "CFN5", "17": "Diserinte",
+    "18": "Dimabel", "20": "C. Logistico", "22": "Comisoe", "23": "CFN2", "24": "II CE",
+    "25": "III CE", "26": "4ta DI", "27": "5ta DI", "28": "6ta DI", "29": "2da DI",
+    "30": "3ra DI", "31": "Ingenieria", "32": "1ra DI",
+    "35": "Comcome Oficiales",
+    "36": "Comcome Sub Oficiales",
+    "37": "Suprema corte",
+    "39": "Comcome Empleados",
+    "42": "Regimiento", "44": "Sanidad", "46": "Digetren", "50": "Esc. Caballeria",
+    "54": "IAEE", "62": "EIME", "70": "Batallon", "73": "CECOPAZ", "82": "Armada",
+    "83": "Aerea", "86": "Policia"
+}
 
 # ==========================================
 # 🛠️ FUNCIONES AUXILIARES Y DE DATOS
@@ -165,6 +185,28 @@ def cargar_excel_detectando_cabecera(file_or_path):
             break
     return pd.read_excel(file_or_path, skiprows=header_idx, dtype=str)
 
+def unificar_hojas_excel(file_or_path):
+    xls = pd.ExcelFile(file_or_path)
+    dfs = []
+    
+    for sheet in xls.sheet_names:
+        num_m = re.findall(r'\d+', str(sheet))
+        num_str = num_m[0] if num_m else ""
+        nombre_unidad = MAPEO_UNIDADES.get(num_str, sheet)
+        
+        try:
+            df_s = cargar_excel_detectando_cabecera(io.BytesIO(xls.parse(sheet, header=None).to_csv(index=False).encode('utf-8')) if hasattr(file_or_path, 'read') else sheet)
+            df_s = estandarizar_columnas_giradurias(df_s)
+            df_s['unidad_nombre_oficial'] = nombre_unidad
+            df_s['hoja_origen'] = sheet
+            dfs.append(df_s)
+        except Exception:
+            pass
+            
+    if dfs:
+        return pd.concat(dfs, ignore_index=True)
+    return pd.DataFrame()
+
 def estandarizar_columnas_ffaa(df):
     cols_map = {}
     for c in df.columns:
@@ -205,8 +247,10 @@ def estandarizar_columnas_giradurias(df):
             cols_map[c] = 'nro_socio'
         elif 'C.I' in c_clean or 'CEDULA' in c_clean:
             cols_map[c] = 'emp_ci'
-        elif 'MONTO' in c_clean or 'ENVIADO' in c_clean or 'COBRADO' in c_clean:
+        elif 'ENVIADO' in c_clean or 'MONTO ENVIADO' in c_clean:
             cols_map[c] = 'monto_enviado'
+        elif 'COBRADO' in c_clean or 'MONTO COBRADO' in c_clean:
+            cols_map[c] = 'monto_cobrado'
         elif 'UNIDAD' in c_clean or 'GIRADURIA' in c_clean:
             cols_map[c] = 'unidad_giraduria'
             
@@ -294,7 +338,7 @@ def guardar_liquidez(df):
 def cargar_giradurias():
     if os.path.exists(DB_GIRADURIAS_FILE):
         try:
-            return pd.read_excel(DB_GIRADURIAS_FILE, dtype=str)
+            return unificar_hojas_excel(DB_GIRADURIAS_FILE)
         except:
             pass
     return pd.DataFrame()
@@ -356,106 +400,32 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
 
     return bytes(pdf.output())
 
-def generar_pdf_nota_hacienda(fecha_nota, mes_eval, anio_eval, monto_tot, cant_benef, c1=False, c2=False, c3=False, c4=False, c5=False):
-    pdf = FPDF()
-    pdf.add_page()
-    
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(0, 6, 'Cooperativa "24 DE OCTUBRE" Ltda.', border=0, ln=True, align="L")
-    pdf.set_font("Helvetica", "I", 9)
-    pdf.cell(0, 5, 'Promoviendo Desarrollo - CATEGORIA A', border=0, ln=True, align="L")
-    pdf.ln(8)
-
-    pdf.set_font("Helvetica", "", 10)
-    pdf.cell(0, 6, f"Asunción, {fecha_nota} -", border=0, ln=True, align="L")
-    pdf.ln(6)
-
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 5, "Sr. Director General", border=0, ln=True)
-    pdf.cell(0, 5, "Dirección General de Jubilaciones y Pensiones", border=0, ln=True)
-    pdf.cell(0, 5, "Ministerio de Economía y Finanzas", border=0, ln=True)
-    pdf.set_font("Helvetica", "I", 10)
-    pdf.cell(0, 5, "Presente", border=0, ln=True)
-    pdf.ln(6)
-
-    pdf.set_font("Helvetica", "", 10)
-    cuerpo1 = (
-        f"En nombre y representación de Cooperativa 24 de Octubre Ltda., solicitamos la "
-        f"ejecución de los descuentos convencionales para los beneficiarios de la Caja Fiscal "
-        f"correspondientes al mes {mes_eval} del año {anio_eval}, debidamente autorizados. Esta solicitud se "
-        f"presenta en carácter de Declaración Jurada, conforme a la Resolución M.E.F. N° 342 del 2025.\n\n"
-        f"Para tal efecto, remitimos la siguiente información, enviada por expediente SIME y al correo "
-        f"educacion@cooperativa24.coop.py, según corresponda:\n"
-        f"(Marque si la planilla será presentada y deje la casilla en blanco para aquellas no presentadas)"
-    )
-    pdf.multi_cell(0, 5, cuerpo1)
-    pdf.ln(4)
-
-    chk1 = "[X]" if c1 else "[  ]"
-    chk2 = "[X]" if c2 else "[  ]"
-    chk3 = "[X]" if c3 else "[  ]"
-    chk4 = "[X]" if c4 else "[  ]"
-    chk5 = "[X]" if c5 else "[  ]"
-
-    pdf.cell(0, 5, f"{chk1} 1- Planilla de Descuentos: (Obligatorio): Archivo .txt, con un monto total de Gs. {formato_guarani(monto_tot)} y de {cant_benef} beneficiarios.", ln=True)
-    pdf.cell(0, 5, f"{chk2} 2- Nómina de Nuevos Asociados: Archivo TXT y cédulas en PDF. Total de socios.", ln=True)
-    pdf.cell(0, 5, f"{chk3} 3- Planilla de Nuevas Autorizaciones: Archivo CSV con la nómina de nuevos autorizantes.", ln=True)
-    pdf.cell(0, 5, f"{chk4} 4- Planilla de Bajas por fallecimiento: Anexo PDF con los datos de socios fallecidos.", ln=True)
-    pdf.cell(0, 5, f"{chk5} 5- Planilla de Información: (Obligatorio) Archivo TXT/CSV con los datos referentes a los descuentos.", ln=True)
-    pdf.ln(6)
-
-    cuerpo2 = (
-        "Certificamos que los datos y cifras consignadas se encuentran respaldadas por documentos, bajo "
-        "el resguardo de nuestra entidad, deslindando de toda responsabilidad a la Dirección General de "
-        "Jubilaciones y Pensiones por los descuentos realizados.\n\n"
-        "Sin otro particular, le saludamos atentamente."
-    )
-    pdf.multi_cell(0, 5, cuerpo2)
-    pdf.ln(18)
-
-    pdf.set_font("Helvetica", "B", 9)
-    col_w = 90
-    y_start = pdf.get_y()
-    
-    pdf.set_xy(15, y_start)
-    pdf.cell(col_w, 4, "CIRILO VENTURA FRANCO ZAVALA", border=0, align="C", ln=True)
-    pdf.set_xy(15, y_start + 4)
-    pdf.set_font("Helvetica", "", 8)
-    pdf.cell(col_w, 4, "Presidente / Rep. Legal", border=0, align="C")
-
-    pdf.set_xy(110, y_start)
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(col_w, 4, "JULIO CESAR RAMIREZ ROLON", border=0, align="C", ln=True)
-    pdf.set_xy(110, y_start + 4)
-    pdf.set_font("Helvetica", "", 8)
-    pdf.cell(col_w, 4, "Secretario / Rep. Legal", border=0, align="C")
-
-    return bytes(pdf.output())
-
-def generar_pdf_tabla_consolidada(df_agg, titulo="REPORTE CONSOLIDADO DE DESCUENTOS"):
+def generar_pdf_reporte_incidencias(df_reporte):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 13)
-    pdf.cell(0, 10, f"SICOC - {titulo}", border=0, ln=True, align="C")
+    pdf.cell(0, 10, "SICOC - INFORME OFICIAL DE PAGOS PARCIALES Y RECHAZADOS", border=0, ln=True, align="C")
     pdf.set_font("Helvetica", "I", 9)
-    pdf.cell(0, 5, f"Fecha de generación: {datetime.now().strftime('%d/%m/%Y %H:%M')}", border=0, ln=True, align="C")
+    pdf.cell(0, 5, f"Fecha de emisión: {datetime.now().strftime('%d/%m/%Y %H:%M')}", border=0, ln=True, align="C")
     pdf.ln(5)
 
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(45, 7, "N° BENEFICIARIO", border=1, align="C")
-    pdf.cell(45, 7, "CÉDULA", border=1, align="C")
-    pdf.cell(60, 7, "MONTO A DESCONTAR", border=1, align="C")
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.cell(20, 6, "SOCIO", border=1, align="C")
+    pdf.cell(20, 6, "CEDULA", border=1, align="C")
+    pdf.cell(50, 6, "NOMBRE Y APELLIDO", border=1, align="C")
+    pdf.cell(25, 6, "ENVIADO", border=1, align="C")
+    pdf.cell(25, 6, "COBRADO", border=1, align="C")
+    pdf.cell(50, 6, "DIAGNOSTICO / OBSERVACIÓN", border=1, align="C")
     pdf.ln()
 
-    pdf.set_font("Helvetica", "", 9)
-    for idx, row in df_agg.iterrows():
-        b_val = str(row.get('beneficiario', '-'))
-        c_val = str(row.get('cedula', '-'))
-        m_val = f"Gs. {formato_guarani(row.get('monto_total', 0))}"
-        
-        pdf.cell(45, 6, b_val, border=1, align="C")
-        pdf.cell(45, 6, c_val, border=1, align="C")
-        pdf.cell(60, 6, m_val, border=1, align="R")
+    pdf.set_font("Helvetica", "", 7)
+    for _, r in df_reporte.iterrows():
+        pdf.cell(20, 6, str(r.get('SOCIO', '-'))[:10], border=1, align="C")
+        pdf.cell(20, 6, str(r.get('CEDULA', '-'))[:10], border=1, align="C")
+        pdf.cell(50, 6, str(r.get('NOMBRE', '-'))[:28], border=1, align="L")
+        pdf.cell(25, 6, f"Gs. {formato_guarani(r.get('ENVIADO', 0))}", border=1, align="R")
+        pdf.cell(25, 6, f"Gs. {formato_guarani(r.get('COBRADO', 0))}", border=1, align="R")
+        pdf.cell(50, 6, str(r.get('DIAGNOSTICO', '-'))[:32], border=1, align="L")
         pdf.ln()
 
     return bytes(pdf.output())
@@ -465,10 +435,10 @@ df_giradurias = cargar_giradurias()
 df_dictamenes = cargar_dictamenes()
 
 # ==========================================
-# 🪖 MÓDULO 1: EVALUADOR DE LIQUIDEZ (FF.AA.)
+# 🪖 MÓDULO 1: EVALUADOR DE LIQUIDEZ CON DIAGNÓSTICO INTEGRAL DE SOCIO
 # ==========================================
 if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
-    st.subheader("🔍 Buscador de Liquidez de Personal Militar")
+    st.subheader("🔍 Buscador de Liquidez y Estado de Socio")
     
     if df_liquidez.empty:
         st.info("👈 La base de datos está vacía. El administrador puede cargar la planilla desde 'Cargar Base Mensual'.")
@@ -497,7 +467,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
 
             nombre = row.get('emp_nomape', 'S/N')
             cedula_militar = limpiar_ci(row.get('emp_ci', '0'))
-            unidad = row.get('UNIDAD', '-')
+            unidad_militar = row.get('UNIDAD', '-')
             categoria = row.get('cat_codigo', '-')
 
             presupuestado = limpiar_monto(row.get('presupuestado', 0))
@@ -515,11 +485,78 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             total_deudas_actuales = giraduria + desc_cf2 + judicial
             margen_deuda_restante = limite_50 - total_deudas_actuales
 
-            st.markdown("---")
-            st.success(f"👤 **Militar:** {nombre} | **C.I.:** {cedula_militar} | **Categoría:** {categoria}")
-            st.info(f"🏛️ **Unidad Militar:** {unidad}")
+            # --- CRUCE CON BASE DE GIRADURÍAS (SOCIO Y PAGOS) ---
+            es_socio = False
+            nro_socio = "No socio"
+            monto_enviado = 0.0
+            monto_cobrado = 0.0
+            unidad_enviada_giraduria = ""
 
-            st.markdown("### 📊 Desglose de Haberes y Descuentos")
+            if not df_giradurias.empty and 'emp_ci' in df_giradurias.columns:
+                match_g = df_giradurias[df_giradurias['emp_ci'].apply(limpiar_ci) == cedula_militar]
+                if not match_g.empty:
+                    es_socio = True
+                    row_socio = match_g.iloc[0]
+                    nro_socio_val = limpiar_texto(row_socio.get('nro_socio', ''))
+                    nro_socio = nro_socio_val if nro_socio_val else "Socio Registrado"
+                    monto_enviado = limpiar_monto(row_socio.get('monto_enviado', 0))
+                    monto_cobrado = limpiar_monto(row_socio.get('monto_cobrado', 0))
+                    unidad_enviada_giraduria = limpiar_texto(row_socio.get('unidad_nombre_oficial', row_socio.get('unidad_giraduria', '')))
+
+            st.markdown("---")
+            
+            col_info1, col_info2, col_info3 = st.columns(3)
+            with col_info1:
+                st.success(f"👤 **Militar:** {nombre}\n\n**C.I.:** {cedula_militar} | **Cat:** {categoria}")
+            with col_info2:
+                if es_socio:
+                    st.info(f"💳 **Estado de Socio:** SOCIO ACTIVO\n\n**N° Socio:** `{nro_socio}`")
+                else:
+                    st.warning("💳 **Estado de Socio:** `No socio`")
+            with col_info3:
+                st.info(f"🏛️ **Unidad en Liquidez:** {unidad_militar}")
+
+            # --- SECCIÓN DE DIAGNÓSTICO DE COBRANZA ---
+            if es_socio and monto_enviado > 0:
+                st.markdown("### 💸 Diagnóstico de Cobranza del Mes")
+                c_e1, c_e2, c_e3 = st.columns(3)
+                c_e1.metric("Monto Enviado", f"Gs. {formato_guarani(monto_enviado)}")
+                c_e2.metric("Monto Cobrado", f"Gs. {formato_guarani(monto_cobrado)}")
+                saldo_pendiente = monto_enviado - monto_cobrado
+                c_e3.metric("Diferencia / Pendiente", f"Gs. {formato_guarani(saldo_pendiente)}")
+
+                # 🚨 CRUCE INTELIGENTE DE ANALISIS DE COBRANZA
+                if monto_cobrado == 0:
+                    st.error("🚨 **ALERTA DE DESCUENTO RECHAZADO ($0 COBRADO)**")
+                    if unidad_enviada_giraduria and unidad_militar.upper() not in unidad_enviada_giraduria.upper():
+                        st.markdown(
+                            f"⚠️ **DIAGNÓSTICO DE INCONSISTENCIA EN GIRADURÍA:**\n"
+                            f"El socio no registró ningún descuento debido a que la planilla fue enviada a la **{unidad_enviada_giraduria}**, "
+                            f"mientras que en la base oficial de Liquidez de las FF.AA. figura asignado a la unidad **{unidad_militar}**.\n"
+                            f"📌 **Acción Requerida:** Reasignar el legajo y enviar la solicitud a la giraduría correspondiente ({unidad_militar})."
+                        )
+                    else:
+                        st.markdown(
+                            f"⚠️ **DIAGNÓSTICO DE CAPACIDAD DE PAGO:**\n"
+                            f"El descuento fue rechazado en la giraduría origen por falta de margen de liquidez disponible "
+                            f"o afectación de embargos judiciales prioritarios."
+                        )
+
+                elif 0 < monto_cobrado < monto_enviado:
+                    st.warning("⚠️ **ALERTA DE PAGO PARCIAL DETECTADO**")
+                    if margen_deuda_restante > 0:
+                        st.success(
+                            f"💡 **ANÁLISIS DE REFINANCIACIÓN FACTIBLE:**\n"
+                            f"El socio realizó un pago parcial. Cuenta con un margen libre de liquidez de **Gs. {formato_guarani(margen_deuda_restante)}**.\n"
+                            f"✅ **Es factible reestructurar o refinanciar el saldo pendiente de Gs. {formato_guarani(saldo_pendiente)}.**"
+                        )
+                    else:
+                        st.error(
+                            f"❌ **REFINANCIACIÓN NO FACTIBLE POR LÍMITE DE LIQUIDEZ:**\n"
+                            f"El socio no dispone de margen sobrante (Límite 50% agotado). Recomendar refinanciación especial o consulta con CF2."
+                        )
+
+            st.markdown("### 📊 Desglose de Haberes y Descuentos (FF.AA.)")
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Presupuestado", f"Gs. {formato_guarani(presupuestado)}")
             c2.metric("Jubilación", f"Gs. {formato_guarani(jubilacion)}")
@@ -564,7 +601,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                 st.warning(f"📌 **Dictamen Registrado por Giraduría:** {obs_dictamen}")
 
             st.markdown("---")
-            pdf_bytes = generar_pdf_constancia("Simulación de Crédito", nombre, cedula_militar, unidad, presupuestado, jubilacion, total_descuentos, liquido_real, limite_50, cuota_solicitada, estado_eval, obs_dictamen)
+            pdf_bytes = generar_pdf_constancia("Simulación de Crédito", nombre, cedula_militar, unidad_militar, presupuestado, jubilacion, total_descuentos, liquido_real, limite_50, cuota_solicitada, estado_eval, obs_dictamen)
             
             st.download_button(
                 label="📄 Descargar / Imprimir Constancia de Evaluación (PDF)",
@@ -575,7 +612,125 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             )
 
 # ==========================================
-# 📋 MÓDULO 2: DICTAMEN DEL GIRADOR
+# 📊 MÓDULO NUEVO: GESTIÓN Y DIAGNÓSTICO DE COBRANZAS (GRAFICOS E INFORMES)
+# ==========================================
+elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
+    st.subheader("📊 Módulo de Diagnóstico de Cobranzas, Estadísticas y Reportes")
+    
+    if df_giradurias.empty:
+        st.info("👈 Por favor cargá la `Planilla_Descuentos_Consolidada.xlsx` en 'Cargar Base Mensual' para habilitar los reportes.")
+    else:
+        # Generar análisis automatizado
+        reporte_list = []
+
+        for idx, row in df_giradurias.iterrows():
+            ci = limpiar_ci(row.get('emp_ci', ''))
+            socio = limpiar_texto(row.get('nro_socio', 'No socio'))
+            enviado = limpiar_monto(row.get('monto_enviado', 0))
+            cobrado = limpiar_monto(row.get('monto_cobrado', 0))
+            unidad_giraduria = limpiar_texto(row.get('unidad_nombre_oficial', row_socio.get('unidad_giraduria', 'Sin Unidad')))
+
+            if not ci or enviado == 0:
+                continue
+
+            diagnostico = "COBRADO NORMAL"
+            unidad_liq = "Desconocida"
+            margen_liq = 0.0
+
+            if not df_liquidez.empty:
+                m_liq = df_liquidez[df_liquidez['emp_ci'].apply(limpiar_ci) == ci]
+                if not m_liq.empty:
+                    r_l = m_liq.iloc[0]
+                    unidad_liq = limpiar_texto(r_l.get('UNIDAD', ''))
+                    presup = limpiar_monto(r_l.get('presupuestado', 0))
+                    jub = limpiar_monto(r_l.get('jubilacion', 0))
+                    tot_d = jub + limpiar_monto(r_l.get('giraduria', 0)) + limpiar_monto(r_l.get('descuento_cf2', 0)) + limpiar_monto(r_l.get('judicial', 0))
+                    margen_liq = ((presup - jub) / 2.0) - (tot_d - jub)
+
+            if cobrado == 0:
+                if unidad_liq != "Desconocida" and unidad_giraduria.upper() not in unidad_liq.upper():
+                    diagnostico = f"RECHAZADO: Enviado a {unidad_giraduria} pero figura en {unidad_liq}"
+                else:
+                    diagnostico = "RECHAZADO: Falta de liquidez o embargo prioritario"
+            elif 0 < cobrado < enviado:
+                if margen_liq > 0:
+                    diagnostico = f"PARCIAL: REFINANCIACIÓN FACTIBLE (Margen libre Gs. {formato_guarani(margen_liq)})"
+                else:
+                    diagnostico = "PARCIAL: REFINANCIACIÓN NO FACTIBLE (Límite 50% agotado)"
+
+            if cobrado < enviado:
+                reporte_list.append({
+                    'SOCIO': socio,
+                    'CEDULA': ci,
+                    'NOMBRE': limpiar_texto(row.get('emp_nomape', 'S/D')),
+                    'UNIDAD GIRADURIA': unidad_giraduria,
+                    'UNIDAD LIQUIDEZ': unidad_liq,
+                    'ENVIADO': enviado,
+                    'COBRADO': cobrado,
+                    'PENDIENTE': enviado - cobrado,
+                    'DIAGNOSTICO': diagnostico
+                })
+
+        df_incidencias = pd.DataFrame(reporte_list)
+
+        tab_r1, tab_r2 = st.tabs(["📉 Reporte de Pagos Parciales / Rechazados", "📊 Gráfico de Cobrabilidad por Unidad"])
+
+        with tab_r1:
+            st.markdown("### 📋 Listado Oficial de Incidencias de Cobro")
+            st.caption("Filtro automático de socios con descuentos parciales o nulos ($0 cobrado).")
+
+            if df_incidencias.empty:
+                st.success("✅ ¡Felicitaciones! No se encontraron descalces o pagos parciales en la planilla.")
+            else:
+                st.warning(f"Se encontraron **{len(df_incidencias)}** socios con observaciones de cobro.")
+                st.dataframe(df_incidencias, use_container_width=True)
+
+                col_rep1, col_rep2 = st.columns(2)
+                with col_rep1:
+                    out_rep = io.BytesIO()
+                    with pd.ExcelWriter(out_rep, engine='openpyxl') as writer:
+                        df_incidencias.to_excel(writer, sheet_name='Incidencias_Cobro', index=False)
+                    st.download_button(
+                        label="📥 Descargar Informe Completo de Incidencias (.XLSX)",
+                        data=out_rep.getvalue(),
+                        file_name="Informe_Socios_Incidencias_Cobro.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
+                with col_rep2:
+                    pdf_inc_bytes = generar_pdf_reporte_incidencias(df_incidencias)
+                    st.download_button(
+                        label="📄 Descargar Informe Oficial en PDF (.PDF)",
+                        data=pdf_inc_bytes,
+                        file_name="Informe_Socios_Incidencias_Cobro.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+
+        with tab_r2:
+            st.markdown("### 📊 Porcentaje de Efectividad de Cobro por Unidad")
+            
+            if 'unidad_nombre_oficial' in df_giradurias.columns or 'unidad_giraduria' in df_giradurias.columns:
+                col_u = 'unidad_nombre_oficial' if 'unidad_nombre_oficial' in df_giradurias.columns else 'unidad_giraduria'
+                
+                df_g_copy = df_giradurias.copy()
+                df_g_copy['monto_enviado_num'] = df_g_copy['monto_enviado'].apply(limpiar_monto)
+                df_g_copy['monto_cobrado_num'] = df_g_copy['monto_cobrado'].apply(limpiar_monto)
+
+                df_metrics = df_g_copy.groupby(col_u, as_index=False)[['monto_enviado_num', 'monto_cobrado_num']].sum()
+                df_metrics['% Cobrado'] = (df_metrics['monto_cobrado_num'] / df_metrics['monto_enviado_num'] * 100).fillna(0).round(1)
+
+                st.dataframe(df_metrics.rename(columns={
+                    col_u: 'Unidad / Giraduría',
+                    'monto_enviado_num': 'Monto Total Enviado',
+                    'monto_cobrado_num': 'Monto Total Cobrado'
+                }), use_container_width=True)
+
+                st.markdown("#### 📈 Gráfico de Porcentaje de Efectividad de Cobro")
+                st.bar_chart(data=df_metrics, x=col_u, y='% Cobrado')
+
+# ==========================================
+# 📋 MÓDULO 3: DICTAMEN DEL GIRADOR
 # ==========================================
 elif opcion == "📋 Dictamen del Girador":
     st.subheader("📋 Módulo de Registro de Dictamen de Giraduría")
@@ -669,7 +824,7 @@ elif opcion == "📋 Dictamen del Girador":
             )
 
 # ==========================================
-# 🛡️ MÓDULO 3: AUDITORÍA Y NOTA DE HACIENDA (RESTRINGIDO)
+# 🛡️ MÓDULO 4: AUDITORÍA Y NOTA DE HACIENDA (RESTRINGIDO)
 # ==========================================
 elif opcion == "🛡️ Auditoría y Cruce de Planillas":
     st.subheader("🛡️ Sistema de Auditoría y Cruce de Planillas (Hacienda)")
@@ -981,7 +1136,7 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
                 st.button("📄 Descargar Nota Oficial de Presentación en PDF (.PDF MEF)", disabled=True, use_container_width=True)
 
 # ==========================================
-# 🧮 MÓDULO 4: CALCULADORA FINANCIERA DE PRÉSTAMOS
+# 🧮 MÓDULO 5: CALCULADORA FINANCIERA DE PRÉSTAMOS
 # ==========================================
 elif opcion == "🧮 Calculadora de Préstamos":
     st.subheader("🧮 Calculadora Financiera y Simulador de Préstamos")
@@ -1154,7 +1309,7 @@ elif opcion == "🧮 Calculadora de Préstamos":
             )
 
 # ==========================================
-# 📥 MÓDULO 5: CARGAR BASES MENSUALES (ADMIN)
+# 📥 MÓDULO 6: CARGAR BASES MENSUALES (ADMIN)
 # ==========================================
 elif opcion == "📥 Cargar Base Mensual":
     st.subheader("📥 Administración y Carga de Bases Mensuales")
@@ -1199,7 +1354,7 @@ elif opcion == "📥 Cargar Base Mensual":
 
         with tab_b2:
             st.markdown("#### 2. Base Enviado / Cobrado Giradurías")
-            st.caption("Esta base almacena el archivo `Planilla_Descuentos_Consolidada_Agosto.xlsx` permanentemente.")
+            st.caption("Esta base unifica automáticamente todas las pestañas de `Planilla_Descuentos_Consolidada.xlsx` asignando su nombre de unidad oficial.")
             
             if not df_giradurias.empty:
                 st.info(f"📊 **Estado actual:** {len(df_giradurias):,} registros de socios/giradurías cargados.")
@@ -1209,16 +1364,15 @@ elif opcion == "📥 Cargar Base Mensual":
             archivo_g = st.file_uploader("📥 Cargar Base Enviado / Cobrado Giradurías (.xlsx / .xls)", type=["xlsx", "xls"], key="u_giradurias")
             
             if archivo_g:
-                if st.button("⚠️ Procesar e Importar Base de Giradurías", use_container_width=True):
+                if st.button("⚠️ Procesar e Importar Base de Giradurías (Unificar Pestañas)", use_container_width=True):
                     try:
-                        df_cargado_g = cargar_excel_detectando_cabecera(archivo_g)
-                        df_norm_g = estandarizar_columnas_giradurias(df_cargado_g)
+                        df_norm_g = unificar_hojas_excel(archivo_g)
 
                         if df_norm_g.empty:
-                            st.warning("No se encontraron datos procesables en el archivo de giradurías.")
+                            st.warning("No se encontraron datos procesables en las pestañas de la planilla de giradurías.")
                         else:
                             guardar_giradurias(df_norm_g)
-                            st.success(f"✅ ¡Base de Giradurías guardada correctamente como 'Planilla_Descuentos_Consolidada_Agosto.xlsx'! Total socios registrados: {len(df_norm_g):,}")
+                            st.success(f"✅ ¡Todas las pestañas fueron unificadas y guardadas correctamente como 'Planilla_Descuentos_Consolidada.xlsx'! Total socios: {len(df_norm_g):,}")
                             st.rerun()
                     except Exception as e:
                         st.error(f"Error al procesar la planilla de giradurías: {e}")
