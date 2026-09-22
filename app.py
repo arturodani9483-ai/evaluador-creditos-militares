@@ -129,45 +129,33 @@ MAPEO_UNIDADES = {
 # 🛠️ FUNCIONES AUXILIARES Y DE DATOS (BLINDADAS)
 # ==========================================
 def limpiar_texto(val):
-    if pd.isna(val) or val is None:
+    try:
+        if isinstance(val, (pd.Series, list)):
+            val = val[0] if len(val) > 0 else ""
+        s = str(val).strip()
+        return "" if s.upper() in ["NAN", "NONE", "<NAT>"] else s
+    except:
         return ""
-    if isinstance(val, (pd.Series, list)):
-        val = val[0] if len(val) > 0 else ""
-    s = str(val).strip()
-    return "" if s.upper() in ["NAN", "NONE"] else s
 
 def limpiar_ci(val):
-    if pd.isna(val) or val is None:
-        return ""
-    if isinstance(val, (pd.Series, list)):
-        val = val[0] if len(val) > 0 else ""
     try:
+        if isinstance(val, (pd.Series, list)):
+            val = val[0] if len(val) > 0 else ""
         s = str(val).split('.')[0].replace('.', '').replace(',', '').strip()
         numeros = re.findall(r'\d+', s)
         return str(numeros[0]) if numeros else ""
     except:
-        return str(val).strip()
+        return ""
 
 def limpiar_monto(val):
-    if pd.isna(val) or val is None:
-        return 0.0
-    if isinstance(val, (pd.Series, list)):
-        val = val[0] if len(val) > 0 else 0.0
     try:
+        if isinstance(val, (pd.Series, list)):
+            val = val[0] if len(val) > 0 else 0.0
         s = str(val).replace('.', '').replace(',', '.').strip()
         numeros = re.findall(r'[-+]?\d*\.\d+|\d+', s)
         return float(numeros[0]) if numeros else 0.0
     except:
         return 0.0
-
-def formato_guarani(val):
-    try:
-        return f"{int(round(val)):,}".replace(',', '.')
-    except:
-        return "0"
-
-def parsear_fecha(d_str):
-    d_clean = limpiar_texto(d_str)
     if not d_clean:
         return None
     s = d_clean.split(' ')[0]
@@ -495,7 +483,8 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             unidad_enviada_giraduria = ""
 
             if not df_giradurias.empty and 'emp_ci' in df_giradurias.columns:
-                match_g = df_giradurias[df_giradurias['emp_ci'].apply(limpiar_ci) == cedula_militar]
+                cis_giraduria = df_giradurias['emp_ci'].astype(str).apply(limpiar_ci)
+                match_g = df_giradurias[cis_giraduria == cedula_militar]
                 if not match_g.empty:
                     es_socio = True
                     row_socio = match_g.iloc[0]
