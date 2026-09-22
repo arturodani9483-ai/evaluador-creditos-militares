@@ -138,12 +138,13 @@ def limpiar_texto(val):
         return ""
 
 def limpiar_ci(val):
+    """Extrae ÚNICAMENTE los dígitos numéricos descartando comas, puntos o espacios."""
     try:
         if isinstance(val, (pd.Series, list)):
             val = val[0] if len(val) > 0 else ""
-        s = str(val).split('.')[0].replace('.', '').replace(',', '').strip()
+        s = str(val).strip()
         numeros = re.findall(r'\d+', s)
-        return str(numeros[0]) if numeros else ""
+        return "".join(numeros) if numeros else ""
     except:
         return ""
 
@@ -192,7 +193,10 @@ def estandarizar_columnas_giradurias(df):
         elif 'RECHAZADO' in c_clean:
             cols_map[c] = 'monto_rechazado'
             
-    return df.rename(columns=cols_map)
+    df_ren = df.rename(columns=cols_map)
+    if 'emp_ci' in df_ren.columns:
+        df_ren['emp_ci_clean'] = df_ren['emp_ci'].astype(str).apply(limpiar_ci)
+    return df_ren
 
 def unificar_hojas_excel(file_or_path):
     """Lee todas las pestañas de un Excel (omitiendo 'Hoja1') y las unifica asignando la unidad correspondiente."""
@@ -220,7 +224,10 @@ def unificar_hojas_excel(file_or_path):
             pass
             
     if dfs:
-        return pd.concat(dfs, ignore_index=True)
+        df_concat = pd.concat(dfs, ignore_index=True)
+        if 'emp_ci' in df_concat.columns:
+            df_concat['emp_ci_clean'] = df_concat['emp_ci'].astype(str).apply(limpiar_ci)
+        return df_concat
     return pd.DataFrame()
 
 def estandarizar_columnas_ffaa(df):
@@ -253,6 +260,10 @@ def estandarizar_columnas_ffaa(df):
     df_renamed = df.rename(columns=cols_map)
     if 'emp_ci' not in df_renamed.columns and len(df_renamed.columns) > 0:
         df_renamed['emp_ci'] = df_renamed.iloc[:, 0]
+    
+    if 'emp_ci' in df_renamed.columns:
+        df_renamed['emp_ci_clean'] = df_renamed['emp_ci'].astype(str).apply(limpiar_ci)
+
     return df_renamed
 
 def mapear_y_desduplicar_columnas_auditoria(df):
@@ -312,6 +323,7 @@ def cargar_liquidez():
         try:
             df = pd.read_csv(DB_LIQUIDEZ_FILE, dtype=str)
             if 'emp_ci' in df.columns:
+                df['emp_ci_clean'] = df['emp_ci'].astype(str).apply(limpiar_ci)
                 return df
         except:
             pass
@@ -337,7 +349,10 @@ def guardar_liquidez(df):
 def cargar_giradurias():
     if os.path.exists(DB_GIRADURIAS_FILE):
         try:
-            return unificar_hojas_excel(DB_GIRADURIAS_FILE)
+            df = unificar_hojas_excel(DB_GIRADURIAS_FILE)
+            if not df.empty and 'emp_ci' in df.columns:
+                df['emp_ci_clean'] = df['emp_ci'].astype(str).apply(limpiar_ci)
+            return df
         except:
             pass
     return pd.DataFrame()
@@ -446,9 +461,12 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
         matches = pd.DataFrame()
         
         if tipo_busqueda == "💳 Por Número de Cédula":
-            ci_input = st.text_input("Número de Cédula (C.I.):", placeholder="Ej: 5511820").strip().replace('.', '')
-            if ci_input:
-                matches = df_liquidez[df_liquidez['emp_ci'].astype(str).str.contains(ci_input, na=False)]
+            ci_input = st.text_input("Número de Cédula (C.I.):", placeholder="Ej: 5511820").strip()
+            ci_input_clean = limpiar_ci(ci_input)
+            if ci_input_clean:
+                if 'emp_ci_clean' not in df_liquidez.columns:
+                    df_liquidez['emp_ci_clean'] = df_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
+                matches = df_liquidez[df_liquidez['emp_ci_clean'] == ci_input_clean]
         else:
             nombre_input = st.text_input("Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
             if nombre_input:
@@ -491,16 +509,21 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             monto_cobrado = 0.0
             unidad_enviada_giraduria = ""
 
-            if not df_giradurias.empty and 'emp_ci' in df_giradurias.columns:
-                match_g = df_giradurias[df_giradurias['emp_ci'].astype(str).str.contains(cedula_militar, na=False)]
-                if not match_g.empty:
-                    es_socio = True
-                    row_socio = match_g.iloc[0]
-                    nro_socio_val = limpiar_texto(row_socio.get('nro_socio', ''))
-                    nro_socio = nro_socio_val if nro_socio_val else "Socio Registrado"
-                    monto_enviado = limpiar_monto(row_socio.get('monto_enviado', 0))
-                    monto_cobrado = limpiar_monto(row_socio.get('monto_cobrado', 0))
-                    unidad_enviada_giraduria = limpiar_texto(row_socio.get('unidad_nombre_oficial', ''))
+            if not df_giradurias.empty:
+                if 'emp_ci_clean' not in df_giradurias.columns and 'emp_ci' in df_giradurias.columns:
+                    df_giradurias['emp_ci_clean'] = df_giradurias['emp_ci'].astype(str).apply(limpiar_ci)
+                
+                if 'emp_ci_clean' in df_giradurias.columns:
+                    match_g = df_giradurias[df_giradurias['emp_ci_clean'] == cedula_militar]
+                    
+                    if not match_g.empty:
+                        es_socio = True
+                        row_socio = match_g.iloc[0]
+                        nro_socio_val = limpiar_texto(row_socio.get('nro_socio', ''))
+                        nro_socio = nro_socio_val if nro_socio_val else "Socio Registrado"
+                        monto_enviado = limpiar_monto(row_socio.get('monto_enviado', 0))
+                        monto_cobrado = limpiar_monto(row_socio.get('monto_cobrado', 0))
+                        unidad_enviada_giraduria = limpiar_texto(row_socio.get('unidad_nombre_oficial', ''))
 
             st.markdown("---")
             
@@ -591,7 +614,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                     estado_eval = "RECHAZADO - CONSULTAR DISPONIBILIDAD CON CF2"
                     st.error("⚠️ **RECHAZADO POR LÍMITE DE LIQUIDEZ DEL 50% - CONSULTAR DISPONIBILIDAD CON CF2**")
 
-            dict_match = df_dictamenes[df_dictamenes['CEDULA'].astype(str).str.contains(cedula_militar, na=False)]
+            dict_match = df_dictamenes[df_dictamenes['CEDULA'].astype(str).apply(limpiar_ci) == cedula_militar]
             obs_dictamen = dict_match.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_match.empty else "Sin observaciones previas."
             
             if not dict_match.empty:
@@ -635,7 +658,8 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
             margen_liq = 0.0
 
             if not df_liquidez.empty:
-                m_liq = df_liquidez[df_liquidez['emp_ci'].astype(str).str.contains(ci, na=False)]
+                col_search_l = 'emp_ci_clean' if 'emp_ci_clean' in df_liquidez.columns else 'emp_ci'
+                m_liq = df_liquidez[df_liquidez[col_search_l].astype(str).apply(limpiar_ci) == ci]
                 if not m_liq.empty:
                     r_l = m_liq.iloc[0]
                     unidad_liq = limpiar_texto(r_l.get('UNIDAD', ''))
@@ -737,9 +761,12 @@ elif opcion == "📋 Dictamen del Girador":
         matches_g = pd.DataFrame()
 
         if tipo_busq_g == "💳 Cédula":
-            ci_girador = st.text_input("Ingresá la Cédula:", placeholder="Ej: 5511820").strip().replace('.', '')
-            if ci_girador:
-                matches_g = df_liquidez[df_liquidez['emp_ci'].astype(str).str.contains(ci_girador, na=False)]
+            ci_girador = st.text_input("Ingresá la Cédula:", placeholder="Ej: 5511820").strip()
+            ci_girador_clean = limpiar_ci(ci_girador)
+            if ci_girador_clean:
+                if 'emp_ci_clean' not in df_liquidez.columns:
+                    df_liquidez['emp_ci_clean'] = df_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
+                matches_g = df_liquidez[df_liquidez['emp_ci_clean'] == ci_girador_clean]
         else:
             nom_girador = st.text_input("Ingresá el Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
             if nom_girador:
@@ -776,7 +803,7 @@ elif opcion == "📋 Dictamen del Girador":
                 st.text_input("Límite de Cuota Máxima (50%):", value=f"Gs. {formato_guarani(limite_50_g)}", disabled=True)
 
             st.markdown("---")
-            dict_previo = df_dictamenes[df_dictamenes['CEDULA'].astype(str).str.contains(ci_g, na=False)]
+            dict_previo = df_dictamenes[df_dictamenes['CEDULA'].astype(str).apply(limpiar_ci) == ci_g]
             obs_inicial = dict_previo.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_previo.empty else "Sin dictamen registrado."
 
             if es_editor:
@@ -791,7 +818,7 @@ elif opcion == "📋 Dictamen del Girador":
                         if not obs_girador.strip():
                             st.error("Por favor ingresá una observación para guardar el dictamen.")
                         else:
-                            df_dictamenes = df_dictamenes[~df_dictamenes['CEDULA'].astype(str).str.contains(ci_g, na=False)]
+                            df_dictamenes = df_dictamenes[df_dictamenes['CEDULA'].astype(str).apply(limpiar_ci) != ci_g]
                             nuevo_dictamen = pd.DataFrame([{
                                 'CEDULA': ci_g,
                                 'CUOTA_PROPUESTA': formato_guarani(cuota_evaluando),
