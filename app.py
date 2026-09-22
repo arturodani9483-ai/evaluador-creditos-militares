@@ -126,19 +126,21 @@ MAPEO_UNIDADES = {
 }
 
 # ==========================================
-# 🛠️ FUNCIONES AUXILIARES Y DE DATOS
+# 🛠️ FUNCIONES AUXILIARES Y DE DATOS (BLINDADAS)
 # ==========================================
 def limpiar_texto(val):
     if pd.isna(val) or val is None:
         return ""
-    if isinstance(val, pd.Series):
-        val = val.dropna().iloc[0] if not val.dropna().empty else ""
+    if isinstance(val, (pd.Series, list)):
+        val = val[0] if len(val) > 0 else ""
     s = str(val).strip()
-    return "" if s.upper() == "NAN" or s.upper() == "NONE" else s
+    return "" if s.upper() in ["NAN", "NONE"] else s
 
 def limpiar_ci(val):
     if pd.isna(val) or val is None:
         return ""
+    if isinstance(val, (pd.Series, list)):
+        val = val[0] if len(val) > 0 else ""
     try:
         s = str(val).split('.')[0].replace('.', '').replace(',', '').strip()
         numeros = re.findall(r'\d+', s)
@@ -149,8 +151,8 @@ def limpiar_ci(val):
 def limpiar_monto(val):
     if pd.isna(val) or val is None:
         return 0.0
-    if isinstance(val, pd.Series):
-        val = val.dropna().iloc[0] if not val.dropna().empty else 0.0
+    if isinstance(val, (pd.Series, list)):
+        val = val[0] if len(val) > 0 else 0.0
     try:
         s = str(val).replace('.', '').replace(',', '.').strip()
         numeros = re.findall(r'[-+]?\d*\.\d+|\d+', s)
@@ -193,8 +195,7 @@ def estandarizar_columnas_giradurias(df):
         elif 'RECHAZADO' in c_clean:
             cols_map[c] = 'monto_rechazado'
             
-    df_ren = df.rename(columns=cols_map)
-    return df_ren
+    return df.rename(columns=cols_map)
 
 def unificar_hojas_excel(file_or_path):
     """Lee todas las pestañas de un Excel (omitiendo 'Hoja1') y las unifica asignando la unidad correspondiente."""
@@ -202,7 +203,6 @@ def unificar_hojas_excel(file_or_path):
     dfs = []
     
     for sheet in xls.sheet_names:
-        # IGNORAR HOJA 1 TAL COMO SE SOLICITÓ
         if sheet.strip().lower() in ['hoja1', 'hoja 1', 'consolidado']:
             continue
 
@@ -212,7 +212,6 @@ def unificar_hojas_excel(file_or_path):
         
         try:
             df_s = pd.read_excel(xls, sheet_name=sheet, dtype=str)
-            # Eliminar la fila final de Totales si existe
             if 'N°' in df_s.columns:
                 df_s = df_s[df_s['N°'].astype(str).str.upper() != 'TOTAL GENERAL:']
             
