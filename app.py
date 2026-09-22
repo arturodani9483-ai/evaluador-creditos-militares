@@ -156,6 +156,15 @@ def limpiar_monto(val):
         return float(numeros[0]) if numeros else 0.0
     except:
         return 0.0
+
+def formato_guarani(val):
+    try:
+        return f"{int(round(val)):,}".replace(',', '.')
+    except:
+        return "0"
+
+def parsear_fecha(d_str):
+    d_clean = limpiar_texto(d_str)
     if not d_clean:
         return None
     s = d_clean.split(' ')[0]
@@ -439,7 +448,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
         if tipo_busqueda == "💳 Por Número de Cédula":
             ci_input = st.text_input("Número de Cédula (C.I.):", placeholder="Ej: 5511820").strip().replace('.', '')
             if ci_input:
-                matches = df_liquidez[df_liquidez['emp_ci'].apply(limpiar_ci) == ci_input]
+                matches = df_liquidez[df_liquidez['emp_ci'].astype(str).str.contains(ci_input, na=False)]
         else:
             nombre_input = st.text_input("Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
             if nombre_input:
@@ -483,8 +492,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             unidad_enviada_giraduria = ""
 
             if not df_giradurias.empty and 'emp_ci' in df_giradurias.columns:
-                cis_giraduria = df_giradurias['emp_ci'].astype(str).apply(limpiar_ci)
-                match_g = df_giradurias[cis_giraduria == cedula_militar]
+                match_g = df_giradurias[df_giradurias['emp_ci'].astype(str).str.contains(cedula_militar, na=False)]
                 if not match_g.empty:
                     es_socio = True
                     row_socio = match_g.iloc[0]
@@ -583,7 +591,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                     estado_eval = "RECHAZADO - CONSULTAR DISPONIBILIDAD CON CF2"
                     st.error("⚠️ **RECHAZADO POR LÍMITE DE LIQUIDEZ DEL 50% - CONSULTAR DISPONIBILIDAD CON CF2**")
 
-            dict_match = df_dictamenes[df_dictamenes['CEDULA'].apply(limpiar_ci) == cedula_militar]
+            dict_match = df_dictamenes[df_dictamenes['CEDULA'].astype(str).str.contains(cedula_militar, na=False)]
             obs_dictamen = dict_match.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_match.empty else "Sin observaciones previas."
             
             if not dict_match.empty:
@@ -627,7 +635,7 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
             margen_liq = 0.0
 
             if not df_liquidez.empty:
-                m_liq = df_liquidez[df_liquidez['emp_ci'].apply(limpiar_ci) == ci]
+                m_liq = df_liquidez[df_liquidez['emp_ci'].astype(str).str.contains(ci, na=False)]
                 if not m_liq.empty:
                     r_l = m_liq.iloc[0]
                     unidad_liq = limpiar_texto(r_l.get('UNIDAD', ''))
@@ -731,7 +739,7 @@ elif opcion == "📋 Dictamen del Girador":
         if tipo_busq_g == "💳 Cédula":
             ci_girador = st.text_input("Ingresá la Cédula:", placeholder="Ej: 5511820").strip().replace('.', '')
             if ci_girador:
-                matches_g = df_liquidez[df_liquidez['emp_ci'].apply(limpiar_ci) == ci_girador]
+                matches_g = df_liquidez[df_liquidez['emp_ci'].astype(str).str.contains(ci_girador, na=False)]
         else:
             nom_girador = st.text_input("Ingresá el Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
             if nom_girador:
@@ -768,7 +776,7 @@ elif opcion == "📋 Dictamen del Girador":
                 st.text_input("Límite de Cuota Máxima (50%):", value=f"Gs. {formato_guarani(limite_50_g)}", disabled=True)
 
             st.markdown("---")
-            dict_previo = df_dictamenes[df_dictamenes['CEDULA'].apply(limpiar_ci) == ci_g]
+            dict_previo = df_dictamenes[df_dictamenes['CEDULA'].astype(str).str.contains(ci_g, na=False)]
             obs_inicial = dict_previo.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_previo.empty else "Sin dictamen registrado."
 
             if es_editor:
@@ -783,7 +791,7 @@ elif opcion == "📋 Dictamen del Girador":
                         if not obs_girador.strip():
                             st.error("Por favor ingresá una observación para guardar el dictamen.")
                         else:
-                            df_dictamenes = df_dictamenes[df_dictamenes['CEDULA'].apply(limpiar_ci) != ci_g]
+                            df_dictamenes = df_dictamenes[~df_dictamenes['CEDULA'].astype(str).str.contains(ci_g, na=False)]
                             nuevo_dictamen = pd.DataFrame([{
                                 'CEDULA': ci_g,
                                 'CUOTA_PROPUESTA': formato_guarani(cuota_evaluando),
