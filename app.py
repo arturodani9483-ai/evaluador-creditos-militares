@@ -414,25 +414,58 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
 
     return bytes(pdf.output())
 
+# ==========================================
+# 📄 CLASES PERSONALIZADAS DE PDF CON ENCABEZADO REPETITIVO EN TODAS LAS HOJAS
+# ==========================================
+class PDFReporteIncidencias(FPDF):
+    def header(self):
+        self.set_font("Helvetica", "B", 13)
+        self.cell(0, 8, "SICOC - INFORME OFICIAL DE PAGOS PARCIALES Y RECHAZADOS", border=0, ln=True, align="C")
+        self.set_font("Helvetica", "I", 9)
+        self.cell(0, 4, f"Fecha de emisión: {datetime.now().strftime('%d/%m/%Y %H:%M')}", border=0, ln=True, align="C")
+        self.ln(4)
+
+        # Cabecera de la Tabla que se repite en CADA página
+        self.set_font("Helvetica", "B", 8)
+        self.cell(20, 6, "SOCIO", border=1, align="C")
+        self.cell(20, 6, "CEDULA", border=1, align="C")
+        self.cell(50, 6, "NOMBRE Y APELLIDO", border=1, align="C")
+        self.cell(25, 6, "ENVIADO", border=1, align="C")
+        self.cell(25, 6, "COBRADO", border=1, align="C")
+        self.cell(50, 6, "DIAGNOSTICO / OBSERVACIÓN", border=1, align="C")
+        self.ln()
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Helvetica", "I", 8)
+        self.cell(0, 10, f"Página {self.page_no()}", align="C")
+
+class PDFCobrabilidadUnidades(FPDF):
+    def header(self):
+        self.set_font("Helvetica", "B", 13)
+        self.cell(0, 8, "SICOC - RESUMEN DE COBRABILIDAD Y EFECTIVIDAD POR UNIDAD", border=0, ln=True, align="C")
+        self.set_font("Helvetica", "I", 9)
+        self.cell(0, 4, f"Fecha de emisión: {datetime.now().strftime('%d/%m/%Y %H:%M')}", border=0, ln=True, align="C")
+        self.ln(4)
+
+        # Cabecera de la Tabla que se repite en CADA página
+        self.set_font("Helvetica", "B", 9)
+        self.cell(55, 7, "UNIDAD / GIRADURÍA", border=1, align="C")
+        self.cell(45, 7, "MONTO ENVIADO", border=1, align="C")
+        self.cell(45, 7, "MONTO COBRADO", border=1, align="C")
+        self.cell(45, 7, "% EFECTIVIDAD", border=1, align="C")
+        self.ln()
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Helvetica", "I", 8)
+        self.cell(0, 10, f"Página {self.page_no()}", align="C")
+
 def generar_pdf_reporte_incidencias(df_reporte):
-    pdf = FPDF()
+    pdf = PDFReporteIncidencias()
     pdf.add_page()
-    pdf.set_font("Helvetica", "B", 13)
-    pdf.cell(0, 10, "SICOC - INFORME OFICIAL DE PAGOS PARCIALES Y RECHAZADOS", border=0, ln=True, align="C")
-    pdf.set_font("Helvetica", "I", 9)
-    pdf.cell(0, 5, f"Fecha de emisión: {datetime.now().strftime('%d/%m/%Y %H:%M')}", border=0, ln=True, align="C")
-    pdf.ln(5)
-
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(20, 6, "SOCIO", border=1, align="C")
-    pdf.cell(20, 6, "CEDULA", border=1, align="C")
-    pdf.cell(50, 6, "NOMBRE Y APELLIDO", border=1, align="C")
-    pdf.cell(25, 6, "ENVIADO", border=1, align="C")
-    pdf.cell(25, 6, "COBRADO", border=1, align="C")
-    pdf.cell(50, 6, "DIAGNOSTICO / OBSERVACIÓN", border=1, align="C")
-    pdf.ln()
-
     pdf.set_font("Helvetica", "", 7)
+
     for _, r in df_reporte.iterrows():
         pdf.cell(20, 6, str(r.get('SOCIO', '-'))[:10], border=1, align="C")
         pdf.cell(20, 6, str(r.get('CEDULA', '-'))[:10], border=1, align="C")
@@ -440,6 +473,20 @@ def generar_pdf_reporte_incidencias(df_reporte):
         pdf.cell(25, 6, f"Gs. {formato_guarani(r.get('ENVIADO', 0))}", border=1, align="R")
         pdf.cell(25, 6, f"Gs. {formato_guarani(r.get('COBRADO', 0))}", border=1, align="R")
         pdf.cell(50, 6, str(r.get('DIAGNOSTICO', '-'))[:32], border=1, align="L")
+        pdf.ln()
+
+    return bytes(pdf.output())
+
+def generar_pdf_cobrabilidad_unidades(df_metrics):
+    pdf = PDFCobrabilidadUnidades()
+    pdf.add_page()
+    pdf.set_font("Helvetica", "", 8)
+
+    for _, r in df_metrics.iterrows():
+        pdf.cell(55, 6, str(r.get('Unidad / Giraduría', '-'))[:30], border=1, align="L")
+        pdf.cell(45, 6, f"Gs. {formato_guarani(r.get('monto_enviado_num', 0))}", border=1, align="R")
+        pdf.cell(45, 6, f"Gs. {formato_guarani(r.get('monto_cobrado_num', 0))}", border=1, align="R")
+        pdf.cell(45, 6, f"{r.get('% Cobrado', 0)} %", border=1, align="C")
         pdf.ln()
 
     return bytes(pdf.output())
@@ -669,7 +716,7 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
                 continue
 
             diagnostico = "COBRADO NORMAL"
-            unidad_liq = "Desconocida"
+            unidad_liq = ""
             margen_liq = 0.0
 
             if not df_liquidez.empty:
@@ -683,8 +730,22 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
                     tot_d = jub + limpiar_monto(r_l.get('giraduria', 0)) + limpiar_monto(r_l.get('descuento_cf2', 0)) + limpiar_monto(r_l.get('judicial', 0))
                     margen_liq = ((presup - jub) / 2.0) - (tot_d - jub)
 
+            # Clasificación inteligente si no figura en la Base Activa de Liquidez Militar
+            if not unidad_liq:
+                u_gir_upper = unidad_giraduria.upper()
+                if "ARMADA" in u_gir_upper:
+                    unidad_liq = "Armada"
+                elif "AEREA" in u_gir_upper or "AÉREA" in u_gir_upper:
+                    unidad_liq = "Fuerza Aérea"
+                elif "POLICIA" in u_gir_upper or "POLICÍA" in u_gir_upper:
+                    unidad_liq = "Policía Nacional"
+                elif "JUBILAD" in u_gir_upper:
+                    unidad_liq = "Jubilado"
+                else:
+                    unidad_liq = "FFPP / Jubilado"
+
             if cobrado == 0:
-                if unidad_liq != "Desconocida" and unidad_giraduria.upper() not in unidad_liq.upper():
+                if unidad_liq not in ["FFPP / Jubilado", "Jubilado", "Armada", "Fuerza Aérea", "Policía Nacional"] and unidad_giraduria.upper() not in unidad_liq.upper():
                     diagnostico = f"RECHAZADO: Enviado a {unidad_giraduria} pero figura en {unidad_liq}"
                 else:
                     diagnostico = "RECHAZADO: Falta de liquidez o embargo prioritario"
@@ -713,7 +774,7 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
 
         with tab_r1:
             st.markdown("### 📋 Listado Oficial de Incidencias de Cobro")
-            st.caption("Filtro automático de socios con descuentos parciales o nulos ($0 cobrado).")
+            st.caption("Filtro automático de socios con descuentos parciales o nulos (Gs. 0 cobrado).")
 
             if df_incidencias.empty:
                 st.success("✅ ¡Sin incidencias! No se encontraron pagos parciales o rechazados.")
@@ -754,11 +815,35 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
                 df_metrics = df_g_copy.groupby('unidad_nombre_oficial', as_index=False)[['monto_enviado_num', 'monto_cobrado_num']].sum()
                 df_metrics['% Cobrado'] = (df_metrics['monto_cobrado_num'] / df_metrics['monto_enviado_num'] * 100).fillna(0).round(1)
 
-                st.dataframe(df_metrics.rename(columns={
-                    'unidad_nombre_oficial': 'Unidad / Giraduría',
-                    'monto_enviado_num': 'Monto Total Enviado',
-                    'monto_cobrado_num': 'Monto Total Cobrado'
-                }), use_container_width=True)
+                df_metrics_view = df_metrics.copy()
+                df_metrics_view['Unidad / Giraduría'] = df_metrics_view['unidad_nombre_oficial']
+                df_metrics_view['Monto Total Enviado (Gs.)'] = df_metrics_view['monto_enviado_num'].apply(formato_guarani)
+                df_metrics_view['Monto Total Cobrado (Gs.)'] = df_metrics_view['monto_cobrado_num'].apply(formato_guarani)
+                df_metrics_view['% Efectividad'] = df_metrics_view['% Cobrado'].astype(str) + " %"
+
+                st.dataframe(df_metrics_view[['Unidad / Giraduría', 'Monto Total Enviado (Gs.)', 'Monto Total Cobrado (Gs.)', '% Efectividad']], use_container_width=True)
+
+                col_m1, col_m2 = st.columns(2)
+                with col_m1:
+                    out_met = io.BytesIO()
+                    with pd.ExcelWriter(out_met, engine='openpyxl') as writer:
+                        df_metrics_view[['Unidad / Giraduría', 'Monto Total Enviado (Gs.)', 'Monto Total Cobrado (Gs.)', '% Efectividad']].to_excel(writer, sheet_name='Cobrabilidad_Unidades', index=False)
+                    st.download_button(
+                        label="📥 Descargar Cuadro de Cobrabilidad (.XLSX)",
+                        data=out_met.getvalue(),
+                        file_name="Efectividad_Cobrabilidad_Por_Unidad.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
+                with col_m2:
+                    pdf_met_bytes = generar_pdf_cobrabilidad_unidades(df_metrics)
+                    st.download_button(
+                        label="📄 Descargar Informe de Cobrabilidad (.PDF)",
+                        data=pdf_met_bytes,
+                        file_name="Efectividad_Cobrabilidad_Por_Unidad.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
 
                 st.markdown("#### 📈 Gráfico de Porcentaje de Efectividad de Cobro")
                 st.bar_chart(data=df_metrics, x='unidad_nombre_oficial', y='% Cobrado')
