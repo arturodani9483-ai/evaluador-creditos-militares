@@ -559,7 +559,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                     col_g4.metric("Monto Rechazado", "Gs. 0", delta="Cobro 100% OK")
 
                 if monto_enviado > 0 and monto_cobrado == 0:
-                    st.error("🚨 **ALERTA DE DESCUENTO RECHAZADO ($0 COBRADO)**")
+                    st.error("🚨 **ALERTA DE DESCUENTO RECHAZADO (Gs. 0 COBRADO)**")
                     if unidad_enviada_giraduria and unidad_militar.upper() not in unidad_enviada_giraduria.upper():
                         st.markdown(
                             f"⚠️ **DIAGNÓSTICO DE INCONSISTENCIA EN GIRADURÍA:**\n"
