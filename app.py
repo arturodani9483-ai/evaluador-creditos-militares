@@ -349,7 +349,7 @@ def guardar_liquidez(df):
 def cargar_giradurias():
     if os.path.exists(DB_GIRADURIAS_FILE):
         try:
-            df = unificar_hojas_excel(DB_GIRADURIAS_FILE)
+            df = pd.read_excel(DB_GIRADURIAS_FILE, dtype=str)
             if not df.empty and 'emp_ci' in df.columns:
                 df['emp_ci_clean'] = df['emp_ci'].astype(str).apply(limpiar_ci)
             return df
@@ -502,11 +502,12 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             total_deudas_actuales = giraduria + desc_cf2 + judicial
             margen_deuda_restante = limite_50 - total_deudas_actuales
 
-            # --- CRUCE CON BASE DE GIRADURÍAS (SOCIO Y PAGOS) ---
+            # --- CRUCE CON BASE DE GIRADURÍAS (SOCIO, ENVIADO, COBRADO, RECHAZADO) ---
             es_socio = False
             nro_socio = "No socio"
             monto_enviado = 0.0
             monto_cobrado = 0.0
+            monto_rechazado = 0.0
             unidad_enviada_giraduria = ""
 
             if not df_giradurias.empty:
@@ -523,6 +524,12 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                         nro_socio = nro_socio_val if nro_socio_val else "Socio Registrado"
                         monto_enviado = limpiar_monto(row_socio.get('monto_enviado', 0))
                         monto_cobrado = limpiar_monto(row_socio.get('monto_cobrado', 0))
+                        monto_rechazado = limpiar_monto(row_socio.get('monto_rechazado', 0))
+                        
+                        # Si el rechazado está en 0 pero enviado > cobrado, se calcula la diferencia
+                        if monto_rechazado == 0 and monto_enviado > monto_cobrado:
+                            monto_rechazado = monto_enviado - monto_cobrado
+                            
                         unidad_enviada_giraduria = limpiar_texto(row_socio.get('unidad_nombre_oficial', ''))
 
             st.markdown("---")
@@ -538,16 +545,20 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             with col_info3:
                 st.info(f"🏛️ **Unidad en Liquidez:** {unidad_militar}")
 
-            # --- SECCIÓN DE DIAGNÓSTICO DE COBRANZA ---
-            if es_socio and monto_enviado > 0:
-                st.markdown("### 💸 Diagnóstico de Cobranza del Mes")
-                c_e1, c_e2, c_e3 = st.columns(3)
-                c_e1.metric("Monto Enviado", f"Gs. {formato_guarani(monto_enviado)}")
-                c_e2.metric("Monto Cobrado", f"Gs. {formato_guarani(monto_cobrado)}")
-                saldo_pendiente = monto_enviado - monto_cobrado
-                c_e3.metric("Diferencia / Pendiente", f"Gs. {formato_guarani(saldo_pendiente)}")
+            # --- NUEVA SECCIÓN: DESGLOSE DE COBRANZA EN GIRADURÍA ---
+            if es_socio:
+                st.markdown("### 🏛️ Datos de Descuento en Giraduría del Mes")
+                col_g1, col_g2, col_g3, col_g4 = st.columns(4)
+                col_g1.metric("Giraduría Enviada", unidad_enviada_giraduria if unidad_enviada_giraduria else "Sin Asignar")
+                col_g2.metric("Monto Enviado", f"Gs. {formato_guarani(monto_enviado)}")
+                col_g3.metric("Monto Descontado/Cobrado", f"Gs. {formato_guarani(monto_cobrado)}")
+                
+                if monto_rechazado > 0:
+                    col_g4.metric("Monto Rechazado / Pendiente", f"Gs. {formato_guarani(monto_rechazado)}", delta=f"-Gs. {formato_guarani(monto_rechazado)}", delta_color="inverse")
+                else:
+                    col_g4.metric("Monto Rechazado", "Gs. 0", delta="Cobro 100% OK")
 
-                if monto_cobrado == 0:
+                if monto_enviado > 0 and monto_cobrado == 0:
                     st.error("🚨 **ALERTA DE DESCUENTO RECHAZADO ($0 COBRADO)**")
                     if unidad_enviada_giraduria and unidad_militar.upper() not in unidad_enviada_giraduria.upper():
                         st.markdown(
@@ -569,7 +580,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                         st.success(
                             f"💡 **ANÁLISIS DE REFINANCIACIÓN FACTIBLE:**\n"
                             f"El socio realizó un pago parcial. Cuenta con un margen libre de liquidez de **Gs. {formato_guarani(margen_deuda_restante)}**.\n"
-                            f"✅ **Es factible reestructurar o refinanciar el saldo pendiente de Gs. {formato_guarani(saldo_pendiente)}.**"
+                            f"✅ **Es factible reestructurar o refinanciar el saldo pendiente de Gs. {formato_guarani(monto_rechazado)}.**"
                         )
                     else:
                         st.error(
@@ -648,6 +659,10 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
             socio = limpiar_texto(row.get('nro_socio', 'No socio'))
             enviado = limpiar_monto(row.get('monto_enviado', 0))
             cobrado = limpiar_monto(row.get('monto_cobrado', 0))
+            m_rech = limpiar_monto(row.get('monto_rechazado', 0))
+            if m_rech == 0 and enviado > cobrado:
+                m_rech = enviado - cobrado
+
             unidad_giraduria = limpiar_texto(row.get('unidad_nombre_oficial', 'Sin Unidad'))
 
             if not ci or enviado == 0:
@@ -688,7 +703,7 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
                     'UNIDAD LIQUIDEZ': unidad_liq,
                     'ENVIADO': enviado,
                     'COBRADO': cobrado,
-                    'PENDIENTE': enviado - cobrado,
+                    'RECHAZADO': m_rech,
                     'DIAGNOSTICO': diagnostico
                 })
 
