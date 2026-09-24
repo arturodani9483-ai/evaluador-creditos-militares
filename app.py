@@ -207,28 +207,31 @@ def estandarizar_columnas_giradurias(df):
     cols_map = {}
     for c in df.columns:
         c_clean = str(c).strip().upper().replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
+        
         if 'SOCIO' in c_clean or 'N° SOCIO' in c_clean or 'NRO SOCIO' in c_clean:
             cols_map[c] = 'nro_socio'
         elif 'C.I' in c_clean or 'CEDULA' in c_clean or 'CI' in c_clean or 'EMP_CI' in c_clean or 'CODIGOPERSONA' in c_clean:
             cols_map[c] = 'emp_ci'
         elif 'APELLIDO' in c_clean or 'NOMBRE' in c_clean or 'NOMAPE' in c_clean:
             cols_map[c] = 'emp_nomape'
-        elif 'TOTAL DESCUENTOS' in c_clean or 'ENVIADO' in c_clean or 'MONTO_ENVIADO' in c_clean or 'MONTO ENVIADO' in c_clean:
+        elif 'TOTAL DESCUENTOS' in c_clean or 'MONTO ENVIADO' in c_clean or 'ENVIADO' in c_clean or 'MONTO_ENVIADO' in c_clean or 'IMPORTE ENVIADO' in c_clean or 'SOLICITADO' in c_clean:
             cols_map[c] = 'monto_enviado'
-        elif 'COBRADO' in c_clean or 'MONTO_COBRADO' in c_clean or 'MONTO COBRADO' in c_clean:
+        elif 'MONTO COBRADO' in c_clean or 'COBRADO' in c_clean or 'MONTO_COBRADO' in c_clean or 'DESCONTADO' in c_clean or 'IMPORTE COBRADO' in c_clean:
             cols_map[c] = 'monto_cobrado'
-        elif 'RECHAZADO' in c_clean or 'MONTO_RECHAZADO' in c_clean or 'MONTO RECHAZADO' in c_clean:
+        elif 'RECHAZADO' in c_clean or 'MONTO_RECHAZADO' in c_clean or 'MONTO RECHAZADO' in c_clean or 'DIFERENCIA' in c_clean:
             cols_map[c] = 'monto_rechazado'
-            
+        elif 'UNIDAD' in c_clean or 'GIRADURIA' in c_clean or 'DEPENDENCIA' in c_clean or 'DESCRIPCION' in c_clean:
+            cols_map[c] = 'unidad_columna'
+
     df_ren = df.rename(columns=cols_map)
-    
-    # Asignación robusta por posición si falla el mapeo por nombre
+
+    # Asignación por posición si fallara el mapeo de nombres de columna
     if 'emp_ci' not in df_ren.columns and len(df_ren.columns) >= 2:
-        df_ren['emp_ci'] = df_ren.iloc[:, 1] # Habitualmente la 2da columna es C.I.
-        
+        df_ren['emp_ci'] = df_ren.iloc[:, 1]
+    
     if 'emp_ci' in df_ren.columns:
         df_ren['emp_ci_clean'] = df_ren['emp_ci'].astype(str).apply(limpiar_ci)
-        
+
     return df_ren
 
 def unificar_hojas_excel(file_or_path):
@@ -236,9 +239,11 @@ def unificar_hojas_excel(file_or_path):
     dfs = []
     
     for sheet in xls.sheet_names:
-        if sheet.strip().lower() in ['hoja1', 'hoja 1', 'consolidado']:
+        sheet_clean = sheet.strip().lower()
+        if sheet_clean in ['hoja1', 'hoja 1', 'consolidado']:
             continue
 
+        # Extraer el número de unidad de nombres tipo 'Unidad 1', 'Unidad 29', 'UNIDAD_32', etc.
         num_m = re.findall(r'\d+', str(sheet))
         num_str = num_m[0] if num_m else ""
         nombre_unidad = MAPEO_UNIDADES.get(num_str, sheet)
@@ -249,6 +254,8 @@ def unificar_hojas_excel(file_or_path):
                 df_s = df_s[df_s['N°'].astype(str).str.upper() != 'TOTAL GENERAL:']
             
             df_s = estandarizar_columnas_giradurias(df_s)
+            
+            # Asignar siempre el nombre oficial según la pestaña del Excel
             df_s['unidad_nombre_oficial'] = nombre_unidad
             df_s['hoja_origen'] = sheet
             dfs.append(df_s)
@@ -693,9 +700,8 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             monto_rechazado = 0.0
             unidad_enviada_giraduria = ""
 
-            # BÚSQUEDA Y CRUCE ULTRA-ROBUSTO DE SOCIO EN GIRADURÍAS
+            # BÚSQUEDA ROBUSTA Y CONSOLIDADA DE SOCIO EN GIRADURÍAS
             if not df_giradurias.empty:
-                # Asegurar que existan columnas limpias
                 if 'emp_ci_clean' not in df_giradurias.columns:
                     for col_pos in ['emp_ci', 'CEDULA', 'C.I.', 'CI', df_giradurias.columns[1] if len(df_giradurias.columns)>1 else df_giradurias.columns[0]]:
                         if col_pos in df_giradurias.columns:
@@ -707,17 +713,41 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                     
                     if not match_g.empty:
                         es_socio = True
-                        row_socio = match_g.iloc[0]
-                        nro_socio_val = limpiar_texto(row_socio.get('nro_socio', row_socio.get('SOCIO', '')))
-                        nro_socio = nro_socio_val if nro_socio_val else "Socio Registrado"
-                        monto_enviado = limpiar_monto(row_socio.get('monto_enviado', 0))
-                        monto_cobrado = limpiar_monto(row_socio.get('monto_cobrado', 0))
-                        monto_rechazado = limpiar_monto(row_socio.get('monto_rechazado', 0))
                         
+                        # Extraer número de socio
+                        for col_s in ['nro_socio', 'SOCIO', 'N° SOCIO', 'NRO SOCIO']:
+                            if col_s in match_g.columns:
+                                ns_val = limpiar_texto(match_g.iloc[0].get(col_s, ''))
+                                if ns_val:
+                                    nro_socio = ns_val
+                                    break
+                        if nro_socio == "No socio":
+                            nro_socio = "Socio Registrado"
+
+                        # Extraer unidad oficial de giraduría
+                        for col_u in ['unidad_nombre_oficial', 'UNIDAD', 'GIRADURIA', 'DEPENDENCIA', 'hoja_origen']:
+                            if col_u in match_g.columns:
+                                u_val = limpiar_texto(match_g.iloc[0].get(col_u, ''))
+                                if u_val:
+                                    unidad_enviada_giraduria = u_val
+                                    break
+
+                        # Sumar montos si existen múltiples filas del mismo socio
+                        for _, row_s in match_g.iterrows():
+                            m_env = limpiar_monto(row_s.get('monto_enviado', row_s.get('ENVIADO', 0)))
+                            m_cob = limpiar_monto(row_s.get('monto_cobrado', row_s.get('COBRADO', 0)))
+                            m_rec = limpiar_monto(row_s.get('monto_rechazado', row_s.get('RECHAZADO', 0)))
+                            
+                            monto_enviado += m_env
+                            monto_cobrado += m_cob
+                            monto_rechazado += m_rec
+
                         if monto_rechazado == 0 and monto_enviado > monto_cobrado:
                             monto_rechazado = monto_enviado - monto_cobrado
-                            
-                        unidad_enviada_giraduria = limpiar_texto(row_socio.get('unidad_nombre_oficial', ''))
+
+            # Respaldo si no se encontró columna de unidad en giraduría
+            if es_socio and not unidad_enviada_giraduria:
+                unidad_enviada_giraduria = unidad_militar if unidad_militar else "Giraduría Oficial"
 
             st.markdown("---")
             
@@ -735,7 +765,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             if es_socio:
                 st.markdown("### 🏛️ Datos de Descuento en Giraduría del Mes")
                 col_g1, col_g2, col_g3, col_g4 = st.columns(4)
-                col_g1.metric("Giraduría Enviada", unidad_enviada_giraduria if unidad_enviada_giraduria else "Sin Asignar")
+                col_g1.metric("Giraduría Enviada", unidad_enviada_giraduria)
                 col_g2.metric("Monto Enviado", f"Gs. {formato_guarani(monto_enviado)}")
                 col_g3.metric("Monto Descontado/Cobrado", f"Gs. {formato_guarani(monto_cobrado)}")
                 
