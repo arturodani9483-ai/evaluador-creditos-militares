@@ -217,7 +217,6 @@ def estandarizar_columnas_giradurias(df):
     return df_ren
 
 def unificar_hojas_excel(file_or_path):
-    """Lee todas las pestañas de un Excel (omitiendo 'Hoja1') y las unifica asignando la unidad correspondiente."""
     xls = pd.ExcelFile(file_or_path)
     dfs = []
     
@@ -437,7 +436,7 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
 # ==========================================
 class PDFReporteIncidencias(FPDF):
     def __init__(self):
-        super().__init__(orientation='L', unit='mm', format='A4') # Formato Horizontal (A4: 297mm ancho)
+        super().__init__(orientation='L', unit='mm', format='A4')
 
     def header(self):
         fecha_local = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
@@ -447,7 +446,6 @@ class PDFReporteIncidencias(FPDF):
         self.cell(0, 4, f"Fecha de emisión: {fecha_local}", border=0, ln=True, align="C")
         self.ln(4)
 
-        # Cabecera de la Tabla Horizontal completa que se repite en CADA página
         self.set_font("Helvetica", "B", 8)
         self.cell(10, 6, "N°", border=1, align="C")
         self.cell(18, 6, "SOCIO", border=1, align="C")
@@ -468,7 +466,7 @@ class PDFReporteIncidencias(FPDF):
 
 class PDFCobrabilidadUnidades(FPDF):
     def __init__(self):
-        super().__init__(orientation='L', unit='mm', format='A4') # Formato Horizontal (A4: 297mm ancho)
+        super().__init__(orientation='L', unit='mm', format='A4')
 
     def header(self):
         fecha_local = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
@@ -478,7 +476,6 @@ class PDFCobrabilidadUnidades(FPDF):
         self.cell(0, 4, f"Fecha de emisión: {fecha_local}", border=0, ln=True, align="C")
         self.ln(4)
 
-        # Cabecera de la Tabla Horizontal que se repite en CADA página
         self.set_font("Helvetica", "B", 9)
         self.cell(15, 7, "N°", border=1, align="C")
         self.cell(90, 7, "UNIDAD / GIRADURÍA", border=1, align="C")
@@ -588,7 +585,6 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             total_deudas_actuales = giraduria + desc_cf2 + judicial
             margen_deuda_restante = limite_50 - total_deudas_actuales
 
-            # --- CRUCE CON BASE DE GIRADURÍAS (SOCIO, ENVIADO, COBRADO, RECHAZADO) ---
             es_socio = False
             nro_socio = "No socio"
             monto_enviado = 0.0
@@ -612,7 +608,6 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                         monto_cobrado = limpiar_monto(row_socio.get('monto_cobrado', 0))
                         monto_rechazado = limpiar_monto(row_socio.get('monto_rechazado', 0))
                         
-                        # Si el rechazado está en 0 pero enviado > cobrado, se calcula la diferencia
                         if monto_rechazado == 0 and monto_enviado > monto_cobrado:
                             monto_rechazado = monto_enviado - monto_cobrado
                             
@@ -631,7 +626,6 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             with col_info3:
                 st.info(f"🏛️ **Unidad en Liquidez:** {unidad_militar}")
 
-            # --- DESGLOSE DE COBRANZA EN GIRADURÍA ---
             if es_socio:
                 st.markdown("### 🏛️ Datos de Descuento en Giraduría del Mes")
                 col_g1, col_g2, col_g3, col_g4 = st.columns(4)
@@ -793,7 +787,6 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
                     tot_d = jub + limpiar_monto(r_l.get('giraduria', 0)) + limpiar_monto(r_l.get('descuento_cf2', 0)) + limpiar_monto(r_l.get('judicial', 0))
                     margen_liq = ((presup - jub) / 2.0) - (tot_d - jub)
 
-            # Clasificación inteligente si no figura en la Base Activa de Liquidez Militar
             if not unidad_liq:
                 u_gir_upper = unidad_giraduria.upper()
                 if "ARMADA" in u_gir_upper:
@@ -811,7 +804,6 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
             is_jubilado_u = "JUBILAD" in u_gir_clean or "JUBILADOS" in unidad_liq.upper()
             is_cf2_u = "CF2" in u_gir_clean or "CFN2" in u_gir_clean
 
-            # REGLAS LÓGICAS PERSONALIZADAS
             if is_cf2_u:
                 if cobrado > 0:
                     diagnostico = f"CF2: Refinanciación factible - Tope cuota recomendada: Gs. {formato_guarani(cobrado)} cobrados"
@@ -852,7 +844,6 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
 
         df_incidencias = pd.DataFrame(reporte_list)
 
-        # Ordenar numéricamente por Número de Socio
         if not df_incidencias.empty:
             df_incidencias = df_incidencias.sort_values(by='SOCIO_NUM', ascending=True).reset_index(drop=True)
             df_incidencias.drop(columns=['SOCIO_NUM'], inplace=True, errors='ignore')
@@ -868,7 +859,6 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
             else:
                 st.warning(f"Se encontraron **{len(df_incidencias)}** socios con observaciones de cobro.")
                 
-                # Crear vista con columna N° de Orden
                 df_view_inc = df_incidencias.copy()
                 df_view_inc.insert(0, 'N°', range(1, 1 + len(df_view_inc)))
                 st.dataframe(df_view_inc, use_container_width=True)
@@ -1352,11 +1342,77 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
                 st.button("📄 Descargar Nota Oficial de Presentación en PDF (.PDF MEF)", disabled=True, use_container_width=True)
 
 # ==========================================
-# 🧮 MÓDULO 5: CALCULADORA FINANCIERA DE PRÉSTAMOS
+# 🧮 MÓDULO 5: CALCULADORA FINANCIERA DE PRÉSTAMOS (CON CRUCE AUTOMÁTICO)
 # ==========================================
 elif opcion == "🧮 Calculadora de Préstamos":
     st.subheader("🧮 Calculadora Financiera y Simulador de Préstamos")
     
+    # --- SECCIÓN SUPERIOR: BÚSQUEDA Y CRUCE DE SOCIO ---
+    st.markdown("### 👤 Datos y Cruce del Socio Solicitante")
+    
+    socio_input = st.text_input("🔍 Ingrese Número de Socio o Cédula (C.I.):", placeholder="Ej: 9946 o 5955048").strip()
+    socio_input_clean = limpiar_ci(socio_input)
+
+    socio_encontrado = False
+    nombre_socio = "No asignado / Cliente General"
+    ci_socio = "S/D"
+    ultimo_descuento_cobrado = 0.0
+    unidad_giraduria_socio = "Sin Giraduría"
+    unidad_liquidez_socio = "Sin Liquidez"
+    margen_libre_liquidez = 0.0
+
+    if socio_input:
+        # 1. Buscar en Giradurías
+        if not df_giradurias.empty:
+            match_g = pd.DataFrame()
+            if 'emp_ci_clean' in df_giradurias.columns:
+                match_g = df_giradurias[df_giradurias['emp_ci_clean'] == socio_input_clean]
+            if match_g.empty and 'nro_socio' in df_giradurias.columns:
+                match_g = df_giradurias[df_giradurias['nro_socio'].astype(str).str.strip() == socio_input.strip()]
+            
+            if not match_g.empty:
+                r_g = match_g.iloc[0]
+                socio_encontrado = True
+                nombre_socio = limpiar_texto(r_g.get('emp_nomape', 'S/D'))
+                ci_socio = limpiar_ci(r_g.get('emp_ci', '0'))
+                ultimo_descuento_cobrado = limpiar_monto(r_g.get('monto_cobrado', 0))
+                unidad_giraduria_socio = limpiar_texto(r_g.get('unidad_nombre_oficial', 'Sin Asignar'))
+
+        # 2. Buscar en Liquidez
+        if not df_liquidez.empty and (ci_socio != "S/D" or socio_input_clean):
+            search_ci = ci_socio if ci_socio != "S/D" else socio_input_clean
+            col_l = 'emp_ci_clean' if 'emp_ci_clean' in df_liquidez.columns else 'emp_ci'
+            match_l = df_liquidez[df_liquidez[col_l].astype(str).apply(limpiar_ci) == search_ci]
+            
+            if not match_l.empty:
+                r_l = match_l.iloc[0]
+                if not socio_encontrado:
+                    nombre_socio = limpiar_texto(r_l.get('emp_nomape', 'S/D'))
+                    ci_socio = search_ci
+                    socio_encontrado = True
+                unidad_liquidez_socio = limpiar_texto(r_l.get('UNIDAD', 'Sin Liquidez'))
+                
+                presup = limpiar_monto(r_l.get('presupuestado', 0))
+                jub = limpiar_monto(r_l.get('jubilacion', 0))
+                tot_d = jub + limpiar_monto(r_l.get('giraduria', 0)) + limpiar_monto(r_l.get('descuento_cf2', 0)) + limpiar_monto(r_l.get('judicial', 0))
+                margen_libre_liquidez = ((presup - jub) / 2.0) - (tot_d - jub)
+
+    # Tarjeta de Estado del Socio
+    if socio_encontrado:
+        st.success(f"👤 **Socio:** {nombre_socio} | **C.I.:** {ci_socio}")
+        c_s1, c_s2, c_s3, c_s4 = st.columns(4)
+        c_s1.metric("Último Descuento Cobrado", f"Gs. {formato_guarani(ultimo_descuento_cobrado)}")
+        c_s2.metric("Giraduría Registrada", unidad_giraduria_socio)
+        c_s3.metric("Unidad Oficial (Liquidez)", unidad_liquidez_socio)
+        c_s4.metric("Margen Libre (50%)", f"Gs. {formato_guarani(margen_libre_liquidez)}")
+    else:
+        if socio_input:
+            st.warning("⚠️ No se encontraron registros coincidentes para ese Número de Socio o Cédula.")
+        else:
+            st.info("💡 Ingresá el N° de Socio arriba para cruzar automáticamente sus descuentos y margen de liquidez.")
+
+    st.markdown("---")
+
     tipos_prestamo = {
         '1': {'nombre': 'Préstamo Ordinario', 'comision': 0},
         '19': {'nombre': 'Préstamo Cumpleaños', 'comision': 0},
@@ -1387,6 +1443,19 @@ elif opcion == "🧮 Calculadora de Préstamos":
             format_func=lambda x: f"Código {x}: {tipos_prestamo[x]['nombre']}"
         )
         nombre_p = tipos_prestamo[codigo_p]['nombre']
+
+        # Selección de Modalidad (Con Cancelación / Paralelo)
+        es_refinanciacion_natura = (codigo_p == '71' or 'REFINANCIACI' in nombre_p.upper())
+        
+        if not es_refinanciacion_natura:
+            modalidad_credito = st.radio(
+                "📌 Modalidad de Crédito:", 
+                ["🔄 Con Cancelación / Refinanciación", "➕ Crédito Paralelo"], 
+                horizontal=True
+            )
+        else:
+            modalidad_credito = "🔄 Con Cancelación / Refinanciación"
+            st.info("ℹ️ Este tipo de crédito opera automáticamente como **Refinanciación / Cancelación**.")
 
         tasa_auto = 20.0
         if nombre_p == 'Préstamo Ordinario':
@@ -1425,7 +1494,7 @@ elif opcion == "🧮 Calculadora de Préstamos":
         fecha_desembolso = st.date_input("Fecha Desembolso:", value=obtener_fecha_hora_local().date())
         fecha_primer_venc = st.date_input("Fecha 1er Vencimiento:", value=obtener_fecha_hora_local().date() + timedelta(days=30))
 
-    if st.button("🚀 Calcular Plan de Pagos", use_container_width=True):
+    if st.button("🚀 Calcular Plan de Pagos y Evaluar Crédito", use_container_width=True):
         if monto_capital <= 0:
             st.error("Por favor ingresá un Monto Capital mayor a 0 para calcular el plan de pagos.")
         else:
@@ -1443,6 +1512,31 @@ elif opcion == "🧮 Calculadora de Préstamos":
             else:
                 cuota = capital_con_gastos / plazo
 
+            # --- EVALUACIÓN Y CRUCE AUTOMÁTICO DE FACTIBILIDAD ---
+            st.markdown("---")
+            st.subheader("🎯 Resultado de la Evaluación Automática")
+
+            es_con_cancelacion = "Con Cancelación" in modalidad_credito
+
+            if es_con_cancelacion and cuota <= ultimo_descuento_cobrado and ultimo_descuento_cobrado > 0:
+                st.success(
+                    f"✅ **CRÉDITO APROBADO (REFINANCIACIÓN / CANCELACIÓN FACTIBLE)**\n\n"
+                    f"La cuota calculada (**Gs. {formato_guarani(cuota)}**) es menor o igual al último descuento del socio (**Gs. {formato_guarani(ultimo_descuento_cobrado)}**)."
+                )
+            elif cuota <= margen_libre_liquidez:
+                st.success(
+                    f"✅ **CRÉDITO APROBADO (DENTRO DEL MARGEN LIBRE DE LIQUIDEZ)**\n\n"
+                    f"La cuota de **Gs. {formato_guarani(cuota)}** entra cómodamente en el margen libre de liquidez de las FF.AA. (**Gs. {formato_guarani(margen_libre_liquidez)}**)."
+                )
+            else:
+                unidad_destino = unidad_liquidez_socio if unidad_liquidez_socio not in ["Sin Liquidez", ""] else "CF2"
+                st.error(
+                    f"⚠️ **ANALIZAR / CONSULTAR CON UNIDAD: {unidad_destino}**\n\n"
+                    f"La cuota calculada (**Gs. {formato_guarani(cuota)}**) supera tanto el último descuento (**Gs. {formato_guarani(ultimo_descuento_cobrado)}**) "
+                    f"como el margen libre de liquidez (**Gs. {formato_guarani(margen_libre_liquidez)}**)."
+                )
+
+            # --- GENERACIÓN DE LA TABLA DE AMORTIZACIÓN ---
             plan_pagos = []
             saldo_restante = capital_con_gastos
             total_pagar = 0.0
@@ -1570,7 +1664,7 @@ elif opcion == "📥 Cargar Base Mensual":
 
         with tab_b2:
             st.markdown("#### 2. Base Enviado / Cobrado Giradurías")
-            st.caption("Esta base unifies automáticamente todas las pestañas de `Planilla_Descuentos_Consolidada.xlsx` (omitiendo 'Hoja1') y asignando el nombre oficial de la unidad.")
+            st.caption("Esta base unifica automáticamente todas las pestañas de `Planilla_Descuentos_Consolidada.xlsx` (omitiendo 'Hoja1') y asignando el nombre oficial de la unidad.")
             
             if not df_giradurias.empty:
                 st.info(f"📊 **Estado actual:** {len(df_giradurias):,} registros de socios/giradurías cargados.")
