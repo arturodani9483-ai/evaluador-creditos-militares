@@ -433,9 +433,12 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
     return bytes(pdf.output())
 
 # ==========================================
-# 📄 CLASES PERSONALIZADAS DE PDF CON ENCABEZADO REPETITIVO EN TODAS LAS HOJAS
+# 📄 CLASES PERSONALIZADAS DE PDF HORIZONTALES (LANDSCAPE)
 # ==========================================
 class PDFReporteIncidencias(FPDF):
+    def __init__(self):
+        super().__init__(orientation='L', unit='mm', format='A4') # Formato Horizontal (A4: 297mm ancho)
+
     def header(self):
         fecha_local = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
         self.set_font("Helvetica", "B", 13)
@@ -444,14 +447,18 @@ class PDFReporteIncidencias(FPDF):
         self.cell(0, 4, f"Fecha de emisión: {fecha_local}", border=0, ln=True, align="C")
         self.ln(4)
 
-        # Cabecera de la Tabla que se repite en CADA página
+        # Cabecera de la Tabla Horizontal completa que se repite en CADA página
         self.set_font("Helvetica", "B", 8)
-        self.cell(20, 6, "SOCIO", border=1, align="C")
+        self.cell(10, 6, "N°", border=1, align="C")
+        self.cell(18, 6, "SOCIO", border=1, align="C")
         self.cell(20, 6, "CEDULA", border=1, align="C")
-        self.cell(50, 6, "NOMBRE Y APELLIDO", border=1, align="C")
-        self.cell(25, 6, "ENVIADO", border=1, align="C")
-        self.cell(25, 6, "COBRADO", border=1, align="C")
-        self.cell(50, 6, "DIAGNOSTICO / OBSERVACIÓN", border=1, align="C")
+        self.cell(48, 6, "NOMBRE Y APELLIDO", border=1, align="C")
+        self.cell(25, 6, "U. GIRADURÍA", border=1, align="C")
+        self.cell(25, 6, "U. LIQUIDEZ", border=1, align="C")
+        self.cell(24, 6, "ENVIADO", border=1, align="C")
+        self.cell(24, 6, "COBRADO", border=1, align="C")
+        self.cell(24, 6, "RECHAZADO", border=1, align="C")
+        self.cell(59, 6, "DIAGNOSTICO / OBSERVACIÓN", border=1, align="C")
         self.ln()
 
     def footer(self):
@@ -460,6 +467,9 @@ class PDFReporteIncidencias(FPDF):
         self.cell(0, 10, f"Página {self.page_no()}", align="C")
 
 class PDFCobrabilidadUnidades(FPDF):
+    def __init__(self):
+        super().__init__(orientation='L', unit='mm', format='A4') # Formato Horizontal (A4: 297mm ancho)
+
     def header(self):
         fecha_local = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
         self.set_font("Helvetica", "B", 13)
@@ -468,12 +478,13 @@ class PDFCobrabilidadUnidades(FPDF):
         self.cell(0, 4, f"Fecha de emisión: {fecha_local}", border=0, ln=True, align="C")
         self.ln(4)
 
-        # Cabecera de la Tabla que se repite en CADA página
+        # Cabecera de la Tabla Horizontal que se repite en CADA página
         self.set_font("Helvetica", "B", 9)
-        self.cell(55, 7, "UNIDAD / GIRADURÍA", border=1, align="C")
-        self.cell(45, 7, "MONTO ENVIADO", border=1, align="C")
-        self.cell(45, 7, "MONTO COBRADO", border=1, align="C")
-        self.cell(45, 7, "% EFECTIVIDAD", border=1, align="C")
+        self.cell(15, 7, "N°", border=1, align="C")
+        self.cell(90, 7, "UNIDAD / GIRADURÍA", border=1, align="C")
+        self.cell(55, 7, "MONTO ENVIADO", border=1, align="C")
+        self.cell(55, 7, "MONTO COBRADO", border=1, align="C")
+        self.cell(50, 7, "% EFECTIVIDAD", border=1, align="C")
         self.ln()
 
     def footer(self):
@@ -486,13 +497,18 @@ def generar_pdf_reporte_incidencias(df_reporte):
     pdf.add_page()
     pdf.set_font("Helvetica", "", 7)
 
-    for _, r in df_reporte.iterrows():
-        pdf.cell(20, 6, str(r.get('SOCIO', '-'))[:10], border=1, align="C")
+    for idx, r in df_reporte.iterrows():
+        nro_orden = idx + 1
+        pdf.cell(10, 6, str(nro_orden), border=1, align="C")
+        pdf.cell(18, 6, str(r.get('SOCIO', '-'))[:10], border=1, align="C")
         pdf.cell(20, 6, str(r.get('CEDULA', '-'))[:10], border=1, align="C")
-        pdf.cell(50, 6, str(r.get('NOMBRE', '-'))[:28], border=1, align="L")
-        pdf.cell(25, 6, f"Gs. {formato_guarani(r.get('ENVIADO', 0))}", border=1, align="R")
-        pdf.cell(25, 6, f"Gs. {formato_guarani(r.get('COBRADO', 0))}", border=1, align="R")
-        pdf.cell(50, 6, str(r.get('DIAGNOSTICO', '-'))[:32], border=1, align="L")
+        pdf.cell(48, 6, str(r.get('NOMBRE', '-'))[:28], border=1, align="L")
+        pdf.cell(25, 6, str(r.get('UNIDAD GIRADURIA', '-'))[:15], border=1, align="L")
+        pdf.cell(25, 6, str(r.get('UNIDAD LIQUIDEZ', '-'))[:15], border=1, align="L")
+        pdf.cell(24, 6, f"Gs. {formato_guarani(r.get('ENVIADO', 0))}", border=1, align="R")
+        pdf.cell(24, 6, f"Gs. {formato_guarani(r.get('COBRADO', 0))}", border=1, align="R")
+        pdf.cell(24, 6, f"Gs. {formato_guarani(r.get('RECHAZADO', 0))}", border=1, align="R")
+        pdf.cell(59, 6, str(r.get('DIAGNOSTICO', '-'))[:38], border=1, align="L")
         pdf.ln()
 
     return bytes(pdf.output())
@@ -502,11 +518,14 @@ def generar_pdf_cobrabilidad_unidades(df_metrics):
     pdf.add_page()
     pdf.set_font("Helvetica", "", 8)
 
-    for _, r in df_metrics.iterrows():
-        pdf.cell(55, 6, str(r.get('Unidad / Giraduría', '-'))[:30], border=1, align="L")
-        pdf.cell(45, 6, f"Gs. {formato_guarani(r.get('monto_enviado_num', 0))}", border=1, align="R")
-        pdf.cell(45, 6, f"Gs. {formato_guarani(r.get('monto_cobrado_num', 0))}", border=1, align="R")
-        pdf.cell(45, 6, f"{r.get('% Cobrado', 0)} %", border=1, align="C")
+    for idx, r in df_metrics.iterrows():
+        nro_orden = idx + 1
+        nombre_u = str(r.get('unidad_nombre_oficial', r.get('Unidad / Giraduría', '-')))
+        pdf.cell(15, 6, str(nro_orden), border=1, align="C")
+        pdf.cell(90, 6, nombre_u[:50], border=1, align="L")
+        pdf.cell(55, 6, f"Gs. {formato_guarani(r.get('monto_enviado_num', 0))}", border=1, align="R")
+        pdf.cell(55, 6, f"Gs. {formato_guarani(r.get('monto_cobrado_num', 0))}", border=1, align="R")
+        pdf.cell(50, 6, f"{r.get('% Cobrado', 0)} %", border=1, align="C")
         pdf.ln()
 
     return bytes(pdf.output())
@@ -776,7 +795,9 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
                     diagnostico = "PARCIAL: REFINANCIACIÓN NO FACTIBLE (Límite 50% agotado)"
 
             if cobrado < enviado:
+                socio_num = int(re.sub(r'\D', '', str(socio))) if re.sub(r'\D', '', str(socio)) else 99999999
                 reporte_list.append({
+                    'SOCIO_NUM': socio_num,
                     'SOCIO': socio,
                     'CEDULA': ci,
                     'NOMBRE': limpiar_texto(row.get('emp_nomape', 'S/D')),
@@ -790,6 +811,11 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
 
         df_incidencias = pd.DataFrame(reporte_list)
 
+        # Ordenar numéricamente por Número de Socio
+        if not df_incidencias.empty:
+            df_incidencias = df_incidencias.sort_values(by='SOCIO_NUM', ascending=True).reset_index(drop=True)
+            df_incidencias.drop(columns=['SOCIO_NUM'], inplace=True, errors='ignore')
+
         tab_r1, tab_r2 = st.tabs(["📉 Reporte de Pagos Parciales / Rechazados", "📊 Gráfico de Cobrabilidad por Unidad"])
 
         with tab_r1:
@@ -800,13 +826,17 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
                 st.success("✅ ¡Sin incidencias! No se encontraron pagos parciales o rechazados.")
             else:
                 st.warning(f"Se encontraron **{len(df_incidencias)}** socios con observaciones de cobro.")
-                st.dataframe(df_incidencias, use_container_width=True)
+                
+                # Crear vista con columna N° de Orden
+                df_view_inc = df_incidencias.copy()
+                df_view_inc.insert(0, 'N°', range(1, 1 + len(df_view_inc)))
+                st.dataframe(df_view_inc, use_container_width=True)
 
                 col_rep1, col_rep2 = st.columns(2)
                 with col_rep1:
                     out_rep = io.BytesIO()
                     with pd.ExcelWriter(out_rep, engine='openpyxl') as writer:
-                        df_incidencias.to_excel(writer, sheet_name='Incidencias_Cobro', index=False)
+                        df_view_inc.to_excel(writer, sheet_name='Incidencias_Cobro', index=False)
                     st.download_button(
                         label="📥 Descargar Informe Completo de Incidencias (.XLSX)",
                         data=out_rep.getvalue(),
@@ -817,7 +847,7 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
                 with col_rep2:
                     pdf_inc_bytes = generar_pdf_reporte_incidencias(df_incidencias)
                     st.download_button(
-                        label="📄 Descargar Informe Oficial en PDF (.PDF)",
+                        label="📄 Descargar Informe Oficial Horizontal (.PDF)",
                         data=pdf_inc_bytes,
                         file_name="Informe_Socios_Incidencias_Cobro.pdf",
                         mime="application/pdf",
@@ -836,18 +866,19 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
                 df_metrics['% Cobrado'] = (df_metrics['monto_cobrado_num'] / df_metrics['monto_enviado_num'] * 100).fillna(0).round(1)
 
                 df_metrics_view = df_metrics.copy()
+                df_metrics_view.insert(0, 'N°', range(1, 1 + len(df_metrics_view)))
                 df_metrics_view['Unidad / Giraduría'] = df_metrics_view['unidad_nombre_oficial']
                 df_metrics_view['Monto Total Enviado (Gs.)'] = df_metrics_view['monto_enviado_num'].apply(formato_guarani)
                 df_metrics_view['Monto Total Cobrado (Gs.)'] = df_metrics_view['monto_cobrado_num'].apply(formato_guarani)
                 df_metrics_view['% Efectividad'] = df_metrics_view['% Cobrado'].astype(str) + " %"
 
-                st.dataframe(df_metrics_view[['Unidad / Giraduría', 'Monto Total Enviado (Gs.)', 'Monto Total Cobrado (Gs.)', '% Efectividad']], use_container_width=True)
+                st.dataframe(df_metrics_view[['N°', 'Unidad / Giraduría', 'Monto Total Enviado (Gs.)', 'Monto Total Cobrado (Gs.)', '% Efectividad']], use_container_width=True)
 
                 col_m1, col_m2 = st.columns(2)
                 with col_m1:
                     out_met = io.BytesIO()
                     with pd.ExcelWriter(out_met, engine='openpyxl') as writer:
-                        df_metrics_view[['Unidad / Giraduría', 'Monto Total Enviado (Gs.)', 'Monto Total Cobrado (Gs.)', '% Efectividad']].to_excel(writer, sheet_name='Cobrabilidad_Unidades', index=False)
+                        df_metrics_view[['N°', 'Unidad / Giraduría', 'Monto Total Enviado (Gs.)', 'Monto Total Cobrado (Gs.)', '% Efectividad']].to_excel(writer, sheet_name='Cobrabilidad_Unidades', index=False)
                     st.download_button(
                         label="📥 Descargar Cuadro de Cobrabilidad (.XLSX)",
                         data=out_met.getvalue(),
@@ -858,7 +889,7 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
                 with col_m2:
                     pdf_met_bytes = generar_pdf_cobrabilidad_unidades(df_metrics)
                     st.download_button(
-                        label="📄 Descargar Informe de Cobrabilidad (.PDF)",
+                        label="📄 Descargar Informe de Cobrabilidad Horizontal (.PDF)",
                         data=pdf_met_bytes,
                         file_name="Efectividad_Cobrabilidad_Por_Unidad.pdf",
                         mime="application/pdf",
