@@ -15,7 +15,6 @@ try:
         return datetime.now(PY_TZ)
 except ImportError:
     def obtener_fecha_hora_local():
-        # Restar 3 horas a la hora UTC si no está instalado pytz
         return datetime.utcnow() - timedelta(hours=3)
 
 def obtener_ultimo_dia_mes_siguiente(fecha_base):
@@ -240,14 +239,11 @@ def unificar_hojas_excel(file_or_path):
         
         try:
             df_s = pd.read_excel(xls, sheet_name=sheet, dtype=str)
-            
-            # Descartar filas de totales si existen
             if 'N°' in df_s.columns:
                 df_s = df_s[~df_s['N°'].astype(str).str.upper().str.contains('TOTAL', na=False)]
             
             df_s = estandarizar_columnas_giradurias(df_s)
             
-            # Limpiar formatos numéricos (ej. quitar .0 del N° Socio)
             if 'nro_socio' in df_s.columns:
                 df_s['nro_socio'] = df_s['nro_socio'].astype(str).apply(lambda x: re.sub(r'\.0$', '', str(x).strip()) if pd.notna(x) else "")
 
@@ -364,7 +360,7 @@ def cargar_liquidez():
             pass
             
     archivos_carpeta = os.listdir('.')
-    archivos_excel = [f for f in archivos_carpeta if f.lower().endswith(('.xlsx', '.xls')) and not f.startswith('~$')]
+    archivos_excel = [f for f in archivos_carpeta if f.lower().endswith(('.xlsx', '.xls')) and not f.startswith('~$') and f != DB_GIRADURIAS_FILE]
     
     if archivos_excel:
         try:
@@ -384,11 +380,11 @@ def guardar_liquidez(df):
 def cargar_giradurias():
     if os.path.exists(DB_GIRADURIAS_FILE):
         try:
-            df = pd.read_excel(DB_GIRADURIAS_FILE, dtype=str)
-            if not df.empty and 'emp_ci' in df.columns:
-                df['emp_ci_clean'] = df['emp_ci'].astype(str).apply(limpiar_ci)
-            return df
-        except:
+            df_u = unificar_hojas_excel(DB_GIRADURIAS_FILE)
+            if not df_u.empty and 'emp_ci' in df_u.columns:
+                df_u['emp_ci_clean'] = df_u['emp_ci'].astype(str).apply(limpiar_ci)
+                return df_u
+        except Exception:
             pass
     return pd.DataFrame()
 
@@ -640,7 +636,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             if socio_input:
                 ci_socio_encontrada = ""
                 if not df_giradurias.empty and 'nro_socio' in df_giradurias.columns:
-                    match_s = df_giradurias[df_giradurias['nro_socio'].astype(str).str.strip() == socio_input]
+                    match_s = df_giradurias[df_giradurias['nro_socio'].astype(str).str.strip() == socio_input.strip()]
                     if not match_s.empty:
                         ci_socio_encontrada = limpiar_ci(match_s.iloc[0].get('emp_ci', ''))
                 
@@ -1057,7 +1053,7 @@ elif opcion == "📋 Dictamen del Girador":
             if socio_g:
                 ci_socio_g = ""
                 if not df_giradurias.empty and 'nro_socio' in df_giradurias.columns:
-                    match_sg = df_giradurias[df_giradurias['nro_socio'].astype(str).str.strip() == socio_g]
+                    match_sg = df_giradurias[df_giradurias['nro_socio'].astype(str).str.strip() == socio_g.strip()]
                     if not match_sg.empty:
                         ci_socio_g = limpiar_ci(match_sg.iloc[0].get('emp_ci', ''))
                 
