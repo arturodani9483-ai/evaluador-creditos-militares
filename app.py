@@ -133,7 +133,6 @@ st.sidebar.markdown(f'[![WhatsApp](https://img.shields.io/badge/WhatsApp-Contact
 DB_LIQUIDEZ_FILE = "base_liquidez_militares.csv"
 DB_GIRADURIAS_FILE = "Planilla_Descuentos_Consolidada.xlsx"
 DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
-DB_NOMINA_MILITARES_FILE = "nomina_militares.csv"
 
 # ==========================================
 # 🗺️ DICCIONARIO DE CORRESPONDENCIA DE UNIDADES
@@ -396,22 +395,6 @@ def cargar_dictamenes():
 def guardar_dictamenes(df):
     df.to_csv(DB_DICTAMENES_FILE, index=False)
 
-@st.cache_data(ttl=2592000)
-def cargar_nomina_militares():
-    if os.path.exists(DB_NOMINA_MILITARES_FILE):
-        try:
-            df = pd.read_csv(DB_NOMINA_MILITARES_FILE, dtype=str)
-            if 'emp_ci' in df.columns:
-                df['emp_ci_clean'] = df['emp_ci'].astype(str).apply(limpiar_ci)
-            return df
-        except:
-            pass
-    return pd.DataFrame()
-
-def guardar_nomina_militares(df):
-    df.to_csv(DB_NOMINA_MILITARES_FILE, index=False)
-    st.cache_data.clear()
-
 def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubilacion, tot_desc, liquido, limite, cuota, estado, obs=""):
     pdf = FPDF()
     pdf.add_page()
@@ -618,7 +601,6 @@ def generar_pdf_cobrabilidad_unidades(df_metrics):
 df_liquidez = cargar_liquidez()
 df_giradurias = cargar_giradurias()
 df_dictamenes = cargar_dictamenes()
-df_nomina_militares = cargar_nomina_militares()
 
 # ==========================================
 # 🪖 MÓDULO 1: EVALUADOR DE LIQUIDEZ Y DIAGNÓSTICO INTEGRAL DE SOCIO
@@ -679,23 +661,6 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             cedula_militar = limpiar_ci(row.get('emp_ci', '0'))
             unidad_militar = row.get('UNIDAD', '-')
             categoria = row.get('cat_codigo', '-')
-
-            # Extraer bonificaciones específicas de la nómina de Hacienda si existen
-            monto_peligro = 0.0
-            monto_gastos_rep = 0.0
-            monto_bonif_grado = 0.0
-
-            if not df_nomina_militares.empty:
-                if 'emp_ci_clean' not in df_nomina_militares.columns:
-                    df_nomina_militares['emp_ci_clean'] = df_nomina_militares['emp_ci'].astype(str).apply(limpiar_ci)
-                match_nom = df_nomina_militares[df_nomina_militares['emp_ci_clean'] == cedula_militar]
-                if not match_nom.empty:
-                    cat_nom = match_nom.iloc[0].get('cat_codigo', '')
-                    if cat_nom:
-                        categoria = cat_nom
-                    monto_peligro = limpiar_monto(match_nom.iloc[0].get('monto_peligro', 0))
-                    monto_gastos_rep = limpiar_monto(match_nom.iloc[0].get('monto_gastos_rep', 0))
-                    monto_bonif_grado = limpiar_monto(match_nom.iloc[0].get('monto_bonif_grado', 0))
 
             presupuestado = limpiar_monto(row.get('presupuestado', 0))
             jubilacion = limpiar_monto(row.get('jubilacion', 0))
@@ -820,26 +785,17 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                         )
 
             st.markdown("### 📊 Desglose de Haberes y Descuentos (FF.AA.)")
-            
-            # Fila 1: Presupuestado Total y Rubros de Bonificaciones
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Presupuestado Total", f"Gs. {formato_guarani(presupuestado)}")
-            c2.metric("Exposición al Peligro", f"Gs. {formato_guarani(monto_peligro)}")
-            c3.metric("Gastos de Representación", f"Gs. {formato_guarani(monto_gastos_rep)}")
-            c4.metric("Bonif. / Grado Académico", f"Gs. {formato_guarani(monto_bonif_grado)}")
+            c1.metric("Presupuestado", f"Gs. {formato_guarani(presupuestado)}")
+            c2.metric("Jubilación", f"Gs. {formato_guarani(jubilacion)}")
+            c3.metric("Giraduría", f"Gs. {formato_guarani(giraduria)}")
+            c4.metric("Descuento CF2", f"Gs. {formato_guarani(desc_cf2)}")
 
-            # Fila 2: Descuentos Oficiales
             c5, c6, c7, c8 = st.columns(4)
-            c5.metric("Jubilación", f"Gs. {formato_guarani(jubilacion)}")
-            c6.metric("Giraduría", f"Gs. {formato_guarani(giraduria)}")
-            c7.metric("Descuento CF2", f"Gs. {formato_guarani(desc_cf2)}")
-            c8.metric("Judicial", f"Gs. {formato_guarani(judicial)}")
-
-            # Fila 3: Totales y Límites de Liquidez
-            c9, c10, c11 = st.columns(3)
-            c9.metric("Total Descuentos", f"Gs. {formato_guarani(total_descuentos)}")
-            c10.metric("Líquido Real", f"Gs. {formato_guarani(liquido_real)}")
-            c11.metric("Límite Cuota (50%)", f"Gs. {formato_guarani(limite_50)}")
+            c5.metric("Judicial", f"Gs. {formato_guarani(judicial)}")
+            c6.metric("Total Descuentos", f"Gs. {formato_guarani(total_descuentos)}")
+            c7.metric("Líquido Real", f"Gs. {formato_guarani(liquido_real)}")
+            c8.metric("Límite Cuota (50%)", f"Gs. {formato_guarani(limite_50)}")
 
             st.markdown("---")
             if total_deudas_actuales > limite_50:
@@ -1669,10 +1625,9 @@ elif opcion == "📥 Cargar Base Mensual":
     else:
         st.success("🔑 **Permisos de Administrador Verificados**")
         
-        tab_b1, tab_b2, tab_b3 = st.tabs([
+        tab_b1, tab_b2 = st.tabs([
             "🪖 Base de Liquidez (FF.AA.)", 
-            "🏛️ Base Enviado / Cobrado (Giradurías)", 
-            "📄 Nómina Consolidada Oficial (Hacienda / FF.AA.)"
+            "🏛️ Base Enviado / Cobrado (Giradurías)"
         ])
 
         with tab_b1:
@@ -1696,69 +1651,3 @@ elif opcion == "📥 Cargar Base Mensual":
                 guardar_giradurias(df_norm_g)
                 st.success("✅ ¡Giradurías unificadas correctamente!")
                 st.rerun()
-
-        with tab_b3:
-            st.markdown("#### 3. Cargar Nómina de Militares (Hacienda / FF.AA.)")
-            st.caption("Filtra por la base de liquidez y desglosa las bonificaciones específicas de Hacienda.")
-            
-            if not df_nomina_militares.empty:
-                st.info(f"📊 **Estado actual:** {len(df_nomina_militares):,} militares en `nomina_militares.csv`.")
-
-            archivo_nom = st.file_uploader("📥 Cargar Nómina General (.xlsx / .xls / .csv)", type=["xlsx", "xls", "csv"], key="u_nomina_mil")
-
-            if archivo_nom and st.button("⚠️ Procesar, Desglosar Bonificaciones y Guardar", use_container_width=True):
-                try:
-                    ext_n = archivo_nom.name.lower().split('.')[-1]
-                    df_raw_n = pd.read_csv(archivo_nom, dtype=str) if ext_n == 'csv' else pd.read_excel(archivo_nom, dtype=str)
-
-                    # Identificar dinámicamente el nombre de la columna C.I.
-                    if 'codigoPersona' in df_raw_n.columns:
-                        col_ci_orig = 'codigoPersona'
-                    elif 'emp_ci' in df_raw_n.columns:
-                        col_ci_orig = 'emp_ci'
-                    else:
-                        col_ci_orig = df_raw_n.columns[0]
-
-                    col_cargo_n = 'cargo' if 'cargo' in df_raw_n.columns else ('cat_codigo' if 'cat_codigo' in df_raw_n.columns else df_raw_n.columns[1])
-                    col_monto_n = 'montoPresupuestado' if 'montoPresupuestado' in df_raw_n.columns else ('presupuestado' if 'presupuestado' in df_raw_n.columns else df_raw_n.columns[2])
-                    col_concepto = 'conceptoGasto' if 'conceptoGasto' in df_raw_n.columns else ('concepto' if 'concepto' in df_raw_n.columns else '')
-
-                    # Crear C.I. limpia directamente en 'emp_ci'
-                    df_raw_n['emp_ci'] = df_raw_n[col_ci_orig].astype(str).apply(limpiar_ci)
-                    df_raw_n['monto_num'] = df_raw_n[col_monto_n].apply(limpiar_monto)
-
-                    if col_concepto in df_raw_n.columns:
-                        df_raw_n['monto_peligro'] = df_raw_n.apply(lambda r: r['monto_num'] if '136' in str(r.get(col_concepto, '')) else 0.0, axis=1)
-                        df_raw_n['monto_gastos_rep'] = df_raw_n.apply(lambda r: r['monto_num'] if '113' in str(r.get(col_concepto, '')) or '162' in str(r.get(col_concepto, '')) else 0.0, axis=1)
-                        df_raw_n['monto_bonif_grado'] = df_raw_n.apply(lambda r: r['monto_num'] if '133' in str(r.get(col_concepto, '')) else 0.0, axis=1)
-                    else:
-                        df_raw_n['monto_peligro'] = 0.0
-                        df_raw_n['monto_gastos_rep'] = 0.0
-                        df_raw_n['monto_bonif_grado'] = 0.0
-
-                    # Filtrar por la base de liquidez si existe
-                    if not df_liquidez.empty:
-                        col_l = 'emp_ci_clean' if 'emp_ci_clean' in df_liquidez.columns else 'emp_ci'
-                        cis_validas = set(df_liquidez[col_l].astype(str).apply(limpiar_ci).unique())
-                        df_raw_n = df_raw_n[df_raw_n['emp_ci'].isin(cis_validas)]
-
-                    # Agrupar limpiamente usando directamente 'emp_ci'
-                    df_consolidado_n = df_raw_n.groupby('emp_ci', as_index=False).agg({
-                        col_cargo_n: 'first',
-                        'monto_num': 'sum',
-                        'monto_peligro': 'sum',
-                        'monto_gastos_rep': 'sum',
-                        'monto_bonif_grado': 'sum'
-                    })
-
-                    df_consolidado_n.rename(columns={
-                        col_cargo_n: 'cat_codigo',
-                        'monto_num': 'presupuestado'
-                    }, inplace=True)
-
-                    guardar_nomina_militares(df_consolidado_n)
-                    st.success(f"✅ ¡Nómina procesada exitosamente! Total militares consolidados: {len(df_consolidado_n):,}")
-                    st.rerun()
-
-                except Exception as e:
-                    st.error(f"Error al procesar la nómina: {e}")
