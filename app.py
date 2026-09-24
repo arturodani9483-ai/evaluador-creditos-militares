@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import io
 import re
+import calendar
 from datetime import datetime, timedelta
 from fpdf import FPDF
 
@@ -16,6 +17,17 @@ except ImportError:
     def obtener_fecha_hora_local():
         # Restar 3 horas a la hora UTC si no está instalado pytz
         return datetime.utcnow() - timedelta(hours=3)
+
+def obtener_ultimo_dia_mes_siguiente(fecha_base):
+    # Calcular el mes siguiente
+    next_m = fecha_base.month + 1
+    next_y = fecha_base.year
+    if next_m > 12:
+        next_m = 1
+        next_y += 1
+    # Obtener el último día de ese mes
+    max_d = calendar.monthrange(next_y, next_m)[1]
+    return datetime(next_y, next_m, max_d).date()
 
 st.set_page_config(
     page_title="SICOC - Sistema Integrado de Control Operativo y Crediticio", 
@@ -540,7 +552,11 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
     if df_liquidez.empty:
         st.info("👈 La base de liquidez está vacía. Cárguela desde 'Cargar Base Mensual'.")
     else:
-        tipo_busqueda = st.radio("Método de búsqueda:", ["💳 Por Número de Cédula", "👤 Por Nombre / Apellido"], horizontal=True)
+        tipo_busqueda = st.radio(
+            "Método de búsqueda:", 
+            ["💳 Por Número de Cédula", "🏷️ Por Número de Socio", "👤 Por Nombre / Apellido"], 
+            horizontal=True
+        )
         matches = pd.DataFrame()
         
         if tipo_busqueda == "💳 Por Número de Cédula":
@@ -550,7 +566,24 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                 if 'emp_ci_clean' not in df_liquidez.columns:
                     df_liquidez['emp_ci_clean'] = df_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
                 matches = df_liquidez[df_liquidez['emp_ci_clean'] == ci_input_clean]
-        else:
+
+        elif tipo_busqueda == "🏷️ Por Número de Socio":
+            socio_input = st.text_input("Número de Socio:", placeholder="Ej: 9946").strip()
+            if socio_input:
+                ci_socio_encontrada = ""
+                if not df_giradurias.empty and 'nro_socio' in df_giradurias.columns:
+                    match_s = df_giradurias[df_giradurias['nro_socio'].astype(str).str.strip() == socio_input]
+                    if not match_s.empty:
+                        ci_socio_encontrada = limpiar_ci(match_s.iloc[0].get('emp_ci', ''))
+                
+                if ci_socio_encontrada:
+                    if 'emp_ci_clean' not in df_liquidez.columns:
+                        df_liquidez['emp_ci_clean'] = df_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
+                    matches = df_liquidez[df_liquidez['emp_ci_clean'] == ci_socio_encontrada]
+                else:
+                    st.warning(f"No se encontró ninguna cédula asociada al N° de Socio '{socio_input}' en la base de Giradurías.")
+
+        else: # Por Nombre / Apellido
             nombre_input = st.text_input("Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
             if nombre_input:
                 matches = df_liquidez[df_liquidez['emp_nomape'].astype(str).str.contains(nombre_input, case=False, na=False)]
@@ -939,7 +972,7 @@ elif opcion == "📋 Dictamen del Girador":
     if df_liquidez.empty:
         st.info("Carga la base de liquidez primero.")
     else:
-        tipo_busq_g = st.radio("Buscar por:", ["💳 Cédula", "👤 Nombre / Apellido"], horizontal=True)
+        tipo_busq_g = st.radio("Buscar por:", ["💳 Cédula", "🏷️ N° Socio", "👤 Nombre / Apellido"], horizontal=True)
         matches_g = pd.DataFrame()
 
         if tipo_busq_g == "💳 Cédula":
@@ -949,6 +982,19 @@ elif opcion == "📋 Dictamen del Girador":
                 if 'emp_ci_clean' not in df_liquidez.columns:
                     df_liquidez['emp_ci_clean'] = df_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
                 matches_g = df_liquidez[df_liquidez['emp_ci_clean'] == ci_girador_clean]
+        elif tipo_busq_g == "🏷️ N° Socio":
+            socio_g = st.text_input("Ingresá el N° de Socio:", placeholder="Ej: 9946").strip()
+            if socio_g:
+                ci_socio_g = ""
+                if not df_giradurias.empty and 'nro_socio' in df_giradurias.columns:
+                    match_sg = df_giradurias[df_giradurias['nro_socio'].astype(str).str.strip() == socio_g]
+                    if not match_sg.empty:
+                        ci_socio_g = limpiar_ci(match_sg.iloc[0].get('emp_ci', ''))
+                
+                if ci_socio_g:
+                    if 'emp_ci_clean' not in df_liquidez.columns:
+                        df_liquidez['emp_ci_clean'] = df_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
+                    matches_g = df_liquidez[df_liquidez['emp_ci_clean'] == ci_socio_g]
         else:
             nom_girador = st.text_input("Ingresá el Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
             if nom_girador:
@@ -1347,7 +1393,6 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
 elif opcion == "🧮 Calculadora de Préstamos":
     st.subheader("🧮 Calculadora Financiera y Simulador de Préstamos")
     
-    # --- SECCIÓN SUPERIOR: BÚSQUEDA Y CRUCE DE SOCIO ---
     st.markdown("### 👤 Datos y Cruce del Socio Solicitante")
     
     socio_input = st.text_input("🔍 Ingrese Número de Socio o Cédula (C.I.):", placeholder="Ej: 9946 o 5955048").strip()
@@ -1362,7 +1407,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
     margen_libre_liquidez = 0.0
 
     if socio_input:
-        # 1. Buscar en Giradurías
         if not df_giradurias.empty:
             match_g = pd.DataFrame()
             if 'emp_ci_clean' in df_giradurias.columns:
@@ -1378,7 +1422,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
                 ultimo_descuento_cobrado = limpiar_monto(r_g.get('monto_cobrado', 0))
                 unidad_giraduria_socio = limpiar_texto(r_g.get('unidad_nombre_oficial', 'Sin Asignar'))
 
-        # 2. Buscar en Liquidez
         if not df_liquidez.empty and (ci_socio != "S/D" or socio_input_clean):
             search_ci = ci_socio if ci_socio != "S/D" else socio_input_clean
             col_l = 'emp_ci_clean' if 'emp_ci_clean' in df_liquidez.columns else 'emp_ci'
@@ -1397,7 +1440,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
                 tot_d = jub + limpiar_monto(r_l.get('giraduria', 0)) + limpiar_monto(r_l.get('descuento_cf2', 0)) + limpiar_monto(r_l.get('judicial', 0))
                 margen_libre_liquidez = ((presup - jub) / 2.0) - (tot_d - jub)
 
-    # Tarjeta de Estado del Socio
     if socio_encontrado:
         st.success(f"👤 **Socio:** {nombre_socio} | **C.I.:** {ci_socio}")
         c_s1, c_s2, c_s3, c_s4 = st.columns(4)
@@ -1444,7 +1486,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
         )
         nombre_p = tipos_prestamo[codigo_p]['nombre']
 
-        # Selección de Modalidad (Con Cancelación / Paralelo)
         es_refinanciacion_natura = (codigo_p == '71' or 'REFINANCIACI' in nombre_p.upper())
         
         if not es_refinanciacion_natura:
@@ -1491,8 +1532,12 @@ elif opcion == "🧮 Calculadora de Préstamos":
 
         st.text_input("Comisión (Gs.):", value=f"Gs. {formato_guarani(comision_val)}", disabled=True)
 
-        fecha_desembolso = st.date_input("Fecha Desembolso:", value=obtener_fecha_hora_local().date())
-        fecha_primer_venc = st.date_input("Fecha 1er Vencimiento:", value=obtener_fecha_hora_local().date() + timedelta(days=30))
+        fecha_hoy = obtener_fecha_hora_local().date()
+        fecha_desembolso = st.date_input("Fecha Desembolso:", value=fecha_hoy)
+
+        # CÁLCULO AUTOMÁTICO: ÚLTIMO DÍA DEL MES SIGUIENTE
+        fecha_primer_venc_default = obtener_ultimo_dia_mes_siguiente(fecha_desembolso)
+        fecha_primer_venc = st.date_input("Fecha 1er Vencimiento:", value=fecha_primer_venc_default)
 
     if st.button("🚀 Calcular Plan de Pagos y Evaluar Crédito", use_container_width=True):
         if monto_capital <= 0:
@@ -1512,7 +1557,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
             else:
                 cuota = capital_con_gastos / plazo
 
-            # --- EVALUACIÓN Y CRUCE AUTOMÁTICO DE FACTIBILIDAD ---
             st.markdown("---")
             st.subheader("🎯 Resultado de la Evaluación Automática")
 
@@ -1536,7 +1580,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
                     f"como el margen libre de liquidez (**Gs. {formato_guarani(margen_libre_liquidez)}**)."
                 )
 
-            # --- GENERACIÓN DE LA TABLA DE AMORTIZACIÓN ---
             plan_pagos = []
             saldo_restante = capital_con_gastos
             total_pagar = 0.0
@@ -1566,7 +1609,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
                     next_m = 1
                     next_y += 1
                 
-                import calendar
                 max_d = calendar.monthrange(next_y, next_m)[1]
                 day = min(curr_venc.day, max_d)
                 curr_venc = datetime(next_y, next_m, day).date()
