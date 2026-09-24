@@ -6,6 +6,17 @@ import re
 from datetime import datetime, timedelta
 from fpdf import FPDF
 
+# Intentar ajustar la zona horaria a Paraguay (America/Asuncion)
+try:
+    import pytz
+    PY_TZ = pytz.timezone('America/Asuncion')
+    def obtener_fecha_hora_local():
+        return datetime.now(PY_TZ)
+except ImportError:
+    def obtener_fecha_hora_local():
+        # Restar 3 horas a la hora UTC si no está instalado pytz
+        return datetime.utcnow() - timedelta(hours=3)
+
 st.set_page_config(
     page_title="SICOC - Sistema Integrado de Control Operativo y Crediticio", 
     layout="wide", 
@@ -67,7 +78,7 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==========================================
-# ⚙️ MENÚ LATERAL Y NAVEGACIÓN
+# ⚙️ MENÚ LATERAL, SOPORTE Y NAVEGACIÓN
 # ==========================================
 usuario_actual = st.session_state['usuario_actual'].lower()
 es_editor = usuario_actual in USUARIOS_EDITORES_DICTAMEN
@@ -101,6 +112,13 @@ opcion = st.sidebar.radio("Navegación de Módulos:", [
     "🧮 Calculadora de Préstamos",
     "📥 Cargar Base Mensual"
 ])
+
+# --- SECCIÓN PERMANENTE DE SOPORTE TÉCNICO Y WHATSAPP ---
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 💬 Soporte del Sistema")
+st.sidebar.caption("Desarrollado por **Arturo Arrua**")
+url_whatsapp = "https://wa.me/595983474662?text=Hola%20Arturo,%20tengo%20una%20consulta%20sobre%20el%20sistema%20SICOC"
+st.sidebar.markdown(f'[![WhatsApp](https://img.shields.io/badge/WhatsApp-Contactar_Desarrollador-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)]({url_whatsapp})')
 
 DB_LIQUIDEZ_FILE = "base_liquidez_militares.csv"
 DB_GIRADURIAS_FILE = "Planilla_Descuentos_Consolidada.xlsx"
@@ -419,10 +437,11 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
 # ==========================================
 class PDFReporteIncidencias(FPDF):
     def header(self):
+        fecha_local = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
         self.set_font("Helvetica", "B", 13)
         self.cell(0, 8, "SICOC - INFORME OFICIAL DE PAGOS PARCIALES Y RECHAZADOS", border=0, ln=True, align="C")
         self.set_font("Helvetica", "I", 9)
-        self.cell(0, 4, f"Fecha de emisión: {datetime.now().strftime('%d/%m/%Y %H:%M')}", border=0, ln=True, align="C")
+        self.cell(0, 4, f"Fecha de emisión: {fecha_local}", border=0, ln=True, align="C")
         self.ln(4)
 
         # Cabecera de la Tabla que se repite en CADA página
@@ -442,10 +461,11 @@ class PDFReporteIncidencias(FPDF):
 
 class PDFCobrabilidadUnidades(FPDF):
     def header(self):
+        fecha_local = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
         self.set_font("Helvetica", "B", 13)
         self.cell(0, 8, "SICOC - RESUMEN DE COBRABILIDAD Y EFECTIVIDAD POR UNIDAD", border=0, ln=True, align="C")
         self.set_font("Helvetica", "I", 9)
-        self.cell(0, 4, f"Fecha de emisión: {datetime.now().strftime('%d/%m/%Y %H:%M')}", border=0, ln=True, align="C")
+        self.cell(0, 4, f"Fecha de emisión: {fecha_local}", border=0, ln=True, align="C")
         self.ln(4)
 
         # Cabecera de la Tabla que se repite en CADA página
@@ -919,11 +939,12 @@ elif opcion == "📋 Dictamen del Girador":
                             st.error("Por favor ingresá una observación para guardar el dictamen.")
                         else:
                             df_dictamenes = df_dictamenes[df_dictamenes['CEDULA'].astype(str).apply(limpiar_ci) != ci_g]
+                            fecha_dictamen = obtener_fecha_hora_local().strftime("%d/%m/%Y %H:%M")
                             nuevo_dictamen = pd.DataFrame([{
                                 'CEDULA': ci_g,
                                 'CUOTA_PROPUESTA': formato_guarani(cuota_evaluando),
                                 'DICTAMEN_GIRADOR': obs_girador.strip(),
-                                'FECHA': pd.Timestamp.now().strftime("%d/%m/%Y %H:%M")
+                                'FECHA': fecha_dictamen
                             }])
                             df_dictamenes = pd.concat([df_dictamenes, nuevo_dictamen], ignore_index=True)
                             guardar_dictamenes(df_dictamenes)
@@ -1212,11 +1233,12 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
 
             col_f1, col_f2, col_f3 = st.columns(3)
             with col_f1:
-                fecha_nota_input = st.text_input("Fecha de Presentación:", value=f"{datetime.now().day:02d} de {datetime.now().strftime('%B').capitalize()} de {datetime.now().year}")
+                now_loc = obtener_fecha_hora_local()
+                fecha_nota_input = st.text_input("Fecha de Presentación:", value=f"{now_loc.day:02d} de {now_loc.strftime('%B').capitalize()} de {now_loc.year}")
             with col_f2:
                 mes_eval_input = st.text_input("Mes Evaluado:", value="septiembre")
             with col_f3:
-                anio_eval_input = st.text_input("Año Evaluado:", value=str(datetime.now().year))
+                anio_eval_input = st.text_input("Año Evaluado:", value=str(now_loc.year))
 
             st.markdown("---")
             st.markdown("#### 📋 Marque las casillas que corresponden a los anexos presentados:")
@@ -1328,8 +1350,8 @@ elif opcion == "🧮 Calculadora de Préstamos":
 
         st.text_input("Comisión (Gs.):", value=f"Gs. {formato_guarani(comision_val)}", disabled=True)
 
-        fecha_desembolso = st.date_input("Fecha Desembolso:", value=datetime.now().date())
-        fecha_primer_venc = st.date_input("Fecha 1er Vencimiento:", value=datetime.now().date() + timedelta(days=30))
+        fecha_desembolso = st.date_input("Fecha Desembolso:", value=obtener_fecha_hora_local().date())
+        fecha_primer_venc = st.date_input("Fecha 1er Vencimiento:", value=obtener_fecha_hora_local().date() + timedelta(days=30))
 
     if st.button("🚀 Calcular Plan de Pagos", use_container_width=True):
         if monto_capital <= 0:
