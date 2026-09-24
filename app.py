@@ -631,7 +631,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             with col_info3:
                 st.info(f"🏛️ **Unidad en Liquidez:** {unidad_militar}")
 
-            # --- NUEVA SECCIÓN: DESGLOSE DE COBRANZA EN GIRADURÍA ---
+            # --- DESGLOSE DE COBRANZA EN GIRADURÍA ---
             if es_socio:
                 st.markdown("### 🏛️ Datos de Descuento en Giraduría del Mes")
                 col_g1, col_g2, col_g3, col_g4 = st.columns(4)
@@ -644,9 +644,20 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                 else:
                     col_g4.metric("Monto Rechazado", "Gs. 0", delta="Cobro 100% OK")
 
+                u_gir_upper = unidad_enviada_giraduria.upper()
+                is_jubilado = "JUBILAD" in u_gir_upper or "JUBILADOS" in unidad_militar.upper()
+                is_cf2 = "CF2" in u_gir_upper or "CFN2" in u_gir_upper
+
                 if monto_enviado > 0 and monto_cobrado == 0:
                     st.error("🚨 **ALERTA DE DESCUENTO RECHAZADO (Gs. 0 COBRADO)**")
-                    if unidad_enviada_giraduria and unidad_militar.upper() not in unidad_enviada_giraduria.upper():
+                    if is_cf2:
+                        unidad_ref = unidad_militar if unidad_militar else "su unidad de origen"
+                        st.markdown(
+                            f"⚠️ **DIAGNÓSTICO ESPECÍFICO UNIDAD CF2:**\n"
+                            f"El descuento enviado a CF2 fue rechazado (Gs. 0 cobrado).\n"
+                            f"📌 **Acción Requerida:** CF2: RECHAZADO - Consultar con la unidad **{unidad_ref}** (figura en liquidez)."
+                        )
+                    elif unidad_enviada_giraduria and unidad_militar.upper() not in unidad_enviada_giraduria.upper():
                         st.markdown(
                             f"⚠️ **DIAGNÓSTICO DE INCONSISTENCIA EN GIRADURÍA:**\n"
                             f"El socio no registró ningún descuento debido a que la planilla fue enviada a la **{unidad_enviada_giraduria}**, "
@@ -662,16 +673,29 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
 
                 elif 0 < monto_cobrado < monto_enviado:
                     st.warning("⚠️ **ALERTA DE PAGO PARCIAL DETECTADO**")
-                    if margen_deuda_restante > 0:
+                    if is_jubilado:
+                        st.info(
+                            f"💡 **DIAGNÓSTICO ESPECÍFICO UNIDAD JUBILADOS:**\n"
+                            f"El socio jubilado registró un pago parcial de Gs. {formato_guarani(monto_cobrado)}.\n"
+                            f"📌 **Acción Requerida:** Actualizar planilla de autorización o refinanciar (Último descuento: Gs. {formato_guarani(monto_cobrado)})."
+                        )
+                    elif is_cf2:
+                        st.success(
+                            f"💡 **DIAGNÓSTICO ESPECÍFICO UNIDAD CF2:**\n"
+                            f"Unidad Central de Descuentos (CF2) con pago parcial acumulado.\n"
+                            f"✅ **Refinanciación Factible - Tope de cuota recomendada: Gs. {formato_guarani(monto_cobrado)} cobrados.**"
+                        )
+                    elif margen_deuda_restante > 0:
                         st.success(
                             f"💡 **ANÁLISIS DE REFINANCIACIÓN FACTIBLE:**\n"
                             f"El socio realizó un pago parcial. Cuenta con un margen libre de liquidez de **Gs. {formato_guarani(margen_deuda_restante)}**.\n"
                             f"✅ **Es factible reestructurar o refinanciar el saldo pendiente de Gs. {formato_guarani(monto_rechazado)}.**"
                         )
                     else:
-                        st.error(
-                            f"❌ **REFINANCIACIÓN NO FACTIBLE POR LÍMITE DE LIQUIDEZ:**\n"
-                            f"El socio no dispone de margen sobrante (Límite 50% agotado). Recomendar refinanciación especial o consulta con CF2."
+                        st.info(
+                            f"💡 **ANÁLISIS DE RESTRUCTURACIÓN RECOMENDADO:**\n"
+                            f"El socio realizó un pago parcial pero no dispone de margen libre en el límite del 50%.\n"
+                            f"📌 **Se sugiere evaluar reestructurar/refinanciar fijando la cuota límite en los Gs. {formato_guarani(monto_cobrado)} descontados actualmente.**"
                         )
 
             st.markdown("### 📊 Desglose de Haberes y Descuentos (FF.AA.)")
@@ -783,16 +807,33 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
                 else:
                     unidad_liq = "FFPP / Jubilado"
 
-            if cobrado == 0:
-                if unidad_liq not in ["FFPP / Jubilado", "Jubilado", "Armada", "Fuerza Aérea", "Policía Nacional"] and unidad_giraduria.upper() not in unidad_liq.upper():
-                    diagnostico = f"RECHAZADO: Enviado a {unidad_giraduria} pero figura en {unidad_liq}"
+            u_gir_clean = unidad_giraduria.upper()
+            is_jubilado_u = "JUBILAD" in u_gir_clean or "JUBILADOS" in unidad_liq.upper()
+            is_cf2_u = "CF2" in u_gir_clean or "CFN2" in u_gir_clean
+
+            # REGLAS LÓGICAS PERSONALIZADAS
+            if is_cf2_u:
+                if cobrado > 0:
+                    diagnostico = f"CF2: Refinanciación factible - Tope cuota recomendada: Gs. {formato_guarani(cobrado)} cobrados"
                 else:
-                    diagnostico = "RECHAZADO: Falta de liquidez o embargo prioritario"
-            elif 0 < cobrado < enviado:
-                if margen_liq > 0:
-                    diagnostico = f"PARCIAL: REFINANCIACIÓN FACTIBLE (Margen libre Gs. {formato_guarani(margen_liq)})"
-                else:
-                    diagnostico = "PARCIAL: REFINANCIACIÓN NO FACTIBLE (Límite 50% agotado)"
+                    unidad_ref = unidad_liq if unidad_liq else "su unidad de origen"
+                    diagnostico = f"CF2: RECHAZADO - Consultar con la unidad {unidad_ref} (figura en liquidez)"
+            
+            elif is_jubilado_u:
+                if cobrado < enviado:
+                    diagnostico = f"JUBILADO: Actualizar planilla de autorización o refinanciar (Último descuento: Gs. {formato_guarani(cobrado)})"
+            
+            else:
+                if cobrado == 0:
+                    if unidad_liq not in ["FFPP / Jubilado", "Jubilado", "Armada", "Fuerza Aérea", "Policía Nacional"] and unidad_giraduria.upper() not in unidad_liq.upper():
+                        diagnostico = f"RECHAZADO: Enviado a {unidad_giraduria} pero figura en {unidad_liq}"
+                    else:
+                        diagnostico = "RECHAZADO: Falta de liquidez o embargo prioritario"
+                elif 0 < cobrado < enviado:
+                    if margen_liq > 0:
+                        diagnostico = f"PARCIAL: REFINANCIACIÓN FACTIBLE (Margen libre Gs. {formato_guarani(margen_liq)})"
+                    else:
+                        diagnostico = f"PARCIAL: Evaluar refinanciación (Cuota límite recomendada: Gs. {formato_guarani(cobrado)} cobrados)"
 
             if cobrado < enviado:
                 socio_num = int(re.sub(r'\D', '', str(socio))) if re.sub(r'\D', '', str(socio)) else 99999999
@@ -1529,7 +1570,7 @@ elif opcion == "📥 Cargar Base Mensual":
 
         with tab_b2:
             st.markdown("#### 2. Base Enviado / Cobrado Giradurías")
-            st.caption("Esta base unifica automáticamente todas las pestañas de `Planilla_Descuentos_Consolidada.xlsx` (omitiendo 'Hoja1') y asignando el nombre oficial de la unidad.")
+            st.caption("Esta base unifies automáticamente todas las pestañas de `Planilla_Descuentos_Consolidada.xlsx` (omitiendo 'Hoja1') y asignando el nombre oficial de la unidad.")
             
             if not df_giradurias.empty:
                 st.info(f"📊 **Estado actual:** {len(df_giradurias):,} registros de socios/giradurías cargados.")
@@ -1547,7 +1588,7 @@ elif opcion == "📥 Cargar Base Mensual":
                             st.warning("No se encontraron datos procesables en las pestañas de la planilla de giradurías.")
                         else:
                             guardar_giradurias(df_norm_g)
-                            st.success(f"✅ ¡Se unificaron correctamente las 40 pestañas de giradurías! Total socios: {len(df_norm_g):,}")
+                            st.success(f"✅ ¡Se unificaron correctamente las pestañas de giradurías! Total socios: {len(df_norm_g):,}")
                             st.rerun()
                     except Exception as e:
                         st.error(f"Error al procesar la planilla de giradurías: {e}")
