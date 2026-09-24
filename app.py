@@ -207,32 +207,34 @@ def estandarizar_columnas_giradurias(df):
     for c in df.columns:
         c_clean = str(c).strip().upper().replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
         
-        if 'SOCIO' in c_clean or 'N° SOCIO' in c_clean or 'NRO SOCIO' in c_clean or 'NSOCIO' in c_clean:
+        if 'SOCIO' in c_clean or 'N° SOCIO' in c_clean or 'NRO SOCIO' in c_clean:
             cols_map[c] = 'nro_socio'
         elif 'C.I' in c_clean or 'CEDULA' in c_clean or 'CI' in c_clean or 'EMP_CI' in c_clean or 'CODIGOPERSONA' in c_clean:
             cols_map[c] = 'emp_ci'
         elif 'APELLIDO' in c_clean or 'NOMBRE' in c_clean or 'NOMAPE' in c_clean:
             cols_map[c] = 'emp_nomape'
-        elif any(k in c_clean for k in ['ENV', 'SOLICITADO', 'MONTO_ENV', 'IMP_ENV', 'IMPORTE_ENV', 'M_ENVIADO']):
+        elif 'TOTAL DESCUENTOS' in c_clean or 'TOTAL DESCUENTO' in c_clean or 'ENVIADO' in c_clean or 'MONTO ENVIADO' in c_clean or 'SOLICITADO' in c_clean:
             cols_map[c] = 'monto_enviado'
-        elif any(k in c_clean for k in ['COBRADO', 'DESCONTADO', 'MONTO_COB', 'IMP_COB', 'IMPORTE_COB', 'M_COBRADO']):
+        elif 'COBRADO' in c_clean or 'MONTO COBRADO' in c_clean or 'DESCONTADO' in c_clean:
             cols_map[c] = 'monto_cobrado'
-        elif any(k in c_clean for k in ['RECHAZADO', 'DIFERENCIA', 'MONTO_REC', 'IMP_REC', 'PENDIENTE']):
+        elif 'RECHAZADO' in c_clean or 'MONTO RECHAZADO' in c_clean or 'DIFERENCIA' in c_clean:
             cols_map[c] = 'monto_rechazado'
-        elif 'UNIDAD' in c_clean or 'GIRADURIA' in c_clean or 'DEPENDENCIA' in c_clean or 'DESCRIPCION' in c_clean:
+        elif 'UNIDAD' in c_clean or 'GIRADURIA' in c_clean or 'DEPENDENCIA' in c_clean:
             cols_map[c] = 'unidad_columna'
 
     df_ren = df.rename(columns=cols_map)
 
-    # Fallback por posiciones de columna si los nombres cambian totalmente
-    if 'emp_ci' not in df_ren.columns and len(df_ren.columns) >= 2:
-        df_ren['emp_ci'] = df_ren.iloc[:, 1]
-
-    # Asignación de montos por posición si no fueron detectados por nombre
-    if 'monto_enviado' not in df_ren.columns and len(df_ren.columns) >= 4:
-        df_ren['monto_enviado'] = df_ren.iloc[:, 3]
-    if 'monto_cobrado' not in df_ren.columns and len(df_ren.columns) >= 5:
-        df_ren['monto_cobrado'] = df_ren.iloc[:, 4]
+    # Fallbacks si no se renombraron
+    if 'emp_ci' not in df_ren.columns and len(df_ren.columns) >= 3:
+        df_ren['emp_ci'] = df_ren.iloc[:, 2]
+    if 'nro_socio' not in df_ren.columns and len(df_ren.columns) >= 2:
+        df_ren['nro_socio'] = df_ren.iloc[:, 1]
+    if 'monto_enviado' not in df_ren.columns and len(df_ren.columns) >= 5:
+        df_ren['monto_enviado'] = df_ren.iloc[:, 4]
+    if 'monto_cobrado' not in df_ren.columns and len(df_ren.columns) >= 6:
+        df_ren['monto_cobrado'] = df_ren.iloc[:, 5]
+    if 'monto_rechazado' not in df_ren.columns and len(df_ren.columns) >= 7:
+        df_ren['monto_rechazado'] = df_ren.iloc[:, 6]
 
     if 'emp_ci' in df_ren.columns:
         df_ren['emp_ci_clean'] = df_ren['emp_ci'].astype(str).apply(limpiar_ci)
@@ -737,27 +739,9 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
 
                         # Sumar montos si existen múltiples filas del mismo socio
                         for _, row_s in match_g.iterrows():
-                            # Búsqueda ultra flexible de campos de montos
-                            m_env = 0.0
-                            m_cob = 0.0
-                            m_rec = 0.0
-
-                            for col_name, val_cell in row_s.items():
-                                c_u = str(col_name).strip().upper()
-                                if any(k in c_u for k in ['ENV', 'SOLICITADO', 'MONTO_ENV', 'IMP_ENV']):
-                                    m_env = max(m_env, limpiar_monto(val_cell))
-                                elif any(k in c_u for k in ['COBRADO', 'DESCONTADO', 'MONTO_COB', 'IMP_COB']):
-                                    m_cob = max(m_cob, limpiar_monto(val_cell))
-                                elif any(k in c_u for k in ['RECHAZADO', 'DIFERENCIA', 'MONTO_REC', 'IMP_REC']):
-                                    m_rec = max(m_rec, limpiar_monto(val_cell))
-
-                            # Si fallo por nombre, usar columnas 'monto_enviado' y 'monto_cobrado' mapeadas previamente
-                            if m_env == 0.0:
-                                m_env = limpiar_monto(row_s.get('monto_enviado', 0))
-                            if m_cob == 0.0:
-                                m_cob = limpiar_monto(row_s.get('monto_cobrado', 0))
-                            if m_rec == 0.0:
-                                m_rec = limpiar_monto(row_s.get('monto_rechazado', 0))
+                            m_env = limpiar_monto(row_s.get('monto_enviado', 0))
+                            m_cob = limpiar_monto(row_s.get('monto_cobrado', 0))
+                            m_rec = limpiar_monto(row_s.get('monto_rechazado', 0))
 
                             monto_enviado += m_env
                             monto_cobrado += m_cob
@@ -1714,7 +1698,7 @@ elif opcion == "📥 Cargar Base Mensual":
 
         with tab_b2:
             st.markdown("#### 2. Base Enviado / Cobrado Giradurías")
-            st.caption("Esta base unifies automáticamente todas las pestañas de `Planilla_Descuentos_Consolidada.xlsx` (omitiendo 'Hoja1') y asignando el nombre oficial de la unidad.")
+            st.caption("Esta base unifica automáticamente todas las pestañas de `Planilla_Descuentos_Consolidada.xlsx` (omitiendo 'Hoja1') y asignando el nombre oficial de la unidad.")
             if not df_giradurias.empty: st.info(f"📊 **Estado actual:** {len(df_giradurias):,} registros de socios/giradurías cargados.")
             archivo_g = st.file_uploader("Cargar Base Enviado / Cobrado Giradurías (.xlsx / .xls)", type=["xlsx", "xls"], key="u_giradurias")
             if archivo_g and st.button("⚠️ Unificar y Cargar Giradurías", use_container_width=True):
