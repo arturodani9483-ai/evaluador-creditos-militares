@@ -155,7 +155,7 @@ MAPEO_UNIDADES = {
 }
 
 # ==========================================
-# 🛠️ FUNCIONES AUXILIARES Y DE DATOS (BLINDADAS)
+# 🛠️ FUNCIONES AUXILIARES Y DE DATOS
 # ==========================================
 def limpiar_texto(val):
     try:
@@ -1711,24 +1711,39 @@ elif opcion == "📥 Cargar Base Mensual":
                     ext_n = archivo_nom.name.lower().split('.')[-1]
                     df_raw_n = pd.read_csv(archivo_nom, dtype=str) if ext_n == 'csv' else pd.read_excel(archivo_nom, dtype=str)
 
-                    col_ci_n = 'codigoPersona' if 'codigoPersona' in df_raw_n.columns else 'emp_ci'
-                    col_cargo_n = 'cargo' if 'cargo' in df_raw_n.columns else 'cat_codigo'
-                    col_monto_n = 'montoPresupuestado' if 'montoPresupuestado' in df_raw_n.columns else 'presupuestado'
-                    col_concepto = 'conceptoGasto' if 'conceptoGasto' in df_raw_n.columns else 'concepto'
+                    # Identificar dinámicamente el nombre de la columna C.I.
+                    if 'codigoPersona' in df_raw_n.columns:
+                        col_ci_orig = 'codigoPersona'
+                    elif 'emp_ci' in df_raw_n.columns:
+                        col_ci_orig = 'emp_ci'
+                    else:
+                        col_ci_orig = df_raw_n.columns[0]
 
-                    df_raw_n['emp_ci_clean'] = df_raw_n[col_ci_n].astype(str).apply(limpiar_ci)
+                    col_cargo_n = 'cargo' if 'cargo' in df_raw_n.columns else ('cat_codigo' if 'cat_codigo' in df_raw_n.columns else df_raw_n.columns[1])
+                    col_monto_n = 'montoPresupuestado' if 'montoPresupuestado' in df_raw_n.columns else ('presupuestado' if 'presupuestado' in df_raw_n.columns else df_raw_n.columns[2])
+                    col_concepto = 'conceptoGasto' if 'conceptoGasto' in df_raw_n.columns else ('concepto' if 'concepto' in df_raw_n.columns else '')
+
+                    # Crear C.I. limpia directamente en 'emp_ci'
+                    df_raw_n['emp_ci'] = df_raw_n[col_ci_orig].astype(str).apply(limpiar_ci)
                     df_raw_n['monto_num'] = df_raw_n[col_monto_n].apply(limpiar_monto)
 
-                    df_raw_n['monto_peligro'] = df_raw_n.apply(lambda r: r['monto_num'] if '136' in str(r.get(col_concepto, '')) else 0.0, axis=1)
-                    df_raw_n['monto_gastos_rep'] = df_raw_n.apply(lambda r: r['monto_num'] if '113' in str(r.get(col_concepto, '')) or '162' in str(r.get(col_concepto, '')) else 0.0, axis=1)
-                    df_raw_n['monto_bonif_grado'] = df_raw_n.apply(lambda r: r['monto_num'] if '133' in str(r.get(col_concepto, '')) else 0.0, axis=1)
+                    if col_concepto in df_raw_n.columns:
+                        df_raw_n['monto_peligro'] = df_raw_n.apply(lambda r: r['monto_num'] if '136' in str(r.get(col_concepto, '')) else 0.0, axis=1)
+                        df_raw_n['monto_gastos_rep'] = df_raw_n.apply(lambda r: r['monto_num'] if '113' in str(r.get(col_concepto, '')) or '162' in str(r.get(col_concepto, '')) else 0.0, axis=1)
+                        df_raw_n['monto_bonif_grado'] = df_raw_n.apply(lambda r: r['monto_num'] if '133' in str(r.get(col_concepto, '')) else 0.0, axis=1)
+                    else:
+                        df_raw_n['monto_peligro'] = 0.0
+                        df_raw_n['monto_gastos_rep'] = 0.0
+                        df_raw_n['monto_bonif_grado'] = 0.0
 
+                    # Filtrar por la base de liquidez si existe
                     if not df_liquidez.empty:
-                        cis_validas = set(df_liquidez['emp_ci'].astype(str).apply(limpiar_ci).unique())
-                        df_raw_n = df_raw_n[df_raw_n['emp_ci_clean'].isin(cis_validas)]
+                        col_l = 'emp_ci_clean' if 'emp_ci_clean' in df_liquidez.columns else 'emp_ci'
+                        cis_validas = set(df_liquidez[col_l].astype(str).apply(limpiar_ci).unique())
+                        df_raw_n = df_raw_n[df_raw_n['emp_ci'].isin(cis_validas)]
 
-                    df_consolidado_n = df_raw_n.groupby('emp_ci_clean', as_index=False).agg({
-                        col_ci_n: 'first',
+                    # Agrupar limpiamente usando directamente 'emp_ci'
+                    df_consolidado_n = df_raw_n.groupby('emp_ci', as_index=False).agg({
                         col_cargo_n: 'first',
                         'monto_num': 'sum',
                         'monto_peligro': 'sum',
@@ -1737,13 +1752,12 @@ elif opcion == "📥 Cargar Base Mensual":
                     })
 
                     df_consolidado_n.rename(columns={
-                        col_ci_n: 'emp_ci',
                         col_cargo_n: 'cat_codigo',
                         'monto_num': 'presupuestado'
                     }, inplace=True)
 
                     guardar_nomina_militares(df_consolidado_n)
-                    st.success(f"✅ ¡Nómina procesada! Total militares filtrados y consolidados: {len(df_consolidado_n):,}")
+                    st.success(f"✅ ¡Nómina procesada exitosamente! Total militares consolidados: {len(df_consolidado_n):,}")
                     st.rerun()
 
                 except Exception as e:
