@@ -19,13 +19,11 @@ except ImportError:
         return datetime.utcnow() - timedelta(hours=3)
 
 def obtener_ultimo_dia_mes_siguiente(fecha_base):
-    # Calcular el mes siguiente
     next_m = fecha_base.month + 1
     next_y = fecha_base.year
     if next_m > 12:
         next_m = 1
         next_y += 1
-    # Obtener el último día de ese mes
     max_d = calendar.monthrange(next_y, next_m)[1]
     return datetime(next_y, next_m, max_d).date()
 
@@ -168,7 +166,6 @@ def limpiar_texto(val):
         return ""
 
 def limpiar_ci(val):
-    """Extrae ÚNICAMENTE los dígitos numéricos descartando comas, puntos o espacios."""
     try:
         if isinstance(val, (pd.Series, list)):
             val = val[0] if len(val) > 0 else ""
@@ -216,7 +213,7 @@ def estandarizar_columnas_giradurias(df):
             cols_map[c] = 'emp_ci'
         elif 'APELLIDO' in c_clean or 'NOMBRE' in c_clean:
             cols_map[c] = 'emp_nomape'
-        elif 'TOTAL DESCUENTOS' in c_clean or 'ENVIADO' in c_clean:
+        elif 'TOTAL DESCUENTOS' in c_clean or 'TOTAL DESCUENTO' in c_clean or 'ENVIADO' in c_clean:
             cols_map[c] = 'monto_enviado'
         elif 'COBRADO' in c_clean:
             cols_map[c] = 'monto_cobrado'
@@ -233,6 +230,7 @@ def unificar_hojas_excel(file_or_path):
     dfs = []
     
     for sheet in xls.sheet_names:
+        # Omitir Hoja1 para procesar desde 'Unidad 1' en adelante
         if sheet.strip().lower() in ['hoja1', 'hoja 1', 'consolidado']:
             continue
 
@@ -242,10 +240,20 @@ def unificar_hojas_excel(file_or_path):
         
         try:
             df_s = pd.read_excel(xls, sheet_name=sheet, dtype=str)
+            
+            # Descartar filas de totales si existen
             if 'N°' in df_s.columns:
-                df_s = df_s[df_s['N°'].astype(str).str.upper() != 'TOTAL GENERAL:']
+                df_s = df_s[~df_s['N°'].astype(str).str.upper().str.contains('TOTAL', na=False)]
             
             df_s = estandarizar_columnas_giradurias(df_s)
+            
+            # Limpiar formatos numéricos (ej. quitar .0 del N° Socio)
+            if 'nro_socio' in df_s.columns:
+                df_s['nro_socio'] = df_s['nro_socio'].astype(str).apply(lambda x: re.sub(r'\.0$', '', str(x).strip()) if pd.notna(x) else "")
+
+            if 'emp_ci' in df_s.columns:
+                df_s['emp_ci_clean'] = df_s['emp_ci'].astype(str).apply(limpiar_ci)
+
             df_s['unidad_nombre_oficial'] = nombre_unidad
             df_s['hoja_origen'] = sheet
             dfs.append(df_s)
@@ -254,8 +262,6 @@ def unificar_hojas_excel(file_or_path):
             
     if dfs:
         df_concat = pd.concat(dfs, ignore_index=True)
-        if 'emp_ci' in df_concat.columns:
-            df_concat['emp_ci_clean'] = df_concat['emp_ci'].astype(str).apply(limpiar_ci)
         return df_concat
     return pd.DataFrame()
 
@@ -440,6 +446,68 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
     pdf.ln(15)
     pdf.cell(0, 6, "_____________________________", align="C", ln=True)
     pdf.cell(0, 6, "Firma / Sello de Recepción", align="C", ln=True)
+
+    return bytes(pdf.output())
+
+# ==========================================
+# 📄 CLASES Y FUNCIONES DE PDF PARA SIMULACIÓN DE PRÉSTAMO
+# ==========================================
+class PDFSimulacionPrestamo(FPDF):
+    def __init__(self):
+        super().__init__(orientation='P', unit='mm', format='A4')
+
+    def header(self):
+        fecha_local = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
+        self.set_font("Helvetica", "B", 13)
+        self.cell(0, 7, "SICOC - SIMULACIÓN OFICIAL DE PRÉSTAMO Y AMORTIZACIÓN", border=0, ln=True, align="C")
+        self.set_font("Helvetica", "I", 9)
+        self.cell(0, 4, f"Fecha de emisión: {fecha_local}", border=0, ln=True, align="C")
+        self.ln(3)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Helvetica", "I", 8)
+        self.cell(0, 10, f"Página {self.page_no()}", align="C")
+
+def generar_pdf_simulacion_prestamo(nombre_s, ci_s, tipo_p, monto_cap, plazo_m, tasa_i, cap_gastos, plus_1, tot_pagar, df_plan_pagos):
+    pdf = PDFSimulacionPrestamo()
+    pdf.add_page()
+
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, "1. DATOS DEL SOLICITANTE Y CONDICIONES DEL CRÉDITO", ln=True)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(100, 5, f"Socio: {nombre_s}")
+    pdf.cell(90, 5, f"Cédula: {ci_s}", ln=True)
+    pdf.cell(100, 5, f"Tipo de Crédito: {tipo_p}")
+    pdf.cell(90, 5, f"Plazo: {plazo_m} meses", ln=True)
+    pdf.cell(100, 5, f"Capital Solicitado: Gs. {formato_guarani(monto_cap)}")
+    pdf.cell(90, 5, f"Tasa de Interés: {tasa_i}% Anual", ln=True)
+    pdf.cell(100, 5, f"Capital con Gastos: Gs. {formato_guarani(cap_gastos)}")
+    pdf.cell(90, 5, f"Total a Pagar: Gs. {formato_guarani(tot_pagar)}", ln=True)
+    pdf.ln(4)
+
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, "2. PLAN DE AMORTIZACIÓN Y VENCIMIENTOS", ln=True)
+    pdf.set_font("Helvetica", "B", 8)
+
+    w_col = [12, 25, 26, 26, 26, 22, 28, 25]
+    cols = ['Cuota', 'Vencimiento', 'Cuota Gs.', 'Amortiz.', 'Intereses', 'Plus Gs.', 'Saldo Gs.', 'Ahorro Gs.']
+    
+    for idx, c in enumerate(cols):
+        pdf.cell(w_col[idx], 6, c, border=1, align="C")
+    pdf.ln()
+
+    pdf.set_font("Helvetica", "", 7)
+    for idx, r in df_plan_pagos.iterrows():
+        pdf.cell(w_col[0], 5, str(r.get('Nro. Cuota', '')), border=1, align="C")
+        pdf.cell(w_col[1], 5, str(r.get('Fecha Vencimiento', '')), border=1, align="C")
+        pdf.cell(w_col[2], 5, str(r.get('Cuota (Gs.)', '')), border=1, align="R")
+        pdf.cell(w_col[3], 5, str(r.get('Amortización', '')), border=1, align="R")
+        pdf.cell(w_col[4], 5, str(r.get('Intereses', '')), border=1, align="R")
+        pdf.cell(w_col[5], 5, str(r.get('Plus (Gs.)', '')), border=1, align="R")
+        pdf.cell(w_col[6], 5, str(r.get('Saldo (Gs.)', '')), border=1, align="R")
+        pdf.cell(w_col[7], 5, str(r.get('Ahorro (Gs.)', '')), border=1, align="R")
+        pdf.ln()
 
     return bytes(pdf.output())
 
@@ -637,10 +705,12 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                         row_socio = match_g.iloc[0]
                         nro_socio_val = limpiar_texto(row_socio.get('nro_socio', ''))
                         nro_socio = nro_socio_val if nro_socio_val else "Socio Registrado"
-                        monto_enviado = limpiar_monto(row_socio.get('monto_enviado', 0))
-                        monto_cobrado = limpiar_monto(row_socio.get('monto_cobrado', 0))
-                        monto_rechazado = limpiar_monto(row_socio.get('monto_rechazado', 0))
                         
+                        for _, r_g in match_g.iterrows():
+                            monto_enviado += limpiar_monto(r_g.get('monto_enviado', 0))
+                            monto_cobrado += limpiar_monto(r_g.get('monto_cobrado', 0))
+                            monto_rechazado += limpiar_monto(r_g.get('monto_rechazado', 0))
+
                         if monto_rechazado == 0 and monto_enviado > monto_cobrado:
                             monto_rechazado = monto_enviado - monto_cobrado
                             
@@ -1274,15 +1344,6 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
                                             mime="text/plain",
                                             use_container_width=True
                                         )
-                                    with col_d2:
-                                        pdf_agg_bytes = generar_pdf_tabla_consolidada(df_agg)
-                                        st.download_button(
-                                            label="📄 Descargar Consolidado (.PDF)",
-                                            data=pdf_agg_bytes,
-                                            file_name="Reporte_Consolidado_Hacienda.pdf",
-                                            mime="application/pdf",
-                                            use_container_width=True
-                                        )
 
                                 else:
                                     st.session_state['auditoria_ejecutada_limpia'] = False
@@ -1362,30 +1423,6 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
 
             st.markdown("---")
             st.write(f"📊 **Totales calculados para la Nota:** Monto Gs. `{formato_guarani(m_tot)}` | Beneficiarios: `{c_ben}`")
-
-            if st.session_state.get('auditoria_ejecutada_limpia', False):
-                pdf_nota_final = generar_pdf_nota_hacienda(
-                    fecha_nota_input, 
-                    mes_eval_input, 
-                    anio_eval_input, 
-                    m_tot, 
-                    c_ben,
-                    c1=chk_1,
-                    c2=chk_2,
-                    c3=chk_3,
-                    c4=chk_4,
-                    c5=chk_5
-                )
-
-                st.download_button(
-                    label="📄 Descargar Nota Oficial de Presentación en PDF (.PDF MEF)",
-                    data=pdf_nota_final,
-                    file_name=f"Nota_Oficial_MEF_{mes_eval_input}_{anio_eval_input}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-            else:
-                st.button("📄 Descargar Nota Oficial de Presentación en PDF (.PDF MEF)", disabled=True, use_container_width=True)
 
 # ==========================================
 # 🧮 MÓDULO 5: CALCULADORA FINANCIERA DE PRÉSTAMOS (CON CRUCE AUTOMÁTICO)
@@ -1535,7 +1572,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
         fecha_hoy = obtener_fecha_hora_local().date()
         fecha_desembolso = st.date_input("Fecha Desembolso:", value=fecha_hoy)
 
-        # CÁLCULO AUTOMÁTICO: ÚLTIMO DÍA DEL MES SIGUIENTE
         fecha_primer_venc_default = obtener_ultimo_dia_mes_siguiente(fecha_desembolso)
         fecha_primer_venc = st.date_input("Fecha 1er Vencimiento:", value=fecha_primer_venc_default)
 
@@ -1648,17 +1684,42 @@ elif opcion == "🧮 Calculadora de Préstamos":
             st.subheader("📋 Tabla Amortización de Pagos")
             st.dataframe(df_plan, use_container_width=True)
 
-            out_plan = io.BytesIO()
-            with pd.ExcelWriter(out_plan, engine='openpyxl') as writer:
-                df_plan.to_excel(writer, sheet_name='Simulacion_Prestamo', index=False)
-            
-            st.download_button(
-                label="📥 Descargar Simulación de Préstamo (Excel)",
-                data=out_plan.getvalue(),
-                file_name=f"Simulacion_Prestamo_{int(monto_capital)}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
+            col_down1, col_down2 = st.columns(2)
+
+            with col_down1:
+                out_plan = io.BytesIO()
+                with pd.ExcelWriter(out_plan, engine='openpyxl') as writer:
+                    df_plan.to_excel(writer, sheet_name='Simulacion_Prestamo', index=False)
+                
+                st.download_button(
+                    label="📥 Descargar Simulación de Préstamo (.XLSX)",
+                    data=out_plan.getvalue(),
+                    file_name=f"Simulacion_Prestamo_{int(monto_capital)}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+
+            with col_down2:
+                pdf_sim_bytes = generar_pdf_simulacion_prestamo(
+                    nombre_socio,
+                    ci_socio,
+                    f"Código {codigo_p} - {nombre_p}",
+                    monto_capital,
+                    plazo,
+                    tasa_interes,
+                    capital_con_gastos,
+                    plus,
+                    total_pagar,
+                    df_plan
+                )
+
+                st.download_button(
+                    label="📄 Descargar Simulación de Préstamo (.PDF)",
+                    data=pdf_sim_bytes,
+                    file_name=f"Simulacion_Prestamo_{ci_socio}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
 
 # ==========================================
 # 📥 MÓDULO 6: CARGAR BASES MENSUALES (ADMIN)
