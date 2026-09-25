@@ -40,7 +40,8 @@ USUARIOS_AUTORIZADOS = {
     "fio": "credfio",
     "agustin": "cobragus",
     "estela": "giradurias",
-    "martin": "mllamas"
+    "martin": "mllamas",
+    "yennifer": "280308"
 }
 
 USUARIOS_EDITORES_DICTAMEN = ["arthuro", "estela", "martin"]
@@ -103,6 +104,8 @@ elif es_auditor_hacienda:
     st.sidebar.caption("🛡️ Rol: Auditor / Evaluador")
 elif es_editor:
     st.sidebar.caption("✍️ Rol: Editor / Evaluador")
+elif usuario_actual == "yennifer":
+    st.sidebar.caption("🔍 Rol: Operador de Evaluaciones y Créditos")
 else:
     st.sidebar.caption("🔒 Rol: Consulta general")
 
@@ -113,14 +116,23 @@ if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
 
 st.sidebar.markdown("---")
 
-opcion = st.sidebar.radio("Navegación de Módulos:", [
-    "🔍 Evaluador de Liquidez (FF.AA.)", 
-    "📊 Gestión y Diagnóstico de Cobranzas",
-    "📋 Dictamen del Girador",
-    "🛡️ Auditoría y Cruce de Planillas",
-    "🧮 Calculadora de Préstamos",
-    "📥 Cargar Base Mensual"
-])
+# Filtrado de módulos según el perfil del usuario
+if usuario_actual == "yennifer":
+    opciones_menu = [
+        "🔍 Evaluador de Liquidez (FF.AA.)",
+        "🧮 Calculadora de Préstamos"
+    ]
+else:
+    opciones_menu = [
+        "🔍 Evaluador de Liquidez (FF.AA.)", 
+        "📊 Gestión y Diagnóstico de Cobranzas",
+        "📋 Dictamen del Girador",
+        "🛡️ Auditoría y Cruce de Planillas",
+        "🧮 Calculadora de Préstamos",
+        "📥 Cargar Base Mensual"
+    ]
+
+opcion = st.sidebar.radio("Navegación de Módulos:", opciones_menu)
 
 # --- SECCIÓN PERMANENTE DE SOPORTE TÉCNICO Y WHATSAPP ---
 st.sidebar.markdown("---")
