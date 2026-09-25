@@ -158,6 +158,7 @@ st.sidebar.markdown(f'[![WhatsApp](https://img.shields.io/badge/WhatsApp-Contact
 
 DB_LIQUIDEZ_FILE = "base_liquidez_militares.csv"
 DB_GIRADURIAS_FILE = "Planilla_Descuentos_Consolidada.xlsx"
+DB_HISTORIAL_GIRADURIAS_FILE = "base_historial_giradurias.csv"
 DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
 
 # ==========================================
@@ -239,7 +240,7 @@ def estandarizar_columnas_giradurias(df):
             cols_map[c] = 'emp_ci'
         elif 'APELLIDO' in c_clean or 'NOMBRE' in c_clean:
             cols_map[c] = 'emp_nomape'
-        elif 'TOTAL DESCUENTOS' in c_clean or 'TOTAL DESCUENTO' in c_clean or 'ENVIADO' in c_clean:
+        elif 'MONTO A DESCONTAR' in c_clean or 'TOTAL DESCUENTOS' in c_clean or 'TOTAL DESCUENTO' in c_clean or 'ENVIADO' in c_clean:
             cols_map[c] = 'monto_enviado'
         elif 'COBRADO' in c_clean:
             cols_map[c] = 'monto_cobrado'
@@ -251,42 +252,87 @@ def estandarizar_columnas_giradurias(df):
         df_ren['emp_ci_clean'] = df_ren['emp_ci'].astype(str).apply(limpiar_ci)
     return df_ren
 
-def unificar_hojas_excel(file_or_path):
+def unificar_hojas_excel(file_or_path, periodo_tag=""):
     xls = pd.ExcelFile(file_or_path)
-    dfs = []
     
-    for sheet in xls.sheet_names:
-        # Omitir Hoja1 para procesar desde 'Unidad 1' en adelante
-        if sheet.strip().lower() in ['hoja1', 'hoja 1', 'consolidado']:
-            continue
-
-        num_m = re.findall(r'\d+', str(sheet))
-        num_str = num_m[0] if num_m else ""
-        nombre_unidad = MAPEO_UNIDADES.get(num_str, sheet)
+    # DETECCIÓN DE FORMATO: HOJA ÚNICA CONSOLIDADA VS PESTAÑAS MÚLTIPLES
+    if len(xls.sheet_names) == 1 or "TODAS LAS UNIDADES" in [s.strip().upper() for s in xls.sheet_names]:
+        sheet_target = xls.sheet_names[0]
+        df_raw = pd.read_excel(xls, sheet_name=sheet_target, header=None, dtype=str)
         
-        try:
-            df_s = pd.read_excel(xls, sheet_name=sheet, dtype=str)
-            if 'N°' in df_s.columns:
-                df_s = df_s[~df_s['N°'].astype(str).str.upper().str.contains('TOTAL', na=False)]
-            
-            df_s = estandarizar_columnas_giradurias(df_s)
-            
-            if 'nro_socio' in df_s.columns:
-                df_s['nro_socio'] = df_s['nro_socio'].astype(str).apply(lambda x: re.sub(r'\.0$', '', str(x).strip()) if pd.notna(x) else "")
+        records = []
+        current_unidad = "Sin Asignar"
 
-            if 'emp_ci' in df_s.columns:
-                df_s['emp_ci_clean'] = df_s['emp_ci'].astype(str).apply(limpiar_ci)
+        for idx, row in df_raw.iterrows():
+            c0 = str(row[0]).strip() if pd.notna(row[0]) else ""
+            c1 = str(row[1]).strip() if pd.notna(row[1]) else ""
+            c2 = str(row[2]).strip() if pd.notna(row[2]) else ""
+            c3 = str(row[3]).strip() if pd.notna(row[3]) else ""
+            c4 = str(row[4]).strip() if pd.notna(row[4]) else ""
+            c5 = str(row[5]).strip() if pd.notna(row[5]) else ""
 
-            df_s['unidad_nombre_oficial'] = nombre_unidad
-            df_s['hoja_origen'] = sheet
-            dfs.append(df_s)
-        except Exception:
-            pass
-            
-    if dfs:
-        df_concat = pd.concat(dfs, ignore_index=True)
+            if 'UNIDAD:' in c0.upper():
+                num_m = re.findall(r'\d+', c0)
+                num_str = num_m[0] if num_m else ""
+                unid_limpia = re.sub(r'^UNIDAD:\s*\d+\s*-\s*', '', c0, flags=re.IGNORECASE).strip()
+                current_unidad = MAPEO_UNIDADES.get(num_str, unid_limpia)
+                continue
+
+            if c0.upper() in ['ITEM', 'N°', 'NRO', 'ORDEN'] or 'TOTAL' in c0.upper() or 'TOTAL' in c1.upper():
+                continue
+
+            if c1 != "" and c1.upper() != 'NRO. SOCIO' and c2 != "":
+                records.append({
+                    'nro_socio': re.sub(r'\.0$', '', c1.strip()),
+                    'emp_nomape': c2.strip(),
+                    'monto_enviado': c3.strip(),
+                    'monto_cobrado': c4.strip(),
+                    'monto_rechazado': c5.strip(),
+                    'unidad_nombre_oficial': current_unidad,
+                    'periodo': periodo_tag
+                })
+
+        df_concat = pd.DataFrame(records)
+        if 'emp_ci' not in df_concat.columns:
+            df_concat['emp_ci'] = ""
+            df_concat['emp_ci_clean'] = ""
         return df_concat
-    return pd.DataFrame()
+
+    else: # MÚLTIPLES PESTAÑAS (FORMATO TRADICIONAL)
+        dfs = []
+        for sheet in xls.sheet_names:
+            if sheet.strip().lower() in ['hoja1', 'hoja 1', 'consolidado']:
+                continue
+
+            num_m = re.findall(r'\d+', str(sheet))
+            num_str = num_m[0] if num_m else ""
+            nombre_unidad = MAPEO_UNIDADES.get(num_str, sheet)
+            
+            try:
+                df_s = pd.read_excel(xls, sheet_name=sheet, dtype=str)
+                if 'N°' in df_s.columns:
+                    df_s = df_s[~df_s['N°'].astype(str).str.upper().str.contains('TOTAL', na=False)]
+                
+                df_s = estandarizar_columnas_giradurias(df_s)
+                
+                if 'nro_socio' in df_s.columns:
+                    df_s['nro_socio'] = df_s['nro_socio'].astype(str).apply(lambda x: re.sub(r'\.0$', '', str(x).strip()) if pd.notna(x) else "")
+
+                if 'emp_ci' in df_s.columns:
+                    df_s['emp_ci_clean'] = df_s['emp_ci'].astype(str).apply(limpiar_ci)
+
+                df_s['unidad_nombre_oficial'] = nombre_unidad
+                df_s['hoja_origen'] = sheet
+                if periodo_tag:
+                    df_s['periodo'] = periodo_tag
+                dfs.append(df_s)
+            except Exception:
+                pass
+                
+        if dfs:
+            df_concat = pd.concat(dfs, ignore_index=True)
+            return df_concat
+        return pd.DataFrame()
 
 def estandarizar_columnas_ffaa(df):
     cols_map = {}
@@ -417,6 +463,29 @@ def cargar_giradurias():
 
 def guardar_giradurias(df):
     df.to_excel(DB_GIRADURIAS_FILE, index=False)
+    st.cache_data.clear()
+
+@st.cache_data(ttl=2592000)
+def cargar_historial_giradurias():
+    if os.path.exists(DB_HISTORIAL_GIRADURIAS_FILE):
+        try:
+            df_h = pd.read_csv(DB_HISTORIAL_GIRADURIAS_FILE, dtype=str)
+            if 'emp_ci' in df_h.columns:
+                df_h['emp_ci_clean'] = df_h['emp_ci'].astype(str).apply(limpiar_ci)
+            return df_h
+        except Exception:
+            pass
+    return pd.DataFrame()
+
+def guardar_historial_giradurias(df_nuevo, periodo_tag):
+    df_existente = cargar_historial_giradurias()
+    if not df_existente.empty and 'periodo' in df_existente.columns:
+        df_existente = df_existente[df_existente['periodo'] != periodo_tag]
+        df_unificado = pd.concat([df_existente, df_nuevo], ignore_index=True)
+    else:
+        df_unificado = df_nuevo
+        
+    df_unificado.to_csv(DB_HISTORIAL_GIRADURIAS_FILE, index=False)
     st.cache_data.clear()
 
 def cargar_dictamenes():
@@ -632,6 +701,7 @@ def generar_pdf_cobrabilidad_unidades(df_metrics):
 
 df_liquidez = cargar_liquidez()
 df_giradurias = cargar_giradurias()
+df_historial_giradurias = cargar_historial_giradurias()
 df_dictamenes = cargar_dictamenes()
 
 # ==========================================
@@ -640,184 +710,234 @@ df_dictamenes = cargar_dictamenes()
 if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
     st.subheader("🔍 Buscador de Liquidez y Estado de Socio")
     
-    if df_liquidez.empty:
-        st.info("👈 La base de liquidez está vacía. Cárguela desde 'Cargar Base Mensual'.")
-    else:
-        tipo_busqueda = st.radio(
-            "Método de búsqueda:", 
-            ["💳 Por Número de Cédula", "🏷️ Por Número de Socio", "👤 Por Nombre / Apellido"], 
-            horizontal=True
-        )
-        matches = pd.DataFrame()
-        
-        if tipo_busqueda == "💳 Por Número de Cédula":
-            ci_input = st.text_input("Número de Cédula (C.I.):", placeholder="Ej: 5511820").strip()
-            ci_input_clean = limpiar_ci(ci_input)
-            if ci_input_clean:
+    df_fuente_giradurias = df_historial_giradurias if not df_historial_giradurias.empty else df_giradurias
+
+    tipo_busqueda = st.radio(
+        "Método de búsqueda:", 
+        ["💳 Por Número de Cédula", "🏷️ Por Número de Socio", "👤 Por Nombre / Apellido"], 
+        horizontal=True
+    )
+    matches_l = pd.DataFrame()
+    matches_g = pd.DataFrame()
+    
+    if tipo_busqueda == "💳 Por Número de Cédula":
+        ci_input = st.text_input("Número de Cédula (C.I.):", placeholder="Ej: 5511820").strip()
+        ci_input_clean = limpiar_ci(ci_input)
+        if ci_input_clean:
+            if not df_liquidez.empty:
                 if 'emp_ci_clean' not in df_liquidez.columns:
                     df_liquidez['emp_ci_clean'] = df_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
-                matches = df_liquidez[df_liquidez['emp_ci_clean'] == ci_input_clean]
+                matches_l = df_liquidez[df_liquidez['emp_ci_clean'] == ci_input_clean]
+            
+            if not df_fuente_giradurias.empty:
+                if 'emp_ci_clean' not in df_fuente_giradurias.columns and 'emp_ci' in df_fuente_giradurias.columns:
+                    df_fuente_giradurias['emp_ci_clean'] = df_fuente_giradurias['emp_ci'].astype(str).apply(limpiar_ci)
+                if 'emp_ci_clean' in df_fuente_giradurias.columns:
+                    matches_g = df_fuente_giradurias[df_fuente_giradurias['emp_ci_clean'] == ci_input_clean]
 
-        elif tipo_busqueda == "🏷️ Por Número de Socio":
-            socio_input = st.text_input("Número de Socio:", placeholder="Ej: 9946").strip()
-            if socio_input:
-                ci_socio_encontrada = ""
-                if not df_giradurias.empty and 'nro_socio' in df_giradurias.columns:
-                    match_s = df_giradurias[df_giradurias['nro_socio'].astype(str).str.strip() == socio_input.strip()]
-                    if not match_s.empty:
-                        ci_socio_encontrada = limpiar_ci(match_s.iloc[0].get('emp_ci', ''))
-                
-                if ci_socio_encontrada:
-                    if 'emp_ci_clean' not in df_liquidez.columns:
-                        df_liquidez['emp_ci_clean'] = df_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
-                    matches = df_liquidez[df_liquidez['emp_ci_clean'] == ci_socio_encontrada]
-                else:
-                    st.warning(f"No se encontró ninguna cédula asociada al N° de Socio '{socio_input}' en la base de Giradurías.")
+    elif tipo_busqueda == "🏷️ Por Número de Socio":
+        socio_input = st.text_input("Número de Socio:", placeholder="Ej: 9946").strip()
+        if socio_input:
+            if not df_fuente_giradurias.empty and 'nro_socio' in df_fuente_giradurias.columns:
+                matches_g = df_fuente_giradurias[df_fuente_giradurias['nro_socio'].astype(str).str.strip() == socio_input.strip()]
+                if not matches_g.empty:
+                    ci_socio_encontrada = limpiar_ci(matches_g.iloc[0].get('emp_ci', ''))
+                    if ci_socio_encontrada and not df_liquidez.empty:
+                        if 'emp_ci_clean' not in df_liquidez.columns:
+                            df_liquidez['emp_ci_clean'] = df_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
+                        matches_l = df_liquidez[df_liquidez['emp_ci_clean'] == ci_socio_encontrada]
 
-        else: # Por Nombre / Apellido
-            nombre_input = st.text_input("Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
-            if nombre_input:
-                matches = df_liquidez[df_liquidez['emp_nomape'].astype(str).str.contains(nombre_input, case=False, na=False)]
+    else: # Por Nombre / Apellido
+        nombre_input = st.text_input("Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
+        if nombre_input:
+            if not df_liquidez.empty:
+                matches_l = df_liquidez[df_liquidez['emp_nomape'].astype(str).str.contains(nombre_input, case=False, na=False)]
+            if not df_fuente_giradurias.empty:
+                matches_g = df_fuente_giradurias[df_fuente_giradurias['emp_nomape'].astype(str).str.contains(nombre_input, case=False, na=False)]
 
-        if not matches.empty:
-            if len(matches) > 1:
-                st.warning(f"Se encontraron {len(matches)} coincidencias:")
-                opciones_m = [f"{row['emp_nomape']} (C.I.: {row['emp_ci']}) - {row.get('UNIDAD', '-')}" for idx, row in matches.iterrows()]
-                seleccion = st.selectbox("Seleccionar Militar:", opciones_m)
-                idx_sel = opciones_m.index(seleccion)
-                row = matches.iloc[idx_sel]
-            else:
-                row = matches.iloc[0]
+    figura_en_liquidez = not matches_l.empty
+    figura_en_giradurias = not matches_g.empty
 
-            nombre = row.get('emp_nomape', 'S/N')
-            cedula_militar = limpiar_ci(row.get('emp_ci', '0'))
-            unidad_militar = row.get('UNIDAD', '-')
-            categoria = row.get('cat_codigo', '-')
+    if figura_en_liquidez or figura_en_giradurias:
+        # Extraer variables principales
+        if figura_en_liquidez:
+            row_l = matches_l.iloc[0]
+            nombre = row_l.get('emp_nomape', 'S/N')
+            cedula_militar = limpiar_ci(row_l.get('emp_ci', '0'))
+            unidad_militar = row_l.get('UNIDAD', 'Liquidez FF.AA.')
+            categoria = row_l.get('cat_codigo', '-')
 
-            presupuestado = limpiar_monto(row.get('presupuestado', 0))
-            jubilacion = limpiar_monto(row.get('jubilacion', 0))
-            giraduria = limpiar_monto(row.get('giraduria', 0))
-            desc_cf2 = limpiar_monto(row.get('descuento_cf2', 0))
-            judicial = limpiar_monto(row.get('judicial', 0))
+            presupuestado = limpiar_monto(row_l.get('presupuestado', 0))
+            jubilacion = limpiar_monto(row_l.get('jubilacion', 0))
+            giraduria = limpiar_monto(row_l.get('giraduria', 0))
+            desc_cf2 = limpiar_monto(row_l.get('descuento_cf2', 0))
+            judicial = limpiar_monto(row_l.get('judicial', 0))
             
             total_descuentos = jubilacion + giraduria + desc_cf2 + judicial
-            liquido_real = presupuestado - total_descuentos if total_descuentos > 0 else limpiar_monto(row.get('liquido', 0))
-            
+            liquido_real = presupuestado - total_descuentos if total_descuentos > 0 else limpiar_monto(row_l.get('liquido', 0))
             base_imponible = presupuestado - jubilacion
             limite_50 = base_imponible / 2.0
-            
             total_deudas_actuales = giraduria + desc_cf2 + judicial
             margen_deuda_restante = limite_50 - total_deudas_actuales
+        else: # Solo figura en Giradurías (Policía, Armada, Fuerza Aérea, etc.)
+            row_g_first = matches_g.iloc[0]
+            nombre = row_g_first.get('emp_nomape', 'S/N')
+            cedula_militar = limpiar_ci(row_g_first.get('emp_ci', '0'))
+            u_g_ofic = row_g_first.get('unidad_nombre_oficial', 'Giradurías')
+            unidad_militar = f"No figura en Liquidez (GIRADURÍA: {u_g_ofic})"
+            categoria = "S/D"
 
-            es_socio = False
-            nro_socio = "No socio"
-            monto_enviado = 0.0
-            monto_cobrado = 0.0
-            monto_rechazado = 0.0
-            unidad_enviada_giraduria = ""
+            presupuestado = 0.0
+            jubilacion = 0.0
+            giraduria = 0.0
+            desc_cf2 = 0.0
+            judicial = 0.0
+            total_descuentos = 0.0
+            liquido_real = 0.0
+            limite_50 = 0.0
+            margen_deuda_restante = 0.0
 
-            if not df_giradurias.empty:
-                if 'emp_ci_clean' not in df_giradurias.columns and 'emp_ci' in df_giradurias.columns:
-                    df_giradurias['emp_ci_clean'] = df_giradurias['emp_ci'].astype(str).apply(limpiar_ci)
-                
-                if 'emp_ci_clean' in df_giradurias.columns:
-                    match_g = df_giradurias[df_giradurias['emp_ci_clean'] == cedula_militar]
-                    
-                    if not match_g.empty:
-                        es_socio = True
-                        row_socio = match_g.iloc[0]
-                        nro_socio_val = limpiar_texto(row_socio.get('nro_socio', ''))
-                        nro_socio = nro_socio_val if nro_socio_val else "Socio Registrado"
-                        
-                        for _, r_g in match_g.iterrows():
-                            monto_enviado += limpiar_monto(r_g.get('monto_enviado', 0))
-                            monto_cobrado += limpiar_monto(r_g.get('monto_cobrado', 0))
-                            monto_rechazado += limpiar_monto(r_g.get('monto_rechazado', 0))
+        es_socio = False
+        nro_socio = "No socio"
+        monto_enviado = 0.0
+        monto_cobrado = 0.0
+        monto_rechazado = 0.0
+        unidad_enviada_giraduria = ""
 
-                        if monto_rechazado == 0 and monto_enviado > monto_cobrado:
-                            monto_rechazado = monto_enviado - monto_cobrado
-                            
-                        unidad_enviada_giraduria = limpiar_texto(row_socio.get('unidad_nombre_oficial', ''))
+        if not df_fuente_giradurias.empty:
+            periodos_disponibles = []
+            if 'periodo' in df_fuente_giradurias.columns:
+                periodos_disponibles = sorted([p for p in df_fuente_giradurias['periodo'].dropna().unique() if str(p).strip() != ""], reverse=True)
+            
+            if not periodos_disponibles:
+                periodos_disponibles = ["Mes Actual Cargado"]
 
             st.markdown("---")
+            col_sel_p, _ = st.columns([2, 2])
+            with col_sel_p:
+                periodo_seleccionado = st.selectbox(
+                    "🗓️ Seleccionar Período / Mes a Consultar (Existente en Base):",
+                    options=periodos_disponibles
+                )
+
+            if 'periodo' in df_fuente_giradurias.columns and periodo_seleccionado != "Mes Actual Cargado":
+                df_gir_periodo = df_fuente_giradurias[df_fuente_giradurias['periodo'] == periodo_seleccionado]
+            else:
+                df_gir_periodo = df_fuente_giradurias
+
+            match_g = pd.DataFrame()
+            if 'emp_ci_clean' in df_gir_periodo.columns and cedula_militar:
+                match_g = df_gir_periodo[df_gir_periodo['emp_ci_clean'] == cedula_militar]
             
-            col_info1, col_info2, col_info3 = st.columns(3)
-            with col_info1:
-                st.success(f"👤 **Militar:** {nombre}\n\n**C.I.:** {cedula_militar} | **Cat:** {categoria}")
-            with col_info2:
-                if es_socio:
-                    st.info(f"💳 **Estado de Socio:** SOCIO ACTIVO\n\n**N° Socio:** `{nro_socio}`")
-                else:
-                    st.warning("💳 **Estado de Socio:** `No socio`")
-            with col_info3:
-                st.info(f"🏛️ **Unidad en Liquidez:** {unidad_militar}")
+            if match_g.empty and 'nro_socio' in df_gir_periodo.columns and figura_en_giradurias:
+                n_soc_ref = str(matches_g.iloc[0].get('nro_socio', '')).strip()
+                match_g = df_gir_periodo[df_gir_periodo['nro_socio'].astype(str).str.strip() == n_soc_ref]
 
-            if es_socio:
-                st.markdown("### 🏛️ Datos de Descuento en Giraduría del Mes")
-                col_g1, col_g2, col_g3, col_g4 = st.columns(4)
-                col_g1.metric("Giraduría Enviada", unidad_enviada_giraduria if unidad_enviada_giraduria else "Sin Asignar")
-                col_g2.metric("Monto Enviado", f"Gs. {formato_guarani(monto_enviado)}")
-                col_g3.metric("Monto Descontado/Cobrado", f"Gs. {formato_guarani(monto_cobrado)}")
+            if not match_g.empty:
+                es_socio = True
+                row_socio = match_g.iloc[0]
+                nro_socio_val = limpiar_texto(row_socio.get('nro_socio', ''))
+                nro_socio = nro_socio_val if nro_socio_val else "Socio Registrado"
                 
-                if monto_rechazado > 0:
-                    col_g4.metric("Monto Rechazado / Pendiente", f"Gs. {formato_guarani(monto_rechazado)}", delta=f"-Gs. {formato_guarani(monto_rechazado)}", delta_color="inverse")
+                for _, r_g in match_g.iterrows():
+                    monto_enviado += limpiar_monto(r_g.get('monto_enviado', 0))
+                    monto_cobrado += limpiar_monto(r_g.get('monto_cobrado', 0))
+                    monto_rechazado += limpiar_monto(r_g.get('monto_rechazado', 0))
+
+                if monto_rechazado == 0 and monto_enviado > monto_cobrado:
+                    monto_rechazado = monto_enviado - monto_cobrado
+                    
+                unidad_enviada_giraduria = limpiar_texto(row_socio.get('unidad_nombre_oficial', ''))
+
+        col_info1, col_info2, col_info3 = st.columns(3)
+        with col_info1:
+            st.success(f"👤 **Socio / Militar:** {nombre}\n\n**C.I.:** {cedula_militar} | **Cat:** {categoria}")
+        with col_info2:
+            if es_socio:
+                st.info(f"💳 **Estado de Socio:** SOCIO ACTIVO\n\n**N° Socio:** `{nro_socio}`")
+            else:
+                st.warning("💳 **Estado de Socio:** `No socio`")
+        with col_info3:
+            if figura_en_liquidez:
+                st.info(f"🏛️ **Unidad en Liquidez:** {unidad_militar}")
+            else:
+                st.warning(f"🏛️ **Unidad en Liquidez:** No figura en Liquidez (Socio en {unidad_enviada_giraduria if unidad_enviada_giraduria else 'Giraduría Externas'})")
+
+        if es_socio:
+            st.markdown(f"### 🏛️ Datos de Descuento en Giraduría ({periodo_seleccionado if 'periodo_seleccionado' in locals() else 'Mes Actual'})")
+            col_g1, col_g2, col_g3, col_g4 = st.columns(4)
+            col_g1.metric("Giraduría Enviada", unidad_enviada_giraduria if unidad_enviada_giraduria else "Sin Asignar")
+            col_g2.metric("Monto Enviado", f"Gs. {formato_guarani(monto_enviado)}")
+            col_g3.metric("Monto Descontado/Cobrado", f"Gs. {formato_guarani(monto_cobrado)}")
+            
+            if monto_rechazado > 0:
+                col_g4.metric("Monto Rechazado / Pendiente", f"Gs. {formato_guarani(monto_rechazado)}", delta=f"-Gs. {formato_guarani(monto_rechazado)}", delta_color="inverse")
+            else:
+                col_g4.metric("Monto Rechazado", "Gs. 0", delta="Cobro 100% OK")
+
+            u_gir_upper = unidad_enviada_giraduria.upper()
+            is_jubilado = "JUBILAD" in u_gir_upper or "JUBILADOS" in unidad_militar.upper()
+            is_cf2 = "CF2" in u_gir_upper or "CFN2" in u_gir_upper
+            is_policia_armada_aerea = any(k in u_gir_upper for k in ['POLICIA', 'ARMADA', 'AEREA', 'POLICÍA', 'AÉREA'])
+
+            if not figura_en_liquidez:
+                st.info(
+                    f"💡 **INFORMACIÓN DE SOCIO EXTERNO A LIQUIDEZ FF.AA.:**\n"
+                    f"El socio pertenece a la giraduría **{unidad_enviada_giraduria}**. Por este motivo no figura en la planilla de salarios de Liquidez de las FF.AA., "
+                    f"pero sí se procesan sus descuentos de cobro normalmente a través de su giraduría respectiva."
+                )
+
+            elif monto_enviado > 0 and monto_cobrado == 0:
+                st.error("🚨 **ALERTA DE DESCUENTO RECHAZADO (Gs. 0 COBRADO)**")
+                if is_cf2:
+                    unidad_ref = unidad_militar if unidad_militar else "su unidad de origen"
+                    st.markdown(
+                        f"⚠️ **DIAGNÓSTICO ESPECÍFICO UNIDAD CF2:**\n"
+                        f"El descuento enviado a CF2 fue rechazado (Gs. 0 cobrado).\n"
+                        f"📌 **Acción Requerida:** CF2: RECHAZADO - Consultar con la unidad **{unidad_ref}** (figura en liquidez)."
+                    )
+                elif unidad_enviada_giraduria and unidad_militar.upper() not in unidad_enviada_giraduria.upper():
+                    st.markdown(
+                        f"⚠️ **DIAGNÓSTICO DE INCONSISTENCIA EN GIRADURÍA:**\n"
+                        f"El socio no registró ningún descuento debido a que la planilla fue enviada a la **{unidad_enviada_giraduria}**, "
+                        f"mientras que en la base oficial de Liquidez de las FF.AA. figura asignado a la unidad **{unidad_militar}**.\n"
+                        f"📌 **Acción Requerida:** Reasignar el legajo y enviar la solicitud a la giraduría correspondiente ({unidad_militar})."
+                    )
                 else:
-                    col_g4.metric("Monto Rechazado", "Gs. 0", delta="Cobro 100% OK")
+                    st.markdown(
+                        f"⚠️ **DIAGNÓSTICO DE CAPACIDAD DE PAGO:**\n"
+                        f"El descuento fue rechazado en la giraduría por falta de margen de liquidez disponible "
+                        f"o afectación de embargos judiciales prioritarios."
+                    )
 
-                u_gir_upper = unidad_enviada_giraduria.upper()
-                is_jubilado = "JUBILAD" in u_gir_upper or "JUBILADOS" in unidad_militar.upper()
-                is_cf2 = "CF2" in u_gir_upper or "CFN2" in u_gir_upper
+            elif 0 < monto_cobrado < monto_enviado:
+                st.warning("⚠️ **ALERTA DE PAGO PARCIAL DETECTADO**")
+                if is_jubilado:
+                    st.info(
+                        f"💡 **DIAGNÓSTICO ESPECÍFICO UNIDAD JUBILADOS:**\n"
+                        f"El socio jubilado registró un pago parcial de Gs. {formato_guarani(monto_cobrado)}.\n"
+                        f"📌 **Acción Requerida:** Actualizar planilla de autorización o refinanciar (Último descuento: Gs. {formato_guarani(monto_cobrado)})."
+                    )
+                elif is_cf2:
+                    st.success(
+                        f"💡 **DIAGNÓSTICO ESPECÍFICO UNIDAD CF2:**\n"
+                        f"Unidad Central de Descuentos (CF2) con pago parcial acumulado.\n"
+                        f"✅ **Refinanciación Factible - Tope de cuota recomendada: Gs. {formato_guarani(monto_cobrado)} cobrados.**"
+                    )
+                elif margen_deuda_restante > 0:
+                    st.success(
+                        f"💡 **ANÁLISIS DE REFINANCIACIÓN FACTIBLE:**\n"
+                        f"El socio realizó un pago parcial. Cuenta con un margen libre de liquidez de **Gs. {formato_guarani(margen_deuda_restante)}**.\n"
+                        f"✅ **Es factible reestructurar o refinanciar el saldo pendiente de Gs. {formato_guarani(monto_rechazado)}.**"
+                    )
+                else:
+                    st.info(
+                        f"💡 **ANÁLISIS DE RESTRUCTURACIÓN RECOMENDADO:**\n"
+                        f"El socio realizó un pago parcial pero no dispone de margen libre en el límite del 50%.\n"
+                        f"📌 **Se sugiere evaluar reestructurar/refinanciar fijando la cuota límite en los Gs. {formato_guarani(monto_cobrado)} descontados actualmente.**"
+                    )
 
-                if monto_enviado > 0 and monto_cobrado == 0:
-                    st.error("🚨 **ALERTA DE DESCUENTO RECHAZADO (Gs. 0 COBRADO)**")
-                    if is_cf2:
-                        unidad_ref = unidad_militar if unidad_militar else "su unidad de origen"
-                        st.markdown(
-                            f"⚠️ **DIAGNÓSTICO ESPECÍFICO UNIDAD CF2:**\n"
-                            f"El descuento enviado a CF2 fue rechazado (Gs. 0 cobrado).\n"
-                            f"📌 **Acción Requerida:** CF2: RECHAZADO - Consultar con la unidad **{unidad_ref}** (figura en liquidez)."
-                        )
-                    elif unidad_enviada_giraduria and unidad_militar.upper() not in unidad_enviada_giraduria.upper():
-                        st.markdown(
-                            f"⚠️ **DIAGNÓSTICO DE INCONSISTENCIA EN GIRADURÍA:**\n"
-                            f"El socio no registró ningún descuento debido a que la planilla fue enviada a la **{unidad_enviada_giraduria}**, "
-                            f"mientras que en la base oficial de Liquidez de las FF.AA. figura asignado a la unidad **{unidad_militar}**.\n"
-                            f"📌 **Acción Requerida:** Reasignar el legajo y enviar la solicitud a la giraduría correspondiente ({unidad_militar})."
-                        )
-                    else:
-                        st.markdown(
-                            f"⚠️ **DIAGNÓSTICO DE CAPACIDAD DE PAGO:**\n"
-                            f"El descuento fue rechazado en la giraduría por falta de margen de liquidez disponible "
-                            f"o afectación de embargos judiciales prioritarios."
-                        )
-
-                elif 0 < monto_cobrado < monto_enviado:
-                    st.warning("⚠️ **ALERTA DE PAGO PARCIAL DETECTADO**")
-                    if is_jubilado:
-                        st.info(
-                            f"💡 **DIAGNÓSTICO ESPECÍFICO UNIDAD JUBILADOS:**\n"
-                            f"El socio jubilado registró un pago parcial de Gs. {formato_guarani(monto_cobrado)}.\n"
-                            f"📌 **Acción Requerida:** Actualizar planilla de autorización o refinanciar (Último descuento: Gs. {formato_guarani(monto_cobrado)})."
-                        )
-                    elif is_cf2:
-                        st.success(
-                            f"💡 **DIAGNÓSTICO ESPECÍFICO UNIDAD CF2:**\n"
-                            f"Unidad Central de Descuentos (CF2) con pago parcial acumulado.\n"
-                            f"✅ **Refinanciación Factible - Tope de cuota recomendada: Gs. {formato_guarani(monto_cobrado)} cobrados.**"
-                        )
-                    elif margen_deuda_restante > 0:
-                        st.success(
-                            f"💡 **ANÁLISIS DE REFINANCIACIÓN FACTIBLE:**\n"
-                            f"El socio realizó un pago parcial. Cuenta con un margen libre de liquidez de **Gs. {formato_guarani(margen_deuda_restante)}**.\n"
-                            f"✅ **Es factible reestructurar o refinanciar el saldo pendiente de Gs. {formato_guarani(monto_rechazado)}.**"
-                        )
-                    else:
-                        st.info(
-                            f"💡 **ANÁLISIS DE RESTRUCTURACIÓN RECOMENDADO:**\n"
-                            f"El socio realizó un pago parcial pero no dispone de margen libre en el límite del 50%.\n"
-                            f"📌 **Se sugiere evaluar reestructurar/refinanciar fijando la cuota límite en los Gs. {formato_guarani(monto_cobrado)} descontados actualmente.**"
-                        )
-
+        if figura_en_liquidez:
             st.markdown("### 📊 Desglose de Haberes y Descuentos (FF.AA.)")
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Presupuestado", f"Gs. {formato_guarani(presupuestado)}")
@@ -842,36 +962,75 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             else:
                 st.info(f"💡 **Margen disponible para nuevos descuentos:** Gs. {formato_guarani(margen_deuda_restante)}")
 
-            st.subheader("💳 Evaluación del Nuevo Crédito")
-            cuota_solicitada = st.number_input("Monto de la Cuota para el Nuevo Crédito (Gs.):", min_value=0.0, step=50000.0, format="%.0f")
-
-            estado_eval = "SIN EVALUAR"
-            if cuota_solicitada > 0:
-                if total_deudas_actuales + cuota_solicitada <= limite_50:
-                    estado_eval = "APROBADO (DENTRO DEL MARGEN DEL 50%)"
-                    st.success("✅ **CRÉDITO FACTIBLE (APROBADO)**")
-                    st.write(f"La cuota entra dentro del límite del 50%. Margen restante: **Gs. {formato_guarani(margen_deuda_restante - cuota_solicitada)}**")
-                else:
-                    estado_eval = "RECHAZADO - CONSULTAR DISPONIBILIDAD CON CF2"
-                    st.error("⚠️ **RECHAZADO POR LÍMITE DE LIQUIDEZ DEL 50% - CONSULTAR DISPONIBILIDAD CON CF2**")
-
-            dict_match = df_dictamenes[df_dictamenes['CEDULA'].astype(str).apply(limpiar_ci) == cedula_militar]
-            obs_dictamen = dict_match.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_match.empty else "Sin observaciones previas."
+        # ==========================================
+        # 📜 HISTORIAL DE DESCUENTOS DEL SOCIO
+        # ==========================================
+        st.markdown("---")
+        st.subheader("📜 Historial de Descuentos del Socio")
+        
+        if es_socio and not df_fuente_giradurias.empty:
+            historial_socio = pd.DataFrame()
+            if 'emp_ci_clean' in df_fuente_giradurias.columns and cedula_militar:
+                historial_socio = df_fuente_giradurias[df_fuente_giradurias['emp_ci_clean'] == cedula_militar]
             
-            if not dict_match.empty:
-                st.markdown("---")
-                st.warning(f"📌 **Dictamen Registrado por Giraduría:** {obs_dictamen}")
+            if historial_socio.empty and 'nro_socio' in df_fuente_giradurias.columns:
+                historial_socio = df_fuente_giradurias[df_fuente_giradurias['nro_socio'].astype(str).str.strip() == str(nro_socio).strip()]
 
+            if not historial_socio.empty:
+                rows_historia = []
+                for _, h_row in historial_socio.iterrows():
+                    p_val = h_row.get('periodo', 'Mes Actual')
+                    u_env = h_row.get('unidad_nombre_oficial', 'Sin Asignar')
+                    m_env = limpiar_monto(h_row.get('monto_enviado', 0))
+                    m_cob = limpiar_monto(h_row.get('monto_cobrado', 0))
+                    m_rec = limpiar_monto(h_row.get('monto_rechazado', 0))
+                    if m_rec == 0 and m_env > m_cob:
+                        m_rec = m_env - m_cob
+
+                    if m_cob == m_env and m_env > 0:
+                        est_hist = "✅ COBRADO COMPLETO"
+                    elif m_cob > 0 and m_cob < m_env:
+                        est_hist = "⚠️ PAGO PARCIAL"
+                    elif m_env > 0 and m_cob == 0:
+                        est_hist = "🚨 RECHAZADO / NULO"
+                    else:
+                        est_hist = "REGISTRADO"
+
+                    rows_historia.append({
+                        "Período / Mes": p_val,
+                        "Giraduría Enviada": u_env,
+                        "Monto Enviado (Gs.)": f"Gs. {formato_guarani(m_env)}",
+                        "Monto Cobrado (Gs.)": f"Gs. {formato_guarani(m_cob)}",
+                        "Monto Rechazado (Gs.)": f"Gs. {formato_guarani(m_rec)}",
+                        "Estado": est_hist
+                    })
+
+                df_hist_view = pd.DataFrame(rows_historia)
+                st.dataframe(df_hist_view, use_container_width=True)
+            else:
+                st.info("No se registran antecedentes previos de descuentos en el historial.")
+        else:
+            st.info("El militar consultado no figura en el historial registrado de socios.")
+
+        dict_match = df_dictamenes[df_dictamenes['CEDULA'].astype(str).apply(limpiar_ci) == cedula_militar]
+        obs_dictamen = dict_match.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_match.empty else "Sin observaciones previas."
+        
+        if not dict_match.empty:
             st.markdown("---")
-            pdf_bytes = generar_pdf_constancia("Simulación de Crédito", nombre, cedula_militar, unidad_militar, presupuestado, jubilacion, total_descuentos, liquido_real, limite_50, cuota_solicitada, estado_eval, obs_dictamen)
-            
-            st.download_button(
-                label="📄 Descargar / Imprimir Constancia de Evaluación (PDF)",
-                data=pdf_bytes,
-                file_name=f"Constancia_Credito_{cedula_militar}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
+            st.warning(f"📌 **Dictamen Registrado por Giraduría:** {obs_dictamen}")
+
+        st.markdown("---")
+        pdf_bytes = generar_pdf_constancia("Evaluación de Liquidez", nombre, cedula_militar, unidad_militar, presupuestado, jubilacion, total_descuentos, liquido_real, limite_50, 0.0, "EVALUACIÓN REALIZADA", obs_dictamen)
+        
+        st.download_button(
+            label="📄 Descargar / Imprimir Constancia de Evaluación (PDF)",
+            data=pdf_bytes,
+            file_name=f"Constancia_Credito_{cedula_militar}.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+    else:
+        st.warning("⚠️ No se encontraron resultados coincidentes en las bases de datos.")
 
 # ==========================================
 # 📊 MÓDULO: GESTIÓN Y DIAGNÓSTICO DE COBRANZAS (GRAFICOS E INFORMES)
@@ -895,14 +1054,14 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
 
             unidad_giraduria = limpiar_texto(row.get('unidad_nombre_oficial', 'Sin Unidad'))
 
-            if not ci or enviado == 0:
+            if enviado == 0:
                 continue
 
             diagnostico = "COBRADO NORMAL"
             unidad_liq = ""
             margen_liq = 0.0
 
-            if not df_liquidez.empty:
+            if not df_liquidez.empty and ci:
                 col_search_l = 'emp_ci_clean' if 'emp_ci_clean' in df_liquidez.columns else 'emp_ci'
                 m_liq = df_liquidez[df_liquidez[col_search_l].astype(str).apply(limpiar_ci) == ci]
                 if not m_liq.empty:
@@ -1062,8 +1221,8 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
 elif opcion == "📋 Dictamen del Girador":
     st.subheader("📋 Módulo de Registro de Dictamen de Giraduría")
     
-    if df_liquidez.empty:
-        st.info("Carga la base de liquidez primero.")
+    if df_liquidez.empty and df_giradurias.empty:
+        st.info("Cargá las bases de liquidez o giradurías primero.")
     else:
         tipo_busq_g = st.radio("Buscar por:", ["💳 Cédula", "🏷️ N° Socio", "👤 Nombre / Apellido"], horizontal=True)
         matches_g = pd.DataFrame()
@@ -1072,9 +1231,15 @@ elif opcion == "📋 Dictamen del Girador":
             ci_girador = st.text_input("Ingresá la Cédula:", placeholder="Ej: 5511820").strip()
             ci_girador_clean = limpiar_ci(ci_girador)
             if ci_girador_clean:
-                if 'emp_ci_clean' not in df_liquidez.columns:
-                    df_liquidez['emp_ci_clean'] = df_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
-                matches_g = df_liquidez[df_liquidez['emp_ci_clean'] == ci_girador_clean]
+                if not df_liquidez.empty:
+                    if 'emp_ci_clean' not in df_liquidez.columns:
+                        df_liquidez['emp_ci_clean'] = df_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
+                    matches_g = df_liquidez[df_liquidez['emp_ci_clean'] == ci_girador_clean]
+                if matches_g.empty and not df_giradurias.empty:
+                    if 'emp_ci_clean' not in df_giradurias.columns:
+                        df_giradurias['emp_ci_clean'] = df_giradurias['emp_ci'].astype(str).apply(limpiar_ci)
+                    matches_g = df_giradurias[df_giradurias['emp_ci_clean'] == ci_girador_clean]
+
         elif tipo_busq_g == "🏷️ N° Socio":
             socio_g = st.text_input("Ingresá el N° de Socio:", placeholder="Ej: 9946").strip()
             if socio_g:
@@ -1083,20 +1248,27 @@ elif opcion == "📋 Dictamen del Girador":
                     match_sg = df_giradurias[df_giradurias['nro_socio'].astype(str).str.strip() == socio_g.strip()]
                     if not match_sg.empty:
                         ci_socio_g = limpiar_ci(match_sg.iloc[0].get('emp_ci', ''))
+                        matches_g = match_sg
                 
-                if ci_socio_g:
+                if ci_socio_g and not df_liquidez.empty:
                     if 'emp_ci_clean' not in df_liquidez.columns:
                         df_liquidez['emp_ci_clean'] = df_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
-                    matches_g = df_liquidez[df_liquidez['emp_ci_clean'] == ci_socio_g]
+                    match_liq = df_liquidez[df_liquidez['emp_ci_clean'] == ci_socio_g]
+                    if not match_liq.empty:
+                        matches_g = match_liq
+
         else:
             nom_girador = st.text_input("Ingresá el Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
             if nom_girador:
-                matches_g = df_liquidez[df_liquidez['emp_nomape'].astype(str).str.contains(nom_girador, case=False, na=False)]
+                if not df_liquidez.empty:
+                    matches_g = df_liquidez[df_liquidez['emp_nomape'].astype(str).str.contains(nom_girador, case=False, na=False)]
+                if matches_g.empty and not df_giradurias.empty:
+                    matches_g = df_giradurias[df_giradurias['emp_nomape'].astype(str).str.contains(nom_girador, case=False, na=False)]
 
         if not matches_g.empty:
             if len(matches_g) > 1:
                 st.warning(f"Se encontraron {len(matches_g)} coincidencias:")
-                opciones_g = [f"{row['emp_nomape']} (C.I.: {row['emp_ci']})" for idx, row in matches_g.iterrows()]
+                opciones_g = [f"{row['emp_nomape']} (C.I.: {row.get('emp_ci', '-')})" for idx, row in matches_g.iterrows()]
                 seleccion_g = st.selectbox("Seleccionar Registro:", opciones_g)
                 idx_g = opciones_g.index(seleccion_g)
                 row_g = matches_g.iloc[idx_g]
@@ -1105,7 +1277,7 @@ elif opcion == "📋 Dictamen del Girador":
 
             nombre_g = row_g.get('emp_nomape', 'S/N')
             ci_g = limpiar_ci(row_g.get('emp_ci', '0'))
-            unidad_g = row_g.get('UNIDAD', '-')
+            unidad_g = row_g.get('UNIDAD', row_g.get('unidad_nombre_oficial', '-'))
             
             presupuestado_g = limpiar_monto(row_g.get('presupuestado', 0))
             jubilacion_g = limpiar_monto(row_g.get('jubilacion', 0))
@@ -1118,7 +1290,7 @@ elif opcion == "📋 Dictamen del Girador":
             col_g1, col_g2 = st.columns(2)
             with col_g1:
                 st.text_input("Nombre y Apellido:", value=nombre_g, disabled=True)
-                st.text_input("Unidad Militar:", value=unidad_g, disabled=True)
+                st.text_input("Unidad Militar / Giraduría:", value=unidad_g, disabled=True)
             with col_g2:
                 st.text_input("Cédula N°:", value=ci_g, disabled=True)
                 st.text_input("Límite de Cuota Máxima (50%):", value=f"Gs. {formato_guarani(limite_50_g)}", disabled=True)
@@ -1794,25 +1966,34 @@ elif opcion == "📥 Cargar Base Mensual":
 
         with tab_b2:
             st.markdown("#### 2. Base Enviado / Cobrado Giradurías")
-            st.caption("Esta base unifica automáticamente todas las pestañas de `Planilla_Descuentos_Consolidada.xlsx` (omitiendo 'Hoja1') y asignando el nombre oficial de la unidad.")
+            st.caption("Esta base procesa automáticamente planillas de hoja única consolidada o múltiples pestañas indicando la etiqueta del período.")
             
+            col_tag1, col_tag2 = st.columns(2)
+            with col_tag1:
+                mes_tag = st.selectbox("Seleccionar Mes del Período:", ["Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio"])
+            with col_tag2:
+                anio_tag = st.selectbox("Seleccionar Año del Período:", ["2026", "2025", "2027"])
+
+            periodo_etiqueta = f"{mes_tag} {anio_tag}"
+
             if not df_giradurias.empty:
-                st.info(f"📊 **Estado actual:** {len(df_giradurias):,} registros de socios/giradurías cargados.")
+                st.info(f"📊 **Estado actual:** {len(df_giradurias):,} registros en base actual.")
             else:
                 st.warning("⚠️ Sin datos de giradurías cargados actualmente.")
 
             archivo_g = st.file_uploader("📥 Cargar Base Enviado / Cobrado Giradurías (.xlsx / .xls)", type=["xlsx", "xls"], key="u_giradurias")
             
             if archivo_g:
-                if st.button("⚠️ Procesar e Importar Base de Giradurías (Unificar Pestañas)", use_container_width=True):
+                if st.button(f"⚠️ Procesar e Importar Base para {periodo_etiqueta}", use_container_width=True):
                     try:
-                        df_norm_g = unificar_hojas_excel(archivo_g)
+                        df_norm_g = unificar_hojas_excel(archivo_g, periodo_tag=periodo_etiqueta)
 
                         if df_norm_g.empty:
-                            st.warning("No se encontraron datos procesables en las pestañas de la planilla de giradurías.")
+                            st.warning("No se encontraron datos procesables en la planilla de giradurías.")
                         else:
                             guardar_giradurias(df_norm_g)
-                            st.success(f"✅ ¡Se unificaron correctamente las pestañas de giradurías! Total socios: {len(df_norm_g):,}")
+                            guardar_historial_giradurias(df_norm_g, periodo_tag=periodo_etiqueta)
+                            st.success(f"✅ ¡Se unificaron e importaron los datos para {periodo_etiqueta}! Total registros: {len(df_norm_g):,}")
                             st.rerun()
                     except Exception as e:
                         st.error(f"Error al procesar la planilla de giradurías: {e}")
