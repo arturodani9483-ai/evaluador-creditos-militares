@@ -4,6 +4,7 @@ import os
 import io
 import re
 import calendar
+import urllib.parse
 from datetime import datetime, timedelta
 from fpdf import FPDF
 
@@ -82,6 +83,20 @@ def pantalla_login():
                 st.rerun()
             else:
                 st.error("⚠️ Usuario o contraseña incorrectos. Verificá con el administrador.")
+
+    st.markdown("---")
+    with st.expander("🔑 ¿Olvidaste tu contraseña?"):
+        st.caption("Ingresá tu usuario registrado para comunicarte directamente con el Administrador (Arturo) por WhatsApp:")
+        u_recup = st.text_input("Ingresá tu Usuario para recuperar:", key="u_recup_input").strip().lower()
+        
+        if u_recup:
+            if u_recup in USUARIOS_AUTORIZADOS:
+                mensaje_wa = f"Hola Arturo, soy el usuario {u_recup.capitalize()} y me olvidé mi contraseña del SICOC. Por favor enviame mi clave."
+                msg_encoded = urllib.parse.quote(mensaje_wa)
+                wa_link_recup = f"https://wa.me/595983474662?text={msg_encoded}"
+                st.markdown(f'[![Solicitar por WhatsApp](https://img.shields.io/badge/WhatsApp-Solicitar_Mi_Contraseña_al_Admin-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)]({wa_link_recup})')
+            else:
+                st.warning("⚠️ El usuario ingresado no existe en la base autorizada.")
 
 if not st.session_state["autenticado"]:
     pantalla_login()
@@ -1740,7 +1755,11 @@ elif opcion == "📥 Cargar Base Mensual":
     else:
         st.success("🔑 **Permisos de Administrador Verificados:** Podés subir o actualizar las bases de datos permanentes.")
         
-        tab_b1, tab_b2 = st.tabs(["🪖 Base de Liquidez (FF.AA.)", "🏛️ Base Enviado / Cobrado (Giradurías)"])
+        tab_b1, tab_b2, tab_b3 = st.tabs([
+            "🪖 Base de Liquidez (FF.AA.)", 
+            "🏛️ Base Enviado / Cobrado (Giradurías)", 
+            "🔑 Credenciales de Usuarios"
+        ])
 
         with tab_b1:
             st.markdown("#### 1. Planilla de Liquidez Militar (FF.AA.)")
@@ -1797,3 +1816,29 @@ elif opcion == "📥 Cargar Base Mensual":
                             st.rerun()
                     except Exception as e:
                         st.error(f"Error al procesar la planilla de giradurías: {e}")
+
+        with tab_b3:
+            st.markdown("#### 3. Consulta de Credenciales de Usuarios (Exclusivo Admin)")
+            st.caption("Listado de usuarios registrados en el sistema y sus contraseñas asignadas para respuesta rápida por soporte/WhatsApp.")
+            
+            data_credenciales = []
+            for usr, pwd in USUARIOS_AUTORIZADOS.items():
+                if usr == "arthuro":
+                    rol_txt = "⭐ Administrador General"
+                elif usr in USUARIOS_AUDITORIA_HACIENDA:
+                    rol_txt = "🛡️ Auditor / Evaluador"
+                elif usr in USUARIOS_EDITORES_DICTAMEN:
+                    rol_txt = "✍️ Editor / Evaluador"
+                elif usr == "yennifer":
+                    rol_txt = "🔍 Operador de Evaluaciones y Créditos"
+                else:
+                    rol_txt = "🔒 Consulta General"
+
+                data_credenciales.append({
+                    "Usuario": usr.capitalize(),
+                    "Contraseña Registrada": pwd,
+                    "Rol / Permisos": rol_txt
+                })
+
+            df_credenciales = pd.DataFrame(data_credenciales)
+            st.table(df_credenciales)
