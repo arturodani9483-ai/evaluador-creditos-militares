@@ -131,7 +131,6 @@ if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
 
 st.sidebar.markdown("---")
 
-# Filtrado de módulos según el perfil del usuario
 if usuario_actual == "yennifer":
     opciones_menu = [
         "🔍 Evaluador de Liquidez (FF.AA.)",
@@ -140,6 +139,7 @@ if usuario_actual == "yennifer":
 else:
     opciones_menu = [
         "🔍 Evaluador de Liquidez (FF.AA.)", 
+        "📱 Giradurías Teléfonos",
         "📊 Gestión y Diagnóstico de Cobranzas",
         "📋 Dictamen del Girador",
         "🛡️ Auditoría y Cruce de Planillas",
@@ -149,7 +149,6 @@ else:
 
 opcion = st.sidebar.radio("Navegación de Módulos:", opciones_menu)
 
-# --- SECCIÓN PERMANENTE DE SOPORTE TÉCNICO Y WHATSAPP ---
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 💬 Soporte del Sistema")
 st.sidebar.caption("Desarrollado por **Arturo Arrua**")
@@ -160,6 +159,8 @@ DB_LIQUIDEZ_FILE = "base_liquidez_militares.csv"
 DB_GIRADURIAS_FILE = "Planilla_Descuentos_Consolidada.xlsx"
 DB_HISTORIAL_GIRADURIAS_FILE = "base_historial_giradurias.csv"
 DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
+DB_TELEFONOS_FILE = "Giraduria con numero de telefono.xlsx"
+DB_HISTORIAL_CONTACTOS_FILE = "base_historial_contactos.csv"
 
 # ==========================================
 # 🗺️ DICCIONARIO DE CORRESPONDENCIA DE UNIDADES
@@ -181,7 +182,7 @@ MAPEO_UNIDADES = {
 }
 
 # ==========================================
-# 🛠️ FUNCIONES AUXILIARES Y DE DATOS (BLINDADAS)
+# 🛠️ FUNCIONES AUXILIARES Y DE DATOS
 # ==========================================
 def limpiar_texto(val):
     try:
@@ -230,6 +231,19 @@ def parsear_fecha(d_str):
             pass
     return None
 
+def formatear_telefono_paraguay(tel_raw):
+    nums = re.findall(r'\d+', str(tel_raw))
+    if not nums:
+        return "", ""
+    cand = re.sub(r'^0+', '', nums[0])
+    if cand.startswith('9') and len(cand) == 9:
+        num_local = "0" + cand
+        num_wa = "595" + cand
+        return num_local, num_wa
+    if cand.startswith('09') and len(cand) == 10:
+        return cand, "595" + cand[1:]
+    return str(tel_raw).strip(), cand
+
 def estandarizar_columnas_giradurias(df):
     cols_map = {}
     for c in df.columns:
@@ -254,8 +268,6 @@ def estandarizar_columnas_giradurias(df):
 
 def unificar_hojas_excel(file_or_path, periodo_tag=""):
     xls = pd.ExcelFile(file_or_path)
-    
-    # DETECCIÓN DE FORMATO: HOJA ÚNICA CONSOLIDADA VS PESTAÑAS MÚLTIPLES
     if len(xls.sheet_names) == 1 or "TODAS LAS UNIDADES" in [s.strip().upper() for s in xls.sheet_names]:
         sheet_target = xls.sheet_names[0]
         df_raw = pd.read_excel(xls, sheet_name=sheet_target, header=None, dtype=str)
@@ -298,7 +310,7 @@ def unificar_hojas_excel(file_or_path, periodo_tag=""):
             df_concat['emp_ci_clean'] = ""
         return df_concat
 
-    else: # MÚLTIPLES PESTAÑAS (FORMATO TRADICIONAL)
+    else:
         dfs = []
         for sheet in xls.sheet_names:
             if sheet.strip().lower() in ['hoja1', 'hoja 1', 'consolidado']:
@@ -433,7 +445,7 @@ def cargar_liquidez():
             pass
             
     archivos_carpeta = os.listdir('.')
-    archivos_excel = [f for f in archivos_carpeta if f.lower().endswith(('.xlsx', '.xls')) and not f.startswith('~$') and f != DB_GIRADURIAS_FILE]
+    archivos_excel = [f for f in archivos_carpeta if f.lower().endswith(('.xlsx', '.xls')) and not f.startswith('~$') and f != DB_GIRADURIAS_FILE and f != DB_TELEFONOS_FILE]
     
     if archivos_excel:
         try:
@@ -488,6 +500,77 @@ def guardar_historial_giradurias(df_nuevo, periodo_tag):
     df_unificado.to_csv(DB_HISTORIAL_GIRADURIAS_FILE, index=False)
     st.cache_data.clear()
 
+@st.cache_data(ttl=2592000)
+def cargar_telefonos():
+    if os.path.exists(DB_TELEFONOS_FILE):
+        try:
+            xls = pd.ExcelFile(DB_TELEFONOS_FILE)
+            all_dfs = []
+            for sheet in xls.sheet_names:
+                d = pd.read_excel(DB_TELEFONOS_FILE, sheet_name=sheet, header=None, dtype=str)
+                all_dfs.append(d)
+            
+            df_all = pd.concat(all_dfs, ignore_index=True)
+            records = []
+            current_unit = "Sin Unidad"
+
+            for idx, row in df_all.iterrows():
+                col0 = str(row[0]).strip() if pd.notna(row[0]) else ""
+                col2 = str(row[2]).strip() if pd.notna(row[2]) else ""
+                col3 = str(row[3]).strip() if pd.notna(row[3]) else ""
+                col4 = str(row[4]).strip() if pd.notna(row[4]) else ""
+
+                if 'UNIDAD:' in col0.upper():
+                    current_unit = f"{col0} {str(row[1]) if pd.notna(row[1]) else ''}".strip()
+                    continue
+
+                if col2 != "" and not col2.upper().startswith("NOMBRE"):
+                    nro_soc = col0.split('\n')[0].strip()
+                    ci_clean = limpiar_ci(col3)
+                    loc_tel, wa_tel = formatear_telefono_paraguay(col4)
+                    
+                    records.append({
+                        'nro_socio': nro_soc,
+                        'emp_nomape': col2,
+                        'emp_ci': col3.replace('.0', '').strip(),
+                        'emp_ci_clean': ci_clean,
+                        'telefono': loc_tel,
+                        'telefono_wa': wa_tel,
+                        'unidad': current_unit
+                    })
+
+            return pd.DataFrame(records)
+        except Exception:
+            pass
+    return pd.DataFrame()
+
+def guardar_telefonos_excel(file_uploader):
+    with open(DB_TELEFONOS_FILE, "wb") as f:
+        f.write(file_uploader.getbuffer())
+    st.cache_data.clear()
+
+def cargar_historial_contactos():
+    if os.path.exists(DB_HISTORIAL_CONTACTOS_FILE):
+        try:
+            return pd.read_csv(DB_HISTORIAL_CONTACTOS_FILE, dtype=str)
+        except:
+            pass
+    return pd.DataFrame(columns=['CEDULA', 'SOCIO', 'USUARIO', 'PLANTILLA_NRO', 'FECHA_HORA', 'MENSAJE_TEXTO'])
+
+def registrar_contacto(cedula, socio, usuario, plantilla_nro, mensaje_texto):
+    df_h = cargar_historial_contactos()
+    fecha_ahora = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
+    nuevo = pd.DataFrame([{
+        'CEDULA': limpiar_ci(cedula),
+        'SOCIO': str(socio).strip(),
+        'USUARIO': usuario.lower().strip(),
+        'PLANTILLA_NRO': str(plantilla_nro),
+        'FECHA_HORA': fecha_ahora,
+        'MENSAJE_TEXTO': mensaje_texto
+    }])
+    df_h = pd.concat([df_h, nuevo], ignore_index=True)
+    df_h.to_csv(DB_HISTORIAL_CONTACTOS_FILE, index=False)
+
 def cargar_dictamenes():
     if os.path.exists(DB_DICTAMENES_FILE):
         return pd.read_csv(DB_DICTAMENES_FILE, dtype=str)
@@ -541,9 +624,6 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
 
     return bytes(pdf.output())
 
-# ==========================================
-# 📄 CLASES Y FUNCIONES DE PDF PARA SIMULACIÓN DE PRÉSTAMO
-# ==========================================
 class PDFSimulacionPrestamo(FPDF):
     def __init__(self):
         super().__init__(orientation='P', unit='mm', format='A4')
@@ -603,9 +683,6 @@ def generar_pdf_simulacion_prestamo(nombre_s, ci_s, tipo_p, monto_cap, plazo_m, 
 
     return bytes(pdf.output())
 
-# ==========================================
-# 📄 CLASES PERSONALIZADAS DE PDF HORIZONTALES (LANDSCAPE)
-# ==========================================
 class PDFReporteIncidencias(FPDF):
     def __init__(self):
         super().__init__(orientation='L', unit='mm', format='A4')
@@ -702,6 +779,7 @@ def generar_pdf_cobrabilidad_unidades(df_metrics):
 df_liquidez = cargar_liquidez()
 df_giradurias = cargar_giradurias()
 df_historial_giradurias = cargar_historial_giradurias()
+df_telefonos = cargar_telefonos()
 df_dictamenes = cargar_dictamenes()
 
 # ==========================================
@@ -759,7 +837,6 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
     figura_en_giradurias = not matches_g.empty
 
     if figura_en_liquidez or figura_en_giradurias:
-        # Extraer variables principales
         if figura_en_liquidez:
             row_l = matches_l.iloc[0]
             nombre = row_l.get('emp_nomape', 'S/N')
@@ -779,7 +856,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             limite_50 = base_imponible / 2.0
             total_deudas_actuales = giraduria + desc_cf2 + judicial
             margen_deuda_restante = limite_50 - total_deudas_actuales
-        else: # Solo figura en Giradurías (Policía, Armada, Fuerza Aérea, etc.)
+        else:
             row_g_first = matches_g.iloc[0]
             nombre = row_g_first.get('emp_nomape', 'S/N')
             cedula_militar = limpiar_ci(row_g_first.get('emp_ci', '0'))
@@ -878,7 +955,6 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             u_gir_upper = unidad_enviada_giraduria.upper()
             is_jubilado = "JUBILAD" in u_gir_upper or "JUBILADOS" in unidad_militar.upper()
             is_cf2 = "CF2" in u_gir_upper or "CFN2" in u_gir_upper
-            is_policia_armada_aerea = any(k in u_gir_upper for k in ['POLICIA', 'ARMADA', 'AEREA', 'POLICÍA', 'AÉREA'])
 
             if not figura_en_liquidez:
                 st.info(
@@ -962,9 +1038,6 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             else:
                 st.info(f"💡 **Margen disponible para nuevos descuentos:** Gs. {formato_guarani(margen_deuda_restante)}")
 
-        # ==========================================
-        # 📜 HISTORIAL DE DESCUENTOS DEL SOCIO
-        # ==========================================
         st.markdown("---")
         st.subheader("📜 Historial de Descuentos del Socio")
         
@@ -1033,7 +1106,121 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
         st.warning("⚠️ No se encontraron resultados coincidentes en las bases de datos.")
 
 # ==========================================
-# 📊 MÓDULO: GESTIÓN Y DIAGNÓSTICO DE COBRANZAS (GRAFICOS E INFORMES)
+# 📱 MÓDULO 2: GIRADURÍAS TELÉFONOS (WHATSAPP & CONTACTO)
+# ==========================================
+elif opcion == "📱 Giradurías Teléfonos":
+    st.subheader("📱 Módulo de Gestión de Contacto y Teléfonos de Socios")
+    
+    if df_telefonos.empty:
+        st.warning("⚠️ No se encuentra cargada la base de teléfonos (`Giraduria con numero de telefono.xlsx`). Podés subirla en 'Cargar Base Mensual'.")
+    else:
+        st.info(f"📊 **Base de datos activa:** {len(df_telefonos):,} socios registrados con números de teléfono.")
+        
+        busq_tel = st.text_input("🔍 Buscar por Cédula (C.I.), N° de Socio o Nombre/Apellido:", placeholder="Ej: 5955048, 9946 o AQUINO").strip()
+        busq_clean = limpiar_ci(busq_tel)
+
+        match_tel = pd.DataFrame()
+        if busq_tel:
+            if busq_clean and 'emp_ci_clean' in df_telefonos.columns:
+                match_tel = df_telefonos[df_telefonos['emp_ci_clean'] == busq_clean]
+            if match_tel.empty and 'nro_socio' in df_telefonos.columns:
+                match_tel = df_telefonos[df_telefonos['nro_socio'].astype(str).str.strip() == busq_tel]
+            if match_tel.empty and 'emp_nomape' in df_telefonos.columns:
+                match_tel = df_telefonos[df_telefonos['emp_nomape'].astype(str).str.contains(busq_tel, case=False, na=False)]
+
+        if not match_tel.empty:
+            socio_t = match_tel.iloc[0]
+            nombre_t = socio_t.get('emp_nomape', 'S/D')
+            ci_t = socio_t.get('emp_ci_clean', '0')
+            socio_num_t = socio_t.get('nro_socio', 'S/D')
+            tel_local_t = socio_t.get('telefono', 'Sin Teléfono')
+            tel_wa_t = socio_t.get('telefono_wa', '')
+            unid_t = socio_t.get('unidad', 'Giraduría')
+
+            st.markdown("---")
+            col_t1, col_t2 = st.columns(2)
+            with col_t1:
+                st.markdown(f"### 👤 {nombre_t}")
+                st.write(f"💳 **Cédula N°:** `{ci_t}` | **N° Socio:** `{socio_num_t}`")
+                st.write(f"🏛️ **Unidad / Giraduría:** {unid_t}")
+                st.write(f"📞 **Teléfono Registrado:** `{tel_local_t}`")
+
+            with col_t2:
+                st.markdown("### 📲 Enviar Mensaje por WhatsApp")
+                
+                if usuario_actual == "martin":
+                    plantilla_nro = 1
+                    msg_text = (
+                        f"Hola {nombre_t}, te saludamos del área de Giradurías de la Cooperativa. "
+                        f"Te informamos que en tu descuento del mes se registró un ajuste al límite disponible. "
+                        f"Te ofrecemos la posibilidad de reestructurar tu saldo, con la opción de retirar un pequeño saldo a favor en efectivo "
+                        f"(sujeto a análisis y margen de liquidez). ¡Consultanos para más detalles!"
+                    )
+                elif usuario_actual == "estela":
+                    plantilla_nro = 1
+                    msg_text = (
+                        f"Hola {nombre_t}, te saludamos del área de Giradurías de la Cooperativa. "
+                        f"Te informamos que en tu descuento del mes se registró un ajuste al límite disponible. "
+                        f"Te ofrecemos la posibilidad de reestructurar tu saldo para regularizar tu cuenta. ¡Consultanos para más detalles!"
+                    )
+                else: # Arthuro
+                    plantilla_sel = st.selectbox("Seleccionar Plantilla a Enviar:", ["Plantilla 1 (Con Opción Efectivo - Martín)", "Plantilla 1 (Estándar - Estela)", "Mensaje Personalizado"])
+                    if "Con Opción Efectivo" in plantilla_sel:
+                        plantilla_nro = 1
+                        msg_text = (
+                            f"Hola {nombre_t}, te saludamos del área de Giradurías. Te informamos que en tu descuento se registró un ajuste. "
+                            f"Podés reestructurar tu saldo con opción a un pequeño monto en efectivo según análisis y liquidez."
+                        )
+                    elif "Estándar" in plantilla_sel:
+                        plantilla_nro = 1
+                        msg_text = (
+                            f"Hola {nombre_t}, te saludamos del área de Giradurías. Te informamos que en tu descuento se registró un ajuste. "
+                            f"Te ofrecemos la posibilidad de reestructurar tu saldo para regularizar tu cuenta."
+                        )
+                    else:
+                        plantilla_nro = 99
+                        msg_text = st.text_area("Escribir mensaje personalizado:", value=f"Hola {nombre_t}, te escribimos del área de Giradurías.")
+
+                st.text_area("Vista previa del mensaje:", value=msg_text, height=120, disabled=True)
+
+                if tel_wa_t:
+                    msg_encoded = urllib.parse.quote(msg_text)
+                    wa_url = f"https://wa.me/{tel_wa_t}?text={msg_encoded}"
+                    
+                    if st.button("📲 Abrir WhatsApp y Registrar Contacto", use_container_width=True):
+                        registrar_contacto(ci_t, socio_num_t, usuario_actual, plantilla_nro, msg_text)
+                        st.success("✅ Contacto registrado correctamente en la bitácora.")
+                        st.markdown(f'[👉 Haz Clic Aquí para Abrir el Chat de WhatsApp Directamente]({wa_url})')
+                else:
+                    st.warning("⚠️ El socio no posee un número de teléfono válido registrado.")
+
+            # HISTORIAL Y BITÁCORA DE CONTACTOS DE LA FICHA
+            st.markdown("---")
+            st.subheader("📜 Bitácora e Historial de Contactos Realizados")
+            df_hist_cont = cargar_historial_contactos()
+
+            match_h_c = df_hist_cont[df_hist_cont['CEDULA'] == ci_t] if not df_hist_cont.empty and 'CEDULA' in df_hist_cont.columns else pd.DataFrame()
+
+            if not match_h_c.empty:
+                ult_c = match_h_c.iloc[-1]
+                usr_c = ult_c.get('USUARIO', '').capitalize()
+                fec_c = ult_c.get('FECHA_HORA', '')
+                p_nro = ult_c.get('PLANTILLA_NRO', '')
+
+                st.info(f"🔵 **Última gestión:** Contactado por **{usr_c}** el {fec_c}.")
+
+                if es_admin_base:
+                    st.markdown("#### 🛡️ Vista de Auditoría Administrador (Exclusivo Arthuro)")
+                    st.dataframe(match_h_c[['FECHA_HORA', 'USUARIO', 'PLANTILLA_NRO', 'MENSAJE_TEXTO']], use_container_width=True)
+                else:
+                    my_contacts = match_h_c[match_h_c['USUARIO'] == usuario_actual]
+                    if not my_contacts.empty:
+                        st.caption(f"ℹ️ Has enviado {len(my_contacts)} mensaje(s) a este socio usando la Plantilla N° {p_nro}.")
+            else:
+                st.success("🟢 **Estado:** Sin contacto previo registrado en el sistema.")
+
+# ==========================================
+# 📊 MÓDULO 3: GESTIÓN Y DIAGNÓSTICO DE COBRANZAS
 # ==========================================
 elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
     st.subheader("📊 Módulo de Diagnóstico de Cobranzas, Estadísticas y Reportes")
@@ -1216,7 +1403,7 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
                 st.bar_chart(data=df_metrics, x='unidad_nombre_oficial', y='% Cobrado')
 
 # ==========================================
-# 📋 MÓDULO 3: DICTAMEN DEL GIRADOR
+# 📋 MÓDULO 4: DICTAMEN DEL GIRADOR
 # ==========================================
 elif opcion == "📋 Dictamen del Girador":
     st.subheader("📋 Módulo de Registro de Dictamen de Giraduría")
@@ -1340,7 +1527,7 @@ elif opcion == "📋 Dictamen del Girador":
             )
 
 # ==========================================
-# 🛡️ MÓDULO 4: AUDITORÍA Y NOTA DE HACIENDA (RESTRINGIDO)
+# 🛡️ MÓDULO 5: AUDITORÍA Y NOTA DE HACIENDA (RESTRINGIDO)
 # ==========================================
 elif opcion == "🛡️ Auditoría y Cruce de Planillas":
     st.subheader("🛡️ Sistema de Auditoría y Cruce de Planillas (Hacienda)")
@@ -1587,7 +1774,6 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
             if not st.session_state.get('auditoria_ejecutada_limpia', False):
                 st.warning("⚠️ **Nota Oficial Bloqueada:** Aún no se ha ejecutado el cruce de planillas o se detectaron errores en la auditoría.")
                 st.info("📌 **Requisito:** Ejecutá primero la auditoría en la pestaña anterior con planillas 100% limpias (cero errores) para habilitar la generación de la Nota en PDF.")
-                
                 m_tot = 0.0
                 c_ben = 0
             else:
@@ -1620,7 +1806,7 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
             st.write(f"📊 **Totales calculados para la Nota:** Monto Gs. `{formato_guarani(m_tot)}` | Beneficiarios: `{c_ben}`")
 
 # ==========================================
-# 🧮 MÓDULO 5: CALCULADORA FINANCIERA DE PRÉSTAMOS (CON CRUCE AUTOMÁTICO)
+# 🧮 MÓDULO 6: CALCULADORA FINANCIERA DE PRÉSTAMOS
 # ==========================================
 elif opcion == "🧮 Calculadora de Préstamos":
     st.subheader("🧮 Calculadora Financiera y Simulador de Préstamos")
@@ -1917,7 +2103,7 @@ elif opcion == "🧮 Calculadora de Préstamos":
                 )
 
 # ==========================================
-# 📥 MÓDULO 6: CARGAR BASES MENSUALES (ADMIN)
+# 📥 MÓDULO 7: CARGAR BASE MENSUAL (ADMIN)
 # ==========================================
 elif opcion == "📥 Cargar Base Mensual":
     st.subheader("📥 Administración y Carga de Bases Mensuales")
@@ -1927,9 +2113,10 @@ elif opcion == "📥 Cargar Base Mensual":
     else:
         st.success("🔑 **Permisos de Administrador Verificados:** Podés subir o actualizar las bases de datos permanentes.")
         
-        tab_b1, tab_b2, tab_b3 = st.tabs([
+        tab_b1, tab_b2, tab_b3, tab_b4 = st.tabs([
             "🪖 Base de Liquidez (FF.AA.)", 
             "🏛️ Base Enviado / Cobrado (Giradurías)", 
+            "📱 Base Giradurías Teléfonos",
             "🔑 Credenciales de Usuarios"
         ])
 
@@ -1999,7 +2186,20 @@ elif opcion == "📥 Cargar Base Mensual":
                         st.error(f"Error al procesar la planilla de giradurías: {e}")
 
         with tab_b3:
-            st.markdown("#### 3. Consulta de Credenciales de Usuarios (Exclusivo Admin)")
+            st.markdown("#### 3. Base Giradurías Teléfonos")
+            st.caption("Subí la planilla `Giraduria con numero de telefono.xlsx` para actualizar la guía de contactos de socios.")
+            archivo_t = st.file_uploader("📥 Cargar Base de Teléfonos (.xlsx)", type=["xlsx", "xls"], key="u_tel")
+            if archivo_t:
+                if st.button("⚠️ Guardar y Actualizar Base de Teléfonos", use_container_width=True):
+                    try:
+                        guardar_telefonos_excel(archivo_t)
+                        st.success("✅ ¡Base de teléfonos cargada y lista para su uso!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al guardar la base de teléfonos: {e}")
+
+        with tab_b4:
+            st.markdown("#### 4. Consulta de Credenciales de Usuarios (Exclusivo Admin)")
             st.caption("Listado de usuarios registrados en el sistema y sus contraseñas asignadas para respuesta rápida por soporte/WhatsApp.")
             
             data_credenciales = []
