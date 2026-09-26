@@ -500,44 +500,48 @@ def guardar_historial_giradurias(df_nuevo, periodo_tag):
     df_unificado.to_csv(DB_HISTORIAL_GIRADURIAS_FILE, index=False)
     st.cache_data.clear()
 
+# ==========================================
+# 📱 FUNCIÓN CORREGIDA: LECTURA COMPLETA DE TODAS LAS PESTAÑAS DE TELÉFONOS
+# ==========================================
 @st.cache_data(ttl=2592000)
 def cargar_telefonos():
     if os.path.exists(DB_TELEFONOS_FILE):
         try:
             xls = pd.ExcelFile(DB_TELEFONOS_FILE)
-            all_dfs = []
-            for sheet in xls.sheet_names:
-                d = pd.read_excel(DB_TELEFONOS_FILE, sheet_name=sheet, header=None, dtype=str)
-                all_dfs.append(d)
-            
-            df_all = pd.concat(all_dfs, ignore_index=True)
             records = []
-            current_unit = "Sin Unidad"
 
-            for idx, row in df_all.iterrows():
-                col0 = str(row[0]).strip() if pd.notna(row[0]) else ""
-                col2 = str(row[2]).strip() if pd.notna(row[2]) else ""
-                col3 = str(row[3]).strip() if pd.notna(row[3]) else ""
-                col4 = str(row[4]).strip() if pd.notna(row[4]) else ""
+            for sheet in xls.sheet_names:
+                df_sheet = pd.read_excel(DB_TELEFONOS_FILE, sheet_name=sheet, header=None, dtype=str)
+                current_unit = str(sheet).strip() # Nombre por defecto de la pestaña
+                
+                for idx, row in df_sheet.iterrows():
+                    col0 = str(row[0]).strip() if pd.notna(row[0]) else ""
+                    col1 = str(row[1]).strip() if pd.notna(row[1]) else ""
+                    col2 = str(row[2]).strip() if pd.notna(row[2]) else ""
+                    col3 = str(row[3]).strip() if pd.notna(row[3]) else ""
+                    col4 = str(row[4]).strip() if pd.notna(row[4]) else ""
 
-                if 'UNIDAD:' in col0.upper():
-                    current_unit = f"{col0} {str(row[1]) if pd.notna(row[1]) else ''}".strip()
-                    continue
+                    # Detectar cambio de unidad dentro de la hoja si existe
+                    if 'UNIDAD:' in col0.upper():
+                        current_unit = f"{col0} {col1}".strip()
+                        continue
 
-                if col2 != "" and not col2.upper().startswith("NOMBRE"):
-                    nro_soc = col0.split('\n')[0].strip()
-                    ci_clean = limpiar_ci(col3)
-                    loc_tel, wa_tel = formatear_telefono_paraguay(col4)
-                    
-                    records.append({
-                        'nro_socio': nro_soc,
-                        'emp_nomape': col2,
-                        'emp_ci': col3.replace('.0', '').strip(),
-                        'emp_ci_clean': ci_clean,
-                        'telefono': loc_tel,
-                        'telefono_wa': wa_tel,
-                        'unidad': current_unit
-                    })
+                    # Omitir cabeceras o filas vacías
+                    if col2 != "" and not col2.upper().startswith("NOMBRE") and not col2.upper().startswith("APELLIDO"):
+                        nro_soc = col0.split('\n')[0].strip()
+                        ci_clean = limpiar_ci(col3)
+                        loc_tel, wa_tel = formatear_telefono_paraguay(col4)
+                        
+                        records.append({
+                            'nro_socio': nro_soc,
+                            'emp_nomape': col2,
+                            'emp_ci': col3.replace('.0', '').strip(),
+                            'emp_ci_clean': ci_clean,
+                            'telefono': loc_tel,
+                            'telefono_wa': wa_tel,
+                            'unidad': current_unit,
+                            'hoja_origen': sheet
+                        })
 
             return pd.DataFrame(records)
         except Exception:
@@ -970,7 +974,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                     st.markdown(
                         f"⚠️ **DIAGNÓSTICO ESPECÍFICO UNIDAD CF2:**\n"
                         f"El descuento enviado a CF2 fue rechazado (Gs. 0 cobrado).\n"
-                        f"📌 **Acción Requerida:** CF2: RECHAZADO - Consultar con la unidad **{unidad_ref}** (figura en liquidez)."
+                        f"📌 **Acción Requerida:** REFINANCIACIÓN NO FACTIBLE (Gs. 0 cobrado). Consultar con unidad **{unidad_ref}** o **proceder a notificación formal en caso de mora**."
                     )
                 elif unidad_enviada_giraduria and unidad_militar.upper() not in unidad_enviada_giraduria.upper():
                     st.markdown(
@@ -981,18 +985,26 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                     )
                 else:
                     st.markdown(
-                        f"⚠️ **DIAGNÓSTICO DE CAPACIDAD DE PAGO:**\n"
-                        f"El descuento fue rechazado en la giraduría por falta de margen de liquidez disponible "
-                        f"o afectación de embargos judiciales prioritarios."
+                        f"⚠️ **DIAGNÓSTICO DE CAPACIDAD DE PAGO Y MOROSIDAD:**\n"
+                        f"REFINANCIACIÓN NO FACTIBLE (Monto cobrado insuficiente).\n"
+                        f"📌 **Acción Requerida:** En caso de registrar atraso en cuotas, **proceder a la emisión de Notificación Formal de Requerimiento de Pago**."
                     )
 
             elif 0 < monto_cobrado < monto_enviado:
                 st.warning("⚠️ **ALERTA DE PAGO PARCIAL DETECTADO**")
-                if is_jubilado:
+                
+                # REGLA ESPECIAL MENOR A 100.000 GS.
+                if monto_cobrado < 100000:
+                    st.error(
+                        f"🔴 **REFINANCIACIÓN NO FACTIBLE (Monto Cobrado < Gs. 100.000):**\n"
+                        f"El socio registró un pago parcial de tan solo **Gs. {formato_guarani(monto_cobrado)}**, lo cual es inferior al mínimo operativo requerido (Gs. 100.000).\n"
+                        f"📌 **Acción Requerida:** No se recomienda estructurar refinanciación. **En caso de contar con cuotas atrasadas, proceder a la notificación formal de pago.**"
+                    )
+                elif is_jubilado:
                     st.info(
                         f"💡 **DIAGNÓSTICO ESPECÍFICO UNIDAD JUBILADOS:**\n"
                         f"El socio jubilado registró un pago parcial de Gs. {formato_guarani(monto_cobrado)}.\n"
-                        f"📌 **Acción Requerida:** Actualizar planilla de autorización o refinanciar (Último descuento: Gs. {formato_guarani(monto_cobrado)})."
+                        f"📌 **Acción Requerida:** Actualizar planilla de autorización o evaluar refinanciación (Último descuento: Gs. {formato_guarani(monto_cobrado)})."
                     )
                 elif is_cf2:
                     st.success(
@@ -1114,7 +1126,7 @@ elif opcion == "📱 Giradurías Teléfonos":
     if df_telefonos.empty:
         st.warning("⚠️ No se encuentra cargada la base de teléfonos (`Giraduria con numero de telefono.xlsx`). Podés subirla en 'Cargar Base Mensual'.")
     else:
-        st.info(f"📊 **Base de datos activa:** {len(df_telefonos):,} socios registrados con números de teléfono.")
+        st.info(f"📊 **Base de datos activa:** {len(df_telefonos):,} socios registrados consolidados de TODAS las pestañas del Excel.")
         
         busq_tel = st.text_input("🔍 Buscar por Cédula (C.I.), N° de Socio o Nombre/Apellido:", placeholder="Ej: 5955048, 9946 o AQUINO").strip()
         busq_clean = limpiar_ci(busq_tel)
@@ -1136,13 +1148,14 @@ elif opcion == "📱 Giradurías Teléfonos":
             tel_local_t = socio_t.get('telefono', 'Sin Teléfono')
             tel_wa_t = socio_t.get('telefono_wa', '')
             unid_t = socio_t.get('unidad', 'Giraduría')
+            hoja_t = socio_t.get('hoja_origen', 'Pestaña')
 
             st.markdown("---")
             col_t1, col_t2 = st.columns(2)
             with col_t1:
                 st.markdown(f"### 👤 {nombre_t}")
                 st.write(f"💳 **Cédula N°:** `{ci_t}` | **N° Socio:** `{socio_num_t}`")
-                st.write(f"🏛️ **Unidad / Giraduría:** {unid_t}")
+                st.write(f"🏛️ **Unidad / Giraduría:** {unid_t} *(Pestaña: {hoja_t})*")
                 st.write(f"📞 **Teléfono Registrado:** `{tel_local_t}`")
 
             with col_t2:
@@ -1276,25 +1289,21 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
             is_jubilado_u = "JUBILAD" in u_gir_clean or "JUBILADOS" in unidad_liq.upper()
             is_cf2_u = "CF2" in u_gir_clean or "CFN2" in u_gir_clean
 
-            if is_cf2_u:
-                if cobrado > 0:
-                    diagnostico = f"CF2: Refinanciación factible - Tope cuota recomendada: Gs. {formato_guarani(cobrado)} cobrados"
-                else:
-                    unidad_ref = unidad_liq if unidad_liq else "su unidad de origen"
-                    diagnostico = f"CF2: RECHAZADO - Consultar con la unidad {unidad_ref} (figura en liquidez)"
-            
+            # REGLA DE EVALUACIÓN DE REFINANCIACIÓN (LÍMITE GS. 100.000)
+            if cobrado < 100000:
+                diagnostico = "REFINANCIACIÓN NO FACTIBLE (Tope < Gs. 100.000) - Emitir notificación formal si registra mora"
+            elif is_cf2_u:
+                diagnostico = f"CF2: Refinanciación factible - Tope cuota recomendada: Gs. {formato_guarani(cobrado)} cobrados"
             elif is_jubilado_u:
-                if cobrado < enviado:
-                    diagnostico = f"JUBILADO: Actualizar planilla de autorización o refinanciar (Último descuento: Gs. {formato_guarani(cobrado)})"
-            
+                diagnostico = f"JUBILADO: Actualizar planilla de autorización o refinanciar (Último descuento: Gs. {formato_guarani(cobrado)})"
             else:
                 if cobrado == 0:
                     if unidad_liq not in ["FFPP / Jubilado", "Jubilado", "Armada", "Fuerza Aérea", "Policía Nacional"] and unidad_giraduria.upper() not in unidad_liq.upper():
-                        diagnostico = f"RECHAZADO: Enviado a {unidad_giraduria} pero figura en {unidad_liq}"
+                        diagnostico = f"RECHAZADO: Enviado a {unidad_giraduria} pero figura en {unidad_liq} - Proceder a notificación"
                     else:
-                        diagnostico = "RECHAZADO: Falta de liquidez o embargo prioritario"
+                        diagnostico = "RECHAZADO: Falta de liquidez - Proceder a notificación formal"
                 elif 0 < cobrado < enviado:
-                    if margen_liq > 0:
+                    if margen_liq >= 100000:
                         diagnostico = f"PARCIAL: REFINANCIACIÓN FACTIBLE (Margen libre Gs. {formato_guarani(margen_liq)})"
                     else:
                         diagnostico = f"PARCIAL: Evaluar refinanciación (Cuota límite recomendada: Gs. {formato_guarani(cobrado)} cobrados)"
@@ -1979,15 +1988,22 @@ elif opcion == "🧮 Calculadora de Préstamos":
 
             es_con_cancelacion = "Con Cancelación" in modalidad_credito
 
-            if es_con_cancelacion and cuota <= ultimo_descuento_cobrado and ultimo_descuento_cobrado > 0:
+            # EVALUACIÓN CON REGLA MÍNIMA DE GS. 100.000
+            if es_con_cancelacion and cuota <= ultimo_descuento_cobrado and ultimo_descuento_cobrado >= 100000:
                 st.success(
                     f"✅ **CRÉDITO APROBADO (REFINANCIACIÓN / CANCELACIÓN FACTIBLE)**\n\n"
                     f"La cuota calculada (**Gs. {formato_guarani(cuota)}**) es menor o igual al último descuento del socio (**Gs. {formato_guarani(ultimo_descuento_cobrado)}**)."
                 )
-            elif cuota <= margen_libre_liquidez:
+            elif cuota <= margen_libre_liquidez and margen_libre_liquidez >= 100000:
                 st.success(
                     f"✅ **CRÉDITO APROBADO (DENTRO DEL MARGEN LIBRE DE LIQUIDEZ)**\n\n"
                     f"La cuota de **Gs. {formato_guarani(cuota)}** entra cómodamente en el margen libre de liquidez de las FF.AA. (**Gs. {formato_guarani(margen_libre_liquidez)}**)."
+                )
+            elif ultimo_descuento_cobrado < 100000 and margen_libre_liquidez < 100000:
+                st.error(
+                    f"🔴 **REFINANCIACIÓN NO FACTIBLE (MARGEN INSUFICIENTE < Gs. 100.000)**\n\n"
+                    f"El monto máximo disponible (**Gs. {formato_guarani(max(ultimo_descuento_cobrado, margen_libre_liquidez))}**) es inferior al mínimo operativo requerido.\n"
+                    f"📌 **Recomendación:** No es viablemente factible reestructurar. En caso de mora, proceder con notificación formal."
                 )
             else:
                 unidad_destino = unidad_liquidez_socio if unidad_liquidez_socio not in ["Sin Liquidez", ""] else "CF2"
