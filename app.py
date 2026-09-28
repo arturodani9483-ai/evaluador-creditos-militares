@@ -166,9 +166,6 @@ DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
 DB_TELEFONOS_FILE = "Giraduria con numero de telefono.xlsx"
 DB_HISTORIAL_CONTACTOS_FILE = "base_historial_contactos.csv"
 
-# ==========================================
-# 🗺️ DICCIONARIO DE CORRESPONDENCIA DE UNIDADES
-# ==========================================
 MAPEO_UNIDADES = {
     "1": "1RA DC", "2": "2da DC", "3": "3ra Dc", "4": "Epoe", "5": "I CE",
     "6": "Cimee", "7": "TEE", "8": "Ejercito", "9": "Edefisfa", "10": "Jubilados",
@@ -176,18 +173,12 @@ MAPEO_UNIDADES = {
     "18": "Dimabel", "20": "C. Logistico", "22": "Comisoe", "23": "CFN2", "24": "II CE",
     "25": "III CE", "26": "4ta DI", "27": "5ta DI", "28": "6ta DI", "29": "2da DI",
     "30": "3ra DI", "31": "Ingenieria", "32": "1ra DI",
-    "35": "Comcome Oficiales",
-    "36": "Comcome Sub Oficiales",
-    "37": "Suprema corte",
-    "39": "Comcome Empleados",
+    "35": "Comcome Oficiales", "36": "Comcome Sub Oficiales", "37": "Suprema corte", "39": "Comcome Empleados",
     "42": "Regimiento", "44": "Sanidad", "46": "Digetren", "50": "Esc. Caballeria",
     "54": "IAEE", "62": "EIME", "70": "Batallon", "73": "CECOPAZ", "82": "Armada",
     "83": "Aerea", "86": "Policia"
 }
 
-# ==========================================
-# 🛠️ FUNCIONES AUXILIARES Y DE DATOS
-# ==========================================
 def limpiar_texto(val):
     try:
         if isinstance(val, (pd.Series, list)):
@@ -196,6 +187,14 @@ def limpiar_texto(val):
         return "" if s.upper() in ["NAN", "NONE", "<NAT>"] else s
     except:
         return ""
+
+def limpiar_texto_pdf(val):
+    """Sanitiza el texto eliminando emojis o caracteres no compatibles con latin-1 para FPDF"""
+    s = limpiar_texto(val)
+    try:
+        return s.encode('latin-1', 'ignore').decode('latin-1')
+    except:
+        return s
 
 def limpiar_ci(val):
     try:
@@ -275,7 +274,6 @@ def unificar_hojas_excel(file_or_path, periodo_tag=""):
     if len(xls.sheet_names) == 1 or "TODAS LAS UNIDADES" in [s.strip().upper() for s in xls.sheet_names]:
         sheet_target = xls.sheet_names[0]
         df_raw = pd.read_excel(xls, sheet_name=sheet_target, header=None, dtype=str)
-        
         records = []
         current_unidad = "Sin Asignar"
 
@@ -588,7 +586,7 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
     pdf.set_font("Helvetica", "B", 14)
     pdf.cell(0, 10, "SICOC - EVALUADOR DE CAPACIDAD CREDITICIA", border=0, ln=True, align="C")
     pdf.set_font("Helvetica", "I", 10)
-    pdf.cell(0, 6, f"Constancia Oficial de {tipo_reporte}", border=0, ln=True, align="C")
+    pdf.cell(0, 6, f"Constancia Oficial de {limpiar_texto_pdf(tipo_reporte)}", border=0, ln=True, align="C")
     pdf.ln(5)
     pdf.line(10, 28, 200, 28)
     pdf.ln(5)
@@ -596,9 +594,9 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 8, "1. DATOS DEL MILITAR / SOCIO", ln=True)
     pdf.set_font("Helvetica", "", 10)
-    pdf.cell(100, 6, f"Nombre y Apellido: {nombre}")
+    pdf.cell(100, 6, f"Nombre y Apellido: {limpiar_texto_pdf(nombre)}")
     pdf.cell(90, 6, f"Cédula N°: {ci}", ln=True)
-    pdf.cell(100, 6, f"Unidad / Dependencia: {unidad}", ln=True)
+    pdf.cell(100, 6, f"Unidad / Dependencia: {limpiar_texto_pdf(unidad)}", ln=True)
     pdf.ln(4)
 
     pdf.set_font("Helvetica", "B", 11)
@@ -615,11 +613,11 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
     pdf.cell(0, 8, "3. EVALUACIÓN DE CRÉDITO Y DICTAMEN", ln=True)
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(100, 6, f"Cuota Solicitada: Gs. {formato_guarani(cuota)}")
-    pdf.cell(90, 6, f"Estado de Factibilidad: {estado}", ln=True)
+    pdf.cell(90, 6, f"Estado de Factibilidad: {limpiar_texto_pdf(estado)}", ln=True)
     
     if obs:
         pdf.ln(2)
-        pdf.multi_cell(0, 6, f"Observación / Dictamen de Giraduría: {obs}")
+        pdf.multi_cell(0, 6, f"Observación / Dictamen de Giraduría: {limpiar_texto_pdf(obs)}")
 
     pdf.ln(15)
     pdf.cell(0, 6, "_____________________________", align="C", ln=True)
@@ -651,9 +649,9 @@ def generar_pdf_simulacion_prestamo(nombre_s, ci_s, tipo_p, monto_cap, plazo_m, 
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(0, 6, "1. DATOS DEL SOLICITANTE Y CONDICIONES DEL CRÉDITO", ln=True)
     pdf.set_font("Helvetica", "", 9)
-    pdf.cell(100, 5, f"Socio: {nombre_s}")
+    pdf.cell(100, 5, f"Socio: {limpiar_texto_pdf(nombre_s)}")
     pdf.cell(90, 5, f"Cédula: {ci_s}", ln=True)
-    pdf.cell(100, 5, f"Tipo de Crédito: {tipo_p}")
+    pdf.cell(100, 5, f"Tipo de Crédito: {limpiar_texto_pdf(tipo_p)}")
     pdf.cell(90, 5, f"Plazo: {plazo_m} meses", ln=True)
     pdf.cell(100, 5, f"Capital Solicitado: Gs. {formato_guarani(monto_cap)}")
     pdf.cell(90, 5, f"Tasa de Interés: {tasa_i}% Anual", ln=True)
@@ -693,15 +691,15 @@ class PDFEstadoCuentaRefinanciacion(FPDF):
     def header(self):
         fecha_local = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
         self.set_font("Helvetica", "B", 13)
-        self.cell(0, 7, "SICOC - ESTADO DE CUENTA Y PROPUESTA DE REFINANCIACIÓN", border=0, ln=True, align="C")
+        self.cell(0, 7, "SICOC - ESTADO DE CUENTA Y PROPUESTA DE REFINANCIACION", border=0, ln=True, align="C")
         self.set_font("Helvetica", "I", 9)
-        self.cell(0, 4, f"Fecha de emisión: {fecha_local}", border=0, ln=True, align="C")
+        self.cell(0, 4, f"Fecha de emision: {fecha_local}", border=0, ln=True, align="C")
         self.ln(3)
 
     def footer(self):
         self.set_y(-15)
         self.set_font("Helvetica", "I", 8)
-        self.cell(0, 10, f"Página {self.page_no()}", align="C")
+        self.cell(0, 10, f"Pagina {self.page_no()}", align="C")
 
 def generar_pdf_estado_cuenta(nombre_s, ci_s, u_gir, u_liq, ult_desc, tot_creditos, tot_sociales, efectivo_retira, total_cancelar, resultado_eval, plazo_rec, cuota_rec):
     pdf = PDFEstadoCuentaRefinanciacion()
@@ -710,17 +708,17 @@ def generar_pdf_estado_cuenta(nombre_s, ci_s, u_gir, u_liq, ult_desc, tot_credit
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(0, 6, "1. DATOS DEL SOCIO Y REFERENCIAS DE DEUDAS", ln=True)
     pdf.set_font("Helvetica", "", 9)
-    pdf.cell(100, 5, f"Socio: {nombre_s}")
-    pdf.cell(90, 5, f"Cédula: {ci_s}", ln=True)
-    pdf.cell(100, 5, f"Giraduría Registrada: {u_gir}")
-    pdf.cell(90, 5, f"Unidad Liquidez: {u_liq}", ln=True)
-    pdf.cell(100, 5, f"Último Descuento Cobrado: Gs. {formato_guarani(ult_desc)}", ln=True)
+    pdf.cell(100, 5, f"Socio: {limpiar_texto_pdf(nombre_s)}")
+    pdf.cell(90, 5, f"Cedula: {ci_s}", ln=True)
+    pdf.cell(100, 5, f"Giraduria Registrada: {limpiar_texto_pdf(u_gir)}")
+    pdf.cell(90, 5, f"Unidad Liquidez: {limpiar_texto_pdf(u_liq)}", ln=True)
+    pdf.cell(100, 5, f"Ultimo Descuento Cobrado: Gs. {formato_guarani(ult_desc)}", ln=True)
     pdf.ln(3)
 
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(0, 6, "2. RESUMEN DE SALDOS Y CONCEPTOS A CANCELAR", ln=True)
     pdf.set_font("Helvetica", "", 9)
-    pdf.cell(100, 5, f"Subtotal Créditos / Deudas: Gs. {formato_guarani(tot_creditos)}")
+    pdf.cell(100, 5, f"Subtotal Creditos / Deudas: Gs. {formato_guarani(tot_creditos)}")
     pdf.cell(90, 5, f"Subtotal Conceptos Sociales: Gs. {formato_guarani(tot_sociales)}", ln=True)
     pdf.cell(100, 5, f"Efectivo Adicional a Retirar: Gs. {formato_guarani(efectivo_retira)}")
     pdf.set_font("Helvetica", "B", 9)
@@ -728,18 +726,23 @@ def generar_pdf_estado_cuenta(nombre_s, ci_s, u_gir, u_liq, ult_desc, tot_credit
     pdf.ln(3)
 
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 6, "3. DIAGNÓSTICO DE REFINANCIACIÓN Y PLAZO RECOMENDADO", ln=True)
+    pdf.cell(0, 6, "3. DIAGNOSTICO DE REFINANCIACION Y PLAZO RECOMENDADO", ln=True)
     pdf.set_font("Helvetica", "", 9)
-    pdf.multi_cell(0, 5, f"Estado / Veredicto: {resultado_eval}")
+    
+    # Sanitizar resultado_eval para evitar error FPDFUnicodeEncodingException
+    res_clean = limpiar_texto_pdf(resultado_eval)
+    pdf.multi_cell(0, 5, f"Estado / Veredicto: {res_clean}")
+    
     if plazo_rec > 0:
-        pdf.cell(100, 5, f"Plazo Recomendado: {plazo_rec} meses (Máximo 54 meses)")
+        pdf.ln(2)
+        pdf.cell(100, 5, f"Plazo Recomendado: {plazo_rec} meses")
         pdf.cell(90, 5, f"Cuota Estimada: Gs. {formato_guarani(cuota_rec)}", ln=True)
 
     pdf.ln(15)
     pdf.cell(95, 6, "_____________________________", align="C")
     pdf.cell(95, 6, "_____________________________", align="C", ln=True)
     pdf.cell(95, 5, "Firma del Socio", align="C")
-    pdf.cell(95, 5, "Firma / Sello de Recepción", align="C", ln=True)
+    pdf.cell(95, 5, "Firma / Sello de Recepcion", align="C", ln=True)
 
     return bytes(pdf.output())
 
@@ -752,7 +755,7 @@ class PDFReporteIncidencias(FPDF):
         self.set_font("Helvetica", "B", 13)
         self.cell(0, 8, "SICOC - INFORME OFICIAL DE PAGOS PARCIALES Y RECHAZADOS", border=0, ln=True, align="C")
         self.set_font("Helvetica", "I", 9)
-        self.cell(0, 4, f"Fecha de emisión: {fecha_local}", border=0, ln=True, align="C")
+        self.cell(0, 4, f"Fecha de emision: {fecha_local}", border=0, ln=True, align="C")
         self.ln(4)
 
         self.set_font("Helvetica", "B", 8)
@@ -760,18 +763,18 @@ class PDFReporteIncidencias(FPDF):
         self.cell(18, 6, "SOCIO", border=1, align="C")
         self.cell(20, 6, "CEDULA", border=1, align="C")
         self.cell(48, 6, "NOMBRE Y APELLIDO", border=1, align="C")
-        self.cell(25, 6, "U. GIRADURÍA", border=1, align="C")
+        self.cell(25, 6, "U. GIRADURIA", border=1, align="C")
         self.cell(25, 6, "U. LIQUIDEZ", border=1, align="C")
         self.cell(24, 6, "ENVIADO", border=1, align="C")
         self.cell(24, 6, "COBRADO", border=1, align="C")
         self.cell(24, 6, "RECHAZADO", border=1, align="C")
-        self.cell(59, 6, "DIAGNOSTICO / OBSERVACIÓN", border=1, align="C")
+        self.cell(59, 6, "DIAGNOSTICO / OBSERVACION", border=1, align="C")
         self.ln()
 
     def footer(self):
         self.set_y(-15)
         self.set_font("Helvetica", "I", 8)
-        self.cell(0, 10, f"Página {self.page_no()}", align="C")
+        self.cell(0, 10, f"Pagina {self.page_no()}", align="C")
 
 class PDFCobrabilidadUnidades(FPDF):
     def __init__(self):
@@ -782,12 +785,12 @@ class PDFCobrabilidadUnidades(FPDF):
         self.set_font("Helvetica", "B", 13)
         self.cell(0, 8, "SICOC - RESUMEN DE COBRABILIDAD Y EFECTIVIDAD POR UNIDAD", border=0, ln=True, align="C")
         self.set_font("Helvetica", "I", 9)
-        self.cell(0, 4, f"Fecha de emisión: {fecha_local}", border=0, ln=True, align="C")
+        self.cell(0, 4, f"Fecha de emision: {fecha_local}", border=0, ln=True, align="C")
         self.ln(4)
 
         self.set_font("Helvetica", "B", 9)
         self.cell(15, 7, "N°", border=1, align="C")
-        self.cell(90, 7, "UNIDAD / GIRADURÍA", border=1, align="C")
+        self.cell(90, 7, "UNIDAD / GIRADURIA", border=1, align="C")
         self.cell(55, 7, "MONTO ENVIADO", border=1, align="C")
         self.cell(55, 7, "MONTO COBRADO", border=1, align="C")
         self.cell(50, 7, "% EFECTIVIDAD", border=1, align="C")
@@ -796,7 +799,7 @@ class PDFCobrabilidadUnidades(FPDF):
     def footer(self):
         self.set_y(-15)
         self.set_font("Helvetica", "I", 8)
-        self.cell(0, 10, f"Página {self.page_no()}", align="C")
+        self.cell(0, 10, f"Pagina {self.page_no()}", align="C")
 
 def generar_pdf_reporte_incidencias(df_reporte):
     pdf = PDFReporteIncidencias()
@@ -808,13 +811,13 @@ def generar_pdf_reporte_incidencias(df_reporte):
         pdf.cell(10, 6, str(nro_orden), border=1, align="C")
         pdf.cell(18, 6, str(r.get('SOCIO', '-'))[:10], border=1, align="C")
         pdf.cell(20, 6, str(r.get('CEDULA', '-'))[:10], border=1, align="C")
-        pdf.cell(48, 6, str(r.get('NOMBRE', '-'))[:28], border=1, align="L")
-        pdf.cell(25, 6, str(r.get('UNIDAD GIRADURIA', '-'))[:15], border=1, align="L")
-        pdf.cell(25, 6, str(r.get('UNIDAD LIQUIDEZ', '-'))[:15], border=1, align="L")
+        pdf.cell(48, 6, limpiar_texto_pdf(r.get('NOMBRE', '-'))[:28], border=1, align="L")
+        pdf.cell(25, 6, limpiar_texto_pdf(r.get('UNIDAD GIRADURIA', '-'))[:15], border=1, align="L")
+        pdf.cell(25, 6, limpiar_texto_pdf(r.get('UNIDAD LIQUIDEZ', '-'))[:15], border=1, align="L")
         pdf.cell(24, 6, f"Gs. {formato_guarani(r.get('ENVIADO', 0))}", border=1, align="R")
         pdf.cell(24, 6, f"Gs. {formato_guarani(r.get('COBRADO', 0))}", border=1, align="R")
         pdf.cell(24, 6, f"Gs. {formato_guarani(r.get('RECHAZADO', 0))}", border=1, align="R")
-        pdf.cell(59, 6, str(r.get('DIAGNOSTICO', '-'))[:38], border=1, align="L")
+        pdf.cell(59, 6, limpiar_texto_pdf(r.get('DIAGNOSTICO', '-'))[:38], border=1, align="L")
         pdf.ln()
 
     return bytes(pdf.output())
@@ -828,7 +831,7 @@ def generar_pdf_cobrabilidad_unidades(df_metrics):
         nro_orden = idx + 1
         nombre_u = str(r.get('unidad_nombre_oficial', r.get('Unidad / Giraduría', '-')))
         pdf.cell(15, 6, str(nro_orden), border=1, align="C")
-        pdf.cell(90, 6, nombre_u[:50], border=1, align="L")
+        pdf.cell(90, 6, limpiar_texto_pdf(nombre_u)[:50], border=1, align="L")
         pdf.cell(55, 6, f"Gs. {formato_guarani(r.get('monto_enviado_num', 0))}", border=1, align="R")
         pdf.cell(55, 6, f"Gs. {formato_guarani(r.get('monto_cobrado_num', 0))}", border=1, align="R")
         pdf.cell(50, 6, f"{r.get('% Cobrado', 0)} %", border=1, align="C")
@@ -843,7 +846,7 @@ df_telefonos = cargar_telefonos()
 df_dictamenes = cargar_dictamenes()
 
 # ==========================================
-# 🪖 MÓDULO 1: EVALUADOR DE LIQUIDEZ Y DIAGNÓSTICO INTEGRAL DE SOCIO
+# 🪖 MÓDULO 1: EVALUADOR DE LIQUIDEZ
 # ==========================================
 if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
     st.subheader("🔍 Buscador de Liquidez y Estado de Socio")
@@ -1173,7 +1176,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
         st.warning("⚠️ No se encontraron resultados coincidentes en las bases de datos.")
 
 # ==========================================
-# 📱 MÓDULO 2: GIRADURÍAS TELÉFONOS (WHATSAPP & CONTACTO)
+# 📱 MÓDULO 2: GIRADURÍAS TELÉFONOS
 # ==========================================
 elif opcion == "📱 Giradurías Teléfonos":
     st.subheader("📱 Módulo de Gestión de Contacto y Teléfonos de Socios")
@@ -1287,7 +1290,7 @@ elif opcion == "📱 Giradurías Teléfonos":
                 st.success("🟢 **Estado:** Sin contacto previo registrado en el sistema.")
 
 # ==========================================
-# 📊 MÓDULO 3: GESTIÓN Y DIAGNÓSTICO DE COBRANZAS
+# 📊 MÓDULO 3: GESTIÓN DE COBRANZAS
 # ==========================================
 elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
     st.subheader("📊 Módulo de Diagnóstico de Cobranzas, Estadísticas y Reportes")
@@ -1589,7 +1592,7 @@ elif opcion == "📋 Dictamen del Girador":
             )
 
 # ==========================================
-# 🛡️ MÓDULO 5: AUDITORÍA Y NOTA DE HACIENDA (RESTRINGIDO)
+# 🛡️ MÓDULO 5: AUDITORÍA Y NOTA DE HACIENDA
 # ==========================================
 elif opcion == "🛡️ Auditoría y Cruce de Planillas":
     st.subheader("🛡️ Sistema de Auditoría y Cruce de Planillas (Hacienda)")
@@ -1605,7 +1608,7 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
             col1, col2 = st.columns(2)
             with col1:
                 files_anteriores = st.file_uploader(
-                    "📥 Planilla(s) Mes Anterior (Referencia - Podés subir 1 o más archivos)", 
+                    "📥 Planilla(s) Mes Anterior (Referencia)", 
                     type=["xlsx", "xls", "csv"], 
                     accept_multiple_files=True
                 )
@@ -1625,7 +1628,6 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
                             dfs_ref_list.append(df_temp)
                         
                         df_prev = pd.concat(dfs_ref_list, ignore_index=True)
-                        
                         df_curr_raw = cargar_archivo_universal(file_actual)
                         df_curr = mapear_y_desduplicar_columnas_auditoria(df_curr_raw)
 
@@ -1717,7 +1719,7 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
                                             'Nombre y Apellido': nombre,
                                             'N° Operación': operacion,
                                             'Concepto': concepto,
-                                            'Tipo de Inconsistencia': 'Monto a descontar aumentó respecto al mes anterior (Monto Actual > Anterior)',
+                                            'Tipo de Inconsistencia': 'Monto a descontar aumentó respecto al mes anterior',
                                             'Dato Mes Actual': f"Gs. {formato_guarani(monto_desc)}",
                                             'Dato Correcto (Mes Anterior)': f"Gs. {formato_guarani(monto_ref)}"
                                         })
@@ -1778,16 +1780,13 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
                                     txt_content = "\n".join(txt_lines)
 
                                     st.markdown("#### 📄 Descarga de Archivos Oficiales:")
-
-                                    col_d1, col_d2 = st.columns(2)
-                                    with col_d1:
-                                        st.download_button(
-                                            label="📥 Descargar Consolidado (.TXT Oficial)",
-                                            data=txt_content.encode('latin1'),
-                                            file_name="COD_96_COOP_24_DE_OCTUBRE.TXT",
-                                            mime="text/plain",
-                                            use_container_width=True
-                                        )
+                                    st.download_button(
+                                        label="📥 Descargar Consolidado (.TXT Oficial)",
+                                        data=txt_content.encode('latin1'),
+                                        file_name="COD_96_COOP_24_DE_OCTUBRE.TXT",
+                                        mime="text/plain",
+                                        use_container_width=True
+                                    )
 
                                 else:
                                     st.session_state['auditoria_ejecutada_limpia'] = False
@@ -1835,7 +1834,6 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
             
             if not st.session_state.get('auditoria_ejecutada_limpia', False):
                 st.warning("⚠️ **Nota Oficial Bloqueada:** Aún no se ha ejecutado el cruce de planillas o se detectaron errores en la auditoría.")
-                st.info("📌 **Requisito:** Ejecutá primero la auditoría en la pestaña anterior con planillas 100% limpias (cero errores) para habilitar la generación de la Nota en PDF.")
                 m_tot = 0.0
                 c_ben = 0
             else:
@@ -2267,7 +2265,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
         subtotal_credito_1 = cap_adeudado_1 + int_vencido_1 + int_moratorio_1 + int_punitorio_1
         total_sociales = m_aporte + m_mantenimiento + m_solidaridad + m_sorteo
 
-        # MANEJO DINÁMICO DE CRÉDITOS ADICIONALES
         col_btn_add, col_btn_rem = st.columns([2, 2])
         with col_btn_add:
             if st.button("➕ Agregar Otro Crédito Adicional", use_container_width=True):
@@ -2334,12 +2331,12 @@ elif opcion == "🧮 Calculadora de Préstamos":
 
                 tope_comparacion = ult_desc_ec if ult_desc_ec > 0 else margen_ec
                 
-                plazos_disponibles = [12, 18, 24, 30, 36, 42, 48, 54] # HASTA 54 MESES MÁXIMO
+                plazos_disponibles = [12, 18, 24, 30, 36, 42, 48, 54]
                 tasa_m_ref = (tasa_refinanciacion / 100.0) / 12.0
 
                 plazo_optimo = 0
                 cuota_optima = 0.0
-                eval_filas = []
+                eval_filas_aprobadas = []
 
                 for p in plazos_disponibles:
                     if tasa_m_ref > 0:
@@ -2352,31 +2349,35 @@ elif opcion == "🧮 Calculadora de Préstamos":
                         plazo_optimo = p
                         cuota_optima = c_m
 
-                    eval_filas.append({
-                        "Plazo (Meses)": f"{p} meses",
-                        "Cuota Calculada (Gs.)": f"Gs. {formato_guarani(c_m)}",
-                        "Límite Socio (Gs.)": f"Gs. {formato_guarani(tope_comparacion)}",
-                        "Cumple Límite": "✅ APROBADO" if cumple else "❌ SUPERA MÁXIMO"
-                    })
+                    if cumple:
+                        eval_filas_aprobadas.append({
+                            "Plazo (Meses)": f"{p} meses",
+                            "Cuota Calculada (Gs.)": f"Gs. {formato_guarani(c_m)}",
+                            "Límite Socio (Gs.)": f"Gs. {formato_guarani(tope_comparacion)}",
+                            "Cumple Límite": "✅ APROBADO"
+                        })
 
-                df_eval_plazos = pd.DataFrame(eval_filas)
+                # Si hay más de 4 opciones aprobadas, tomar las primeras 4 (las más convenientes/cortas)
+                eval_filas_filtradas = eval_filas_aprobadas[:4] if len(eval_filas_aprobadas) > 0 else []
 
                 if tope_comparacion < 100000:
-                    resultado_txt = "🔴 REFINANCIACIÓN NO FACTIBLE (Límite / Último descuento < Gs. 100.000). Se sugiere proceder a notificación de pago si hay mora."
-                    st.error(resultado_txt)
+                    resultado_txt = "REFINANCIACION NO FACTIBLE (Limite / Ultimo descuento < Gs. 100.000). Se sugiere proceder a notificacion de pago si hay mora."
+                    st.error("🔴 **REFINANCIACIÓN NO FACTIBLE:** El límite o último descuento es inferior a Gs. 100.000.")
                 elif plazo_optimo > 0:
-                    resultado_txt = f"✅ REFINANCIACIÓN APROBADA A {plazo_optimo} MESES con una cuota recomendada de Gs. {formato_guarani(cuota_optima)} (dentro del tope de Gs. {formato_guarani(tope_comparacion)})."
+                    resultado_txt = f"REFINANCIACION APROBADA A {plazo_optimo} MESES con cuota estimada de Gs. {formato_guarani(cuota_optima)} (Tope ultimo descuento: Gs. {formato_guarani(tope_comparacion)})."
                     st.success(
                         f"🎯 **REFINANCIACIÓN FACTIBLE Y RECOMENDADA:**\n\n"
                         f"Para que el socio pague una cuota menor o igual a su último descuento (**Gs. {formato_guarani(tope_comparacion)}**), "
                         f"la refinanciación debe estructurarse a **{plazo_optimo} meses** con una cuota mensual de **Gs. {formato_guarani(cuota_optima)}**."
                     )
                 else:
-                    resultado_txt = f"⚠️ REFINANCIACIÓN NO FACTIBLE A PLAZO MÁXIMO DE 54 MESES. La cuota mínima posible supera el último descuento del socio (Gs. {formato_guarani(tope_comparacion)})."
-                    st.error(resultado_txt)
+                    resultado_txt = f"REFINANCIACION NO FACTIBLE A PLAZO MAXIMO DE 54 MESES. La cuota minima posible supera el ultimo descuento del socio (Gs. {formato_guarani(tope_comparacion)})."
+                    st.error(f"⚠️ **REFINANCIACIÓN NO FACTIBLE A 54 MESES:** La cuota mínima posible supera el último descuento (Gs. {formato_guarani(tope_comparacion)}).")
 
-                st.markdown("##### 📋 Tabla Comparativa por Plazos (Hasta 54 Meses):")
-                st.dataframe(df_eval_plazos, use_container_width=True)
+                if eval_filas_filtradas:
+                    df_eval_plazos = pd.DataFrame(eval_filas_filtradas)
+                    st.markdown("##### 📋 Opciones Recomendadas Aprobradas (Mejores alternativas):")
+                    st.dataframe(df_eval_plazos, use_container_width=True)
 
                 st.markdown("---")
                 pdf_ec_bytes = generar_pdf_estado_cuenta(
@@ -2403,7 +2404,7 @@ elif opcion == "🧮 Calculadora de Préstamos":
                 )
 
 # ==========================================
-# 📥 MÓDULO 7: CARGAR BASE MENSUAL (ADMIN)
+# 📥 MÓDULO 7: CARGAR BASE MENSUAL
 # ==========================================
 elif opcion == "📥 Cargar Base Mensual":
     st.subheader("📥 Administración y Carga de Bases Mensuales")
