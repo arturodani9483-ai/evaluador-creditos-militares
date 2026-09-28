@@ -34,21 +34,32 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🎨 ESTILO VISUAL PERSONALIZADO (FINTECH MODERN DESIGN)
+# 🎨 ESTILO VISUAL PERSONALIZADO (ALTO CONTRASTE Y MAXIMA LEGIBILIDAD)
 # ==========================================
 st.markdown("""
 <style>
     /* Fondo principal de la app */
     .stApp {
-        background-color: #f4f7f6;
-        color: #0f172a;
+        background-color: #f8fafc !important;
+        color: #0f172a !important;
         font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    }
+
+    /* TODOS LOS TEXTOS GENERALES, LABELS Y ETIQUETAS */
+    .stApp p, .stApp label, .stApp span, .stApp div {
+        color: #1e293b !important;
+    }
+
+    /* ENCABEZADOS Y TÍTULOS (AZUL MARINO CORPORATIVO) */
+    h1, h2, h3, h4, h5, h6, .stApp h1, .stApp h2, .stApp h3 {
+        color: #0a2540 !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.3px;
     }
 
     /* BARRA LATERAL (SIDEBAR) ESTILO AZUL MARINO A VERDE ESMERALDA */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0a2540 0%, #003848 60%, #00a884 100%) !important;
-        color: #ffffff !important;
     }
 
     [data-testid="stSidebar"] * {
@@ -61,35 +72,72 @@ st.markdown("""
     }
 
     [data-testid="stSidebar"] .stRadio label {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 10px;
-        padding: 10px 14px;
-        transition: all 0.25s ease-in-out;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        cursor: pointer;
+        background: rgba(255, 255, 255, 0.08) !important;
+        border-radius: 10px !important;
+        padding: 10px 14px !important;
+        transition: all 0.25s ease-in-out !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        cursor: pointer !important;
     }
 
     [data-testid="stSidebar"] .stRadio label:hover {
-        background: rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.2) !important;
         transform: translateX(4px);
     }
 
-    /* Ítem seleccionado activo en el menú */
+    /* Ítem seleccionado activo en el menú lateral */
     [data-testid="stSidebar"] .stRadio [data-checked="true"] + div {
         background: #00a884 !important;
         color: #ffffff !important;
-        font-weight: bold;
-        border-radius: 10px;
-        box-shadow: 0 4px 12px rgba(0, 168, 132, 0.4);
+        font-weight: bold !important;
+        border-radius: 10px !important;
+        box-shadow: 0 4px 12px rgba(0, 168, 132, 0.4) !important;
+    }
+
+    /* CAMPOS DE ENTRADA / INPUTS Y SELECTS (CORRECCIÓN DE VISIBILIDAD DE FUENTE) */
+    .stTextInput input, .stNumberInput input, .stSelectbox select, div[data-baseweb="select"] {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+        border: 1.5px solid #cbd5e1 !important;
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+    }
+
+    .stTextInput input:focus, .stNumberInput input:focus {
+        border-color: #00a884 !important;
+        box-shadow: 0 0 0 3px rgba(0, 168, 132, 0.15) !important;
+    }
+
+    /* RADIO BUTTONS EN LA ZONA CENTRAL (MÉTODO DE BÚSQUEDA) */
+    div[role="radiogroup"] label span {
+        color: #0a2540 !important;
+        font-weight: 700 !important;
+    }
+
+    /* ALERTAS Y CUADROS DE MENSAJES (INFORMACIÓN / ADVERTENCIAS / ÉXITO) */
+    .stAlert {
+        background-color: #ffffff !important;
+        border-radius: 12px !important;
+        border-left: 6px solid #00a884 !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.04) !important;
+    }
+
+    .stAlert p, .stAlert span, .stAlert div {
+        color: #0f172a !important;
+        font-weight: 600 !important;
     }
 
     /* TARJETAS Y CONTENEDORES (CARDS) */
     .stMetric, div[data-testid="stExpander"], div.stForm {
-        background-color: #ffffff;
+        background-color: #ffffff !important;
         border-radius: 16px !important;
         padding: 18px !important;
         box-shadow: 0 4px 16px rgba(10, 37, 64, 0.05) !important;
         border: 1px solid #e2e8f0 !important;
+    }
+
+    .stMetric label, .stMetric [data-testid="stMetricValue"] {
+        color: #0a2540 !important;
     }
 
     /* BOTONES PRINCIPALES */
@@ -110,6 +158,10 @@ st.markdown("""
         box-shadow: 0 6px 16px rgba(0, 168, 132, 0.35) !important;
     }
 
+    .stButton > button p {
+        color: #ffffff !important;
+    }
+
     /* BOTONES DE DESCARGA */
     .stDownloadButton > button {
         background: linear-gradient(135deg, #0a2540 0%, #003848 100%) !important;
@@ -126,25 +178,22 @@ st.markdown("""
         transform: translateY(-2px);
     }
 
-    /* TABLAS Y DATAFRAMES */
-    div[data-testid="stDataFrame"] {
-        background-color: #ffffff;
-        border-radius: 14px;
-        padding: 8px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+    .stDownloadButton > button p {
+        color: #ffffff !important;
     }
 
-    /* ENCABEZADOS Y TÍTULOS */
-    h1, h2, h3 {
-        color: #0a2540 !important;
-        font-weight: 800 !important;
-        letter-spacing: -0.5px;
+    /* TABLAS Y DATAFRAMES */
+    div[data-testid="stDataFrame"] {
+        background-color: #ffffff !important;
+        border-radius: 14px !important;
+        padding: 8px !important;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03) !important;
     }
 
     /* PESTAÑAS (TABS) */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
-        background-color: #e2e8f0;
+        background-color: #cbd5e1 !important;
         padding: 6px;
         border-radius: 12px;
     }
@@ -152,8 +201,8 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] {
         border-radius: 8px;
         padding: 8px 16px;
-        font-weight: 600;
-        color: #475569;
+        font-weight: 700;
+        color: #0a2540 !important;
     }
 
     .stTabs [aria-selected="true"] {
@@ -1129,7 +1178,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             if figura_en_liquidez:
                 st.info(f"🏛️ **Unidad en Liquidez:** {unidad_militar}")
             else:
-                st.warning(f"🏛️ **Unidad en Liquidez:** No figura en Liquidez (Socio en {unidad_enviada_giraduria if unidad_enviada_giraduria else 'Giraduría Externas'})")
+                st.warning(f"🏛️ **Unidad en Liquidez:** No figura en Liquidez (Socio en {unidad_enviada_giraduria if unidad_enviada_giraduria else 'Giradurías Externas'})")
 
         if es_socio:
             st.markdown(f"### 🏛️ Datos de Descuento en Giraduría ({periodo_seleccionado if 'periodo_seleccionado' in locals() else 'Mes Actual'})")
