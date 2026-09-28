@@ -34,7 +34,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🎨 ESTILO VISUAL PERSONALIZADO (ALTO CONTRASTE Y MAXIMA LEGIBILIDAD)
+# 🎨 ESTILO VISUAL PERSONALIZADO Y CORRECCIONES DE LEGIBILIDAD
 # ==========================================
 st.markdown("""
 <style>
@@ -94,7 +94,22 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(0, 168, 132, 0.4) !important;
     }
 
-    /* CAMPOS DE ENTRADA / INPUTS Y SELECTS (CORRECCIÓN DE VISIBILIDAD DE FUENTE) */
+    /* 1. CORRECCIÓN DE TAMAÑO DE FUENTE EN CUADROS / MÉTRICAS (Muestra montos completos) */
+    [data-testid="stMetricValue"] {
+        font-size: 1.15rem !important;
+        font-weight: 800 !important;
+        color: #0a2540 !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
+    }
+
+    [data-testid="stMetricLabel"] {
+        font-size: 0.85rem !important;
+        font-weight: 700 !important;
+        color: #475569 !important;
+    }
+
+    /* CAMPOS DE ENTRADA / INPUTS Y SELECTS */
     .stTextInput input, .stNumberInput input, .stSelectbox select, div[data-baseweb="select"] {
         background-color: #ffffff !important;
         color: #0f172a !important;
@@ -108,13 +123,61 @@ st.markdown("""
         box-shadow: 0 0 0 3px rgba(0, 168, 132, 0.15) !important;
     }
 
-    /* RADIO BUTTONS EN LA ZONA CENTRAL (MÉTODO DE BÚSQUEDA) */
+    /* 2. CORRECCIÓN DE CAJAS DE ARCHIVOS (FILE UPLOADER - VISIBILIDAD TOTAL) */
+    [data-testid="stFileUploader"] {
+        background-color: #ffffff !important;
+        border: 2px dashed #00a884 !important;
+        border-radius: 14px !important;
+        padding: 16px !important;
+        box-shadow: 0 2px 10px rgba(0, 168, 132, 0.05) !important;
+    }
+
+    [data-testid="stFileUploader"] * {
+        color: #0f172a !important;
+    }
+
+    [data-testid="stFileUploader"] button {
+        background-color: #0a2540 !important;
+        color: #ffffff !important;
+        border-radius: 8px !important;
+        border: none !important;
+        font-weight: 700 !important;
+    }
+
+    [data-testid="stFileUploader"] button * {
+        color: #ffffff !important;
+    }
+
+    /* 3. CORRECCIÓN DE EXPANDERS / DESPLEGABLES ("Crédito N° 1 y Conceptos Sociales") */
+    div[data-testid="stExpander"] {
+        background-color: #ffffff !important;
+        border-radius: 14px !important;
+        border: 1.5px solid #cbd5e1 !important;
+        overflow: hidden !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.03) !important;
+    }
+
+    div[data-testid="stExpander"] details summary {
+        background-color: #f1f5f9 !important;
+        color: #0a2540 !important;
+        font-weight: 800 !important;
+        padding: 12px 18px !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+    }
+
+    div[data-testid="stExpander"] details summary * {
+        color: #0a2540 !important;
+        font-size: 1.05rem !important;
+        font-weight: 800 !important;
+    }
+
+    /* RADIO BUTTONS EN LA ZONA CENTRAL */
     div[role="radiogroup"] label span {
         color: #0a2540 !important;
         font-weight: 700 !important;
     }
 
-    /* ALERTAS Y CUADROS DE MENSAJES (INFORMACIÓN / ADVERTENCIAS / ÉXITO) */
+    /* ALERTAS Y CUADROS DE MENSAJES */
     .stAlert {
         background-color: #ffffff !important;
         border-radius: 12px !important;
@@ -125,19 +188,6 @@ st.markdown("""
     .stAlert p, .stAlert span, .stAlert div {
         color: #0f172a !important;
         font-weight: 600 !important;
-    }
-
-    /* TARJETAS Y CONTENEDORES (CARDS) */
-    .stMetric, div[data-testid="stExpander"], div.stForm {
-        background-color: #ffffff !important;
-        border-radius: 16px !important;
-        padding: 18px !important;
-        box-shadow: 0 4px 16px rgba(10, 37, 64, 0.05) !important;
-        border: 1px solid #e2e8f0 !important;
-    }
-
-    .stMetric label, .stMetric [data-testid="stMetricValue"] {
-        color: #0a2540 !important;
     }
 
     /* BOTONES PRINCIPALES */
@@ -155,7 +205,6 @@ st.markdown("""
     .stButton > button:hover {
         background: linear-gradient(135deg, #008f70 0%, #00755b 100%) !important;
         transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(0, 168, 132, 0.35) !important;
     }
 
     .stButton > button p {
@@ -193,7 +242,7 @@ st.markdown("""
     /* PESTAÑAS (TABS) */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
-        background-color: #cbd5e1 !important;
+        background-color: #e2e8f0 !important;
         padding: 6px;
         border-radius: 12px;
     }
