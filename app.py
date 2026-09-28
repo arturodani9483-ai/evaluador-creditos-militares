@@ -34,6 +34,137 @@ st.set_page_config(
 )
 
 # ==========================================
+# 🎨 ESTILO VISUAL PERSONALIZADO (FINTECH MODERN DESIGN)
+# ==========================================
+st.markdown("""
+<style>
+    /* Fondo principal de la app */
+    .stApp {
+        background-color: #f4f7f6;
+        color: #0f172a;
+        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    }
+
+    /* BARRA LATERAL (SIDEBAR) ESTILO AZUL MARINO A VERDE ESMERALDA */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0a2540 0%, #003848 60%, #00a884 100%) !important;
+        color: #ffffff !important;
+    }
+
+    [data-testid="stSidebar"] * {
+        color: #ffffff !important;
+    }
+
+    /* Radio buttons en sidebar (Navegación) */
+    [data-testid="stSidebar"] .stRadio > div {
+        gap: 8px;
+    }
+
+    [data-testid="stSidebar"] .stRadio label {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+        padding: 10px 14px;
+        transition: all 0.25s ease-in-out;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        cursor: pointer;
+    }
+
+    [data-testid="stSidebar"] .stRadio label:hover {
+        background: rgba(255, 255, 255, 0.15);
+        transform: translateX(4px);
+    }
+
+    /* Ítem seleccionado activo en el menú */
+    [data-testid="stSidebar"] .stRadio [data-checked="true"] + div {
+        background: #00a884 !important;
+        color: #ffffff !important;
+        font-weight: bold;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0, 168, 132, 0.4);
+    }
+
+    /* TARJETAS Y CONTENEDORES (CARDS) */
+    .stMetric, div[data-testid="stExpander"], div.stForm {
+        background-color: #ffffff;
+        border-radius: 16px !important;
+        padding: 18px !important;
+        box-shadow: 0 4px 16px rgba(10, 37, 64, 0.05) !important;
+        border: 1px solid #e2e8f0 !important;
+    }
+
+    /* BOTONES PRINCIPALES */
+    .stButton > button {
+        background: linear-gradient(135deg, #00a884 0%, #008f70 100%) !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        border-radius: 10px !important;
+        border: none !important;
+        padding: 10px 22px !important;
+        box-shadow: 0 4px 12px rgba(0, 168, 132, 0.25) !important;
+        transition: all 0.2s ease-in-out !important;
+    }
+
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #008f70 0%, #00755b 100%) !important;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(0, 168, 132, 0.35) !important;
+    }
+
+    /* BOTONES DE DESCARGA */
+    .stDownloadButton > button {
+        background: linear-gradient(135deg, #0a2540 0%, #003848 100%) !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        border-radius: 10px !important;
+        border: none !important;
+        padding: 10px 22px !important;
+        box-shadow: 0 4px 12px rgba(10, 37, 64, 0.2) !important;
+    }
+
+    .stDownloadButton > button:hover {
+        background: linear-gradient(135deg, #003848 0%, #00a884 100%) !important;
+        transform: translateY(-2px);
+    }
+
+    /* TABLAS Y DATAFRAMES */
+    div[data-testid="stDataFrame"] {
+        background-color: #ffffff;
+        border-radius: 14px;
+        padding: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+    }
+
+    /* ENCABEZADOS Y TÍTULOS */
+    h1, h2, h3 {
+        color: #0a2540 !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.5px;
+    }
+
+    /* PESTAÑAS (TABS) */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #e2e8f0;
+        padding: 6px;
+        border-radius: 12px;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-weight: 600;
+        color: #475569;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background-color: #ffffff !important;
+        color: #00a884 !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ==========================================
 # 🔐 CONFIGURACIÓN DE USUARIOS Y PERMISOS
 # ==========================================
 USUARIOS_AUTORIZADOS = {
@@ -61,7 +192,6 @@ if "total_monto_auditoria" not in st.session_state:
 if "total_beneficiarios_auditoria" not in st.session_state:
     st.session_state["total_beneficiarios_auditoria"] = 0
 
-# Estado para créditos adicionales en Estado de Cuenta
 if "num_creditos_adicionales" not in st.session_state:
     st.session_state["num_creditos_adicionales"] = 0
 
@@ -189,7 +319,6 @@ def limpiar_texto(val):
         return ""
 
 def limpiar_texto_pdf(val):
-    """Sanitiza el texto eliminando emojis o caracteres no compatibles con latin-1 para FPDF"""
     s = limpiar_texto(val)
     try:
         return s.encode('latin-1', 'ignore').decode('latin-1')
@@ -595,7 +724,7 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
     pdf.cell(0, 8, "1. DATOS DEL MILITAR / SOCIO", ln=True)
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(100, 6, f"Nombre y Apellido: {limpiar_texto_pdf(nombre)}")
-    pdf.cell(90, 6, f"Cédula N°: {ci}", ln=True)
+    pdf.cell(90, 6, f"Cedula N°: {ci}", ln=True)
     pdf.cell(100, 6, f"Unidad / Dependencia: {limpiar_texto_pdf(unidad)}", ln=True)
     pdf.ln(4)
 
@@ -603,25 +732,25 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
     pdf.cell(0, 8, "2. RESUMEN DE LIQUIDEZ Y HABERES", ln=True)
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(100, 6, f"Sueldo Presupuestado: Gs. {formato_guarani(presupuestado)}")
-    pdf.cell(90, 6, f"Descuento Jubilación: Gs. {formato_guarani(jubilacion)}", ln=True)
+    pdf.cell(90, 6, f"Descuento Jubilacion: Gs. {formato_guarani(jubilacion)}", ln=True)
     pdf.cell(100, 6, f"Total Descuentos: Gs. {formato_guarani(tot_desc)}")
-    pdf.cell(90, 6, f"Líquido Real Actual: Gs. {formato_guarani(liquido)}", ln=True)
-    pdf.cell(100, 6, f"Límite Disponible (50%): Gs. {formato_guarani(limite)}", ln=True)
+    pdf.cell(90, 6, f"Liquido Real Actual: Gs. {formato_guarani(liquido)}", ln=True)
+    pdf.cell(100, 6, f"Limite Disponible (50%): Gs. {formato_guarani(limite)}", ln=True)
     pdf.ln(4)
 
     pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(0, 8, "3. EVALUACIÓN DE CRÉDITO Y DICTAMEN", ln=True)
+    pdf.cell(0, 8, "3. EVALUACION DE CREDITO Y DICTAMEN", ln=True)
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(100, 6, f"Cuota Solicitada: Gs. {formato_guarani(cuota)}")
     pdf.cell(90, 6, f"Estado de Factibilidad: {limpiar_texto_pdf(estado)}", ln=True)
     
     if obs:
         pdf.ln(2)
-        pdf.multi_cell(0, 6, f"Observación / Dictamen de Giraduría: {limpiar_texto_pdf(obs)}")
+        pdf.multi_cell(0, 6, f"Observacion / Dictamen de Giraduria: {limpiar_texto_pdf(obs)}")
 
     pdf.ln(15)
     pdf.cell(0, 6, "_____________________________", align="C", ln=True)
-    pdf.cell(0, 6, "Firma / Sello de Recepción", align="C", ln=True)
+    pdf.cell(0, 6, "Firma / Sello de Recepcion", align="C", ln=True)
 
     return bytes(pdf.output())
 
@@ -632,35 +761,35 @@ class PDFSimulacionPrestamo(FPDF):
     def header(self):
         fecha_local = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
         self.set_font("Helvetica", "B", 13)
-        self.cell(0, 7, "SICOC - SIMULACIÓN OFICIAL DE PRÉSTAMO Y AMORTIZACIÓN", border=0, ln=True, align="C")
+        self.cell(0, 7, "SICOC - SIMULACION OFICIAL DE PRESTAMO Y AMORTIZACION", border=0, ln=True, align="C")
         self.set_font("Helvetica", "I", 9)
-        self.cell(0, 4, f"Fecha de emisión: {fecha_local}", border=0, ln=True, align="C")
+        self.cell(0, 4, f"Fecha de emision: {fecha_local}", border=0, ln=True, align="C")
         self.ln(3)
 
     def footer(self):
         self.set_y(-15)
         self.set_font("Helvetica", "I", 8)
-        self.cell(0, 10, f"Página {self.page_no()}", align="C")
+        self.cell(0, 10, f"Pagina {self.page_no()}", align="C")
 
 def generar_pdf_simulacion_prestamo(nombre_s, ci_s, tipo_p, monto_cap, plazo_m, tasa_i, cap_gastos, plus_1, tot_pagar, df_plan_pagos):
     pdf = PDFSimulacionPrestamo()
     pdf.add_page()
 
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 6, "1. DATOS DEL SOLICITANTE Y CONDICIONES DEL CRÉDITO", ln=True)
+    pdf.cell(0, 6, "1. DATOS DEL SOLICITANTE Y CONDICIONES DEL CREDITO", ln=True)
     pdf.set_font("Helvetica", "", 9)
     pdf.cell(100, 5, f"Socio: {limpiar_texto_pdf(nombre_s)}")
-    pdf.cell(90, 5, f"Cédula: {ci_s}", ln=True)
-    pdf.cell(100, 5, f"Tipo de Crédito: {limpiar_texto_pdf(tipo_p)}")
+    pdf.cell(90, 5, f"Cedula: {ci_s}", ln=True)
+    pdf.cell(100, 5, f"Tipo de Credito: {limpiar_texto_pdf(tipo_p)}")
     pdf.cell(90, 5, f"Plazo: {plazo_m} meses", ln=True)
     pdf.cell(100, 5, f"Capital Solicitado: Gs. {formato_guarani(monto_cap)}")
-    pdf.cell(90, 5, f"Tasa de Interés: {tasa_i}% Anual", ln=True)
+    pdf.cell(90, 5, f"Tasa de Interes: {tasa_i}% Anual", ln=True)
     pdf.cell(100, 5, f"Capital con Gastos: Gs. {formato_guarani(cap_gastos)}")
     pdf.cell(90, 5, f"Total a Pagar: Gs. {formato_guarani(tot_pagar)}", ln=True)
     pdf.ln(4)
 
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 6, "2. PLAN DE AMORTIZACIÓN Y VENCIMIENTOS", ln=True)
+    pdf.cell(0, 6, "2. PLAN DE AMORTIZACION Y VENCIMIENTOS", ln=True)
     pdf.set_font("Helvetica", "B", 8)
 
     w_col = [12, 25, 26, 26, 26, 22, 28, 25]
@@ -729,7 +858,6 @@ def generar_pdf_estado_cuenta(nombre_s, ci_s, u_gir, u_liq, ult_desc, tot_credit
     pdf.cell(0, 6, "3. DIAGNOSTICO DE REFINANCIACION Y PLAZO RECOMENDADO", ln=True)
     pdf.set_font("Helvetica", "", 9)
     
-    # Sanitizar resultado_eval para evitar error FPDFUnicodeEncodingException
     res_clean = limpiar_texto_pdf(resultado_eval)
     pdf.multi_cell(0, 5, f"Estado / Veredicto: {res_clean}")
     
@@ -2357,7 +2485,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
                             "Cumple Límite": "✅ APROBADO"
                         })
 
-                # Si hay más de 4 opciones aprobadas, tomar las primeras 4 (las más convenientes/cortas)
                 eval_filas_filtradas = eval_filas_aprobadas[:4] if len(eval_filas_aprobadas) > 0 else []
 
                 if tope_comparacion < 100000:
@@ -2376,7 +2503,7 @@ elif opcion == "🧮 Calculadora de Préstamos":
 
                 if eval_filas_filtradas:
                     df_eval_plazos = pd.DataFrame(eval_filas_filtradas)
-                    st.markdown("##### 📋 Opciones Recomendadas Aprobradas (Mejores alternativas):")
+                    st.markdown("##### 📋 Opciones Recomendadas Aprobadas (Mejores alternativas):")
                     st.dataframe(df_eval_plazos, use_container_width=True)
 
                 st.markdown("---")
