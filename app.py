@@ -61,6 +61,10 @@ if "total_monto_auditoria" not in st.session_state:
 if "total_beneficiarios_auditoria" not in st.session_state:
     st.session_state["total_beneficiarios_auditoria"] = 0
 
+# Estado para créditos adicionales en Estado de Cuenta
+if "num_creditos_adicionales" not in st.session_state:
+    st.session_state["num_creditos_adicionales"] = 0
+
 def pantalla_login():
     st.markdown("# 🏛️ SICOC")
     st.markdown("### Sistema Integrado de Control Operativo y Crediticio")
@@ -500,9 +504,6 @@ def guardar_historial_giradurias(df_nuevo, periodo_tag):
     df_unificado.to_csv(DB_HISTORIAL_GIRADURIAS_FILE, index=False)
     st.cache_data.clear()
 
-# ==========================================
-# 📱 FUNCIÓN CORREGIDA: LECTURA COMPLETA DE TODAS LAS PESTAÑAS DE TELÉFONOS
-# ==========================================
 @st.cache_data(ttl=2592000)
 def cargar_telefonos():
     if os.path.exists(DB_TELEFONOS_FILE):
@@ -512,7 +513,7 @@ def cargar_telefonos():
 
             for sheet in xls.sheet_names:
                 df_sheet = pd.read_excel(DB_TELEFONOS_FILE, sheet_name=sheet, header=None, dtype=str)
-                current_unit = str(sheet).strip() # Nombre por defecto de la pestaña
+                current_unit = str(sheet).strip()
                 
                 for idx, row in df_sheet.iterrows():
                     col0 = str(row[0]).strip() if pd.notna(row[0]) else ""
@@ -521,12 +522,10 @@ def cargar_telefonos():
                     col3 = str(row[3]).strip() if pd.notna(row[3]) else ""
                     col4 = str(row[4]).strip() if pd.notna(row[4]) else ""
 
-                    # Detectar cambio de unidad dentro de la hoja si existe
                     if 'UNIDAD:' in col0.upper():
                         current_unit = f"{col0} {col1}".strip()
                         continue
 
-                    # Omitir cabeceras o filas vacías
                     if col2 != "" and not col2.upper().startswith("NOMBRE") and not col2.upper().startswith("APELLIDO"):
                         nro_soc = col0.split('\n')[0].strip()
                         ci_clean = limpiar_ci(col3)
@@ -687,6 +686,63 @@ def generar_pdf_simulacion_prestamo(nombre_s, ci_s, tipo_p, monto_cap, plazo_m, 
 
     return bytes(pdf.output())
 
+class PDFEstadoCuentaRefinanciacion(FPDF):
+    def __init__(self):
+        super().__init__(orientation='P', unit='mm', format='A4')
+
+    def header(self):
+        fecha_local = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
+        self.set_font("Helvetica", "B", 13)
+        self.cell(0, 7, "SICOC - ESTADO DE CUENTA Y PROPUESTA DE REFINANCIACIÓN", border=0, ln=True, align="C")
+        self.set_font("Helvetica", "I", 9)
+        self.cell(0, 4, f"Fecha de emisión: {fecha_local}", border=0, ln=True, align="C")
+        self.ln(3)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Helvetica", "I", 8)
+        self.cell(0, 10, f"Página {self.page_no()}", align="C")
+
+def generar_pdf_estado_cuenta(nombre_s, ci_s, u_gir, u_liq, ult_desc, tot_creditos, tot_sociales, efectivo_retira, total_cancelar, resultado_eval, plazo_rec, cuota_rec):
+    pdf = PDFEstadoCuentaRefinanciacion()
+    pdf.add_page()
+
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, "1. DATOS DEL SOCIO Y REFERENCIAS DE DEUDAS", ln=True)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(100, 5, f"Socio: {nombre_s}")
+    pdf.cell(90, 5, f"Cédula: {ci_s}", ln=True)
+    pdf.cell(100, 5, f"Giraduría Registrada: {u_gir}")
+    pdf.cell(90, 5, f"Unidad Liquidez: {u_liq}", ln=True)
+    pdf.cell(100, 5, f"Último Descuento Cobrado: Gs. {formato_guarani(ult_desc)}", ln=True)
+    pdf.ln(3)
+
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, "2. RESUMEN DE SALDOS Y CONCEPTOS A CANCELAR", ln=True)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(100, 5, f"Subtotal Créditos / Deudas: Gs. {formato_guarani(tot_creditos)}")
+    pdf.cell(90, 5, f"Subtotal Conceptos Sociales: Gs. {formato_guarani(tot_sociales)}", ln=True)
+    pdf.cell(100, 5, f"Efectivo Adicional a Retirar: Gs. {formato_guarani(efectivo_retira)}")
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(90, 5, f"TOTAL DEUDA BASE: Gs. {formato_guarani(total_cancelar)}", ln=True)
+    pdf.ln(3)
+
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, "3. DIAGNÓSTICO DE REFINANCIACIÓN Y PLAZO RECOMENDADO", ln=True)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.multi_cell(0, 5, f"Estado / Veredicto: {resultado_eval}")
+    if plazo_rec > 0:
+        pdf.cell(100, 5, f"Plazo Recomendado: {plazo_rec} meses (Máximo 54 meses)")
+        pdf.cell(90, 5, f"Cuota Estimada: Gs. {formato_guarani(cuota_rec)}", ln=True)
+
+    pdf.ln(15)
+    pdf.cell(95, 6, "_____________________________", align="C")
+    pdf.cell(95, 6, "_____________________________", align="C", ln=True)
+    pdf.cell(95, 5, "Firma del Socio", align="C")
+    pdf.cell(95, 5, "Firma / Sello de Recepción", align="C", ln=True)
+
+    return bytes(pdf.output())
+
 class PDFReporteIncidencias(FPDF):
     def __init__(self):
         super().__init__(orientation='L', unit='mm', format='A4')
@@ -829,7 +885,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                             df_liquidez['emp_ci_clean'] = df_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
                         matches_l = df_liquidez[df_liquidez['emp_ci_clean'] == ci_socio_encontrada]
 
-    else: # Por Nombre / Apellido
+    else:
         nombre_input = st.text_input("Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
         if nombre_input:
             if not df_liquidez.empty:
@@ -993,7 +1049,6 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             elif 0 < monto_cobrado < monto_enviado:
                 st.warning("⚠️ **ALERTA DE PAGO PARCIAL DETECTADO**")
                 
-                # REGLA ESPECIAL MENOR A 100.000 GS.
                 if monto_cobrado < 100000:
                     st.error(
                         f"🔴 **REFINANCIACIÓN NO FACTIBLE (Monto Cobrado < Gs. 100.000):**\n"
@@ -1176,7 +1231,7 @@ elif opcion == "📱 Giradurías Teléfonos":
                         f"Te informamos que en tu descuento del mes se registró un ajuste al límite disponible. "
                         f"Te ofrecemos la posibilidad de reestructurar tu saldo para regularizar tu cuenta. ¡Consultanos para más detalles!"
                     )
-                else: # Arthuro
+                else:
                     plantilla_sel = st.selectbox("Seleccionar Plantilla a Enviar:", ["Plantilla 1 (Con Opción Efectivo - Martín)", "Plantilla 1 (Estándar - Estela)", "Mensaje Personalizado"])
                     if "Con Opción Efectivo" in plantilla_sel:
                         plantilla_nro = 1
@@ -1207,7 +1262,6 @@ elif opcion == "📱 Giradurías Teléfonos":
                 else:
                     st.warning("⚠️ El socio no posee un número de teléfono válido registrado.")
 
-            # HISTORIAL Y BITÁCORA DE CONTACTOS DE LA FICHA
             st.markdown("---")
             st.subheader("📜 Bitácora e Historial de Contactos Realizados")
             df_hist_cont = cargar_historial_contactos()
@@ -1289,7 +1343,6 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
             is_jubilado_u = "JUBILAD" in u_gir_clean or "JUBILADOS" in unidad_liq.upper()
             is_cf2_u = "CF2" in u_gir_clean or "CFN2" in u_gir_clean
 
-            # REGLA DE EVALUACIÓN DE REFINANCIACIÓN (LÍMITE GS. 100.000)
             if cobrado < 100000:
                 diagnostico = "REFINANCIACIÓN NO FACTIBLE (Tope < Gs. 100.000) - Emitir notificación formal si registra mora"
             elif is_cf2_u:
@@ -1815,305 +1868,536 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
             st.write(f"📊 **Totales calculados para la Nota:** Monto Gs. `{formato_guarani(m_tot)}` | Beneficiarios: `{c_ben}`")
 
 # ==========================================
-# 🧮 MÓDULO 6: CALCULADORA FINANCIERA DE PRÉSTAMOS
+# 🧮 MÓDULO 6: CALCULADORA FINANCIERA DE PRÉSTAMOS Y ESTADO DE CUENTA
 # ==========================================
 elif opcion == "🧮 Calculadora de Préstamos":
-    st.subheader("🧮 Calculadora Financiera y Simulador de Préstamos")
+    st.subheader("🧮 Módulo de Operaciones Financieras, Préstamos y Estado de Cuenta")
     
-    st.markdown("### 👤 Datos y Cruce del Socio Solicitante")
-    
-    socio_input = st.text_input("🔍 Ingrese Número de Socio o Cédula (C.I.):", placeholder="Ej: 9946 o 5955048").strip()
-    socio_input_clean = limpiar_ci(socio_input)
+    sub_tab1, sub_tab2 = st.tabs(["🧮 Simulación de Préstamos", "📊 Estado de Cuenta y Refinanciación Automática"])
 
-    socio_encontrado = False
-    nombre_socio = "No asignado / Cliente General"
-    ci_socio = "S/D"
-    ultimo_descuento_cobrado = 0.0
-    unidad_giraduria_socio = "Sin Giraduría"
-    unidad_liquidez_socio = "Sin Liquidez"
-    margen_libre_liquidez = 0.0
+    # -------------------------------------------------------------
+    # PESTAÑA 1: SIMULADOR DE PRÉSTAMOS ESTÁNDAR
+    # -------------------------------------------------------------
+    with sub_tab1:
+        st.markdown("### 👤 Datos y Cruce del Socio Solicitante")
+        
+        socio_input = st.text_input("🔍 Ingrese Número de Socio o Cédula (C.I.):", placeholder="Ej: 9946 o 5955048", key="calc_socio_search").strip()
+        socio_input_clean = limpiar_ci(socio_input)
 
-    if socio_input:
-        if not df_giradurias.empty:
-            match_g = pd.DataFrame()
-            if 'emp_ci_clean' in df_giradurias.columns:
-                match_g = df_giradurias[df_giradurias['emp_ci_clean'] == socio_input_clean]
-            if match_g.empty and 'nro_socio' in df_giradurias.columns:
-                match_g = df_giradurias[df_giradurias['nro_socio'].astype(str).str.strip() == socio_input.strip()]
-            
-            if not match_g.empty:
-                r_g = match_g.iloc[0]
-                socio_encontrado = True
-                nombre_socio = limpiar_texto(r_g.get('emp_nomape', 'S/D'))
-                ci_socio = limpiar_ci(r_g.get('emp_ci', '0'))
-                ultimo_descuento_cobrado = limpiar_monto(r_g.get('monto_cobrado', 0))
-                unidad_giraduria_socio = limpiar_texto(r_g.get('unidad_nombre_oficial', 'Sin Asignar'))
+        socio_encontrado = False
+        nombre_socio = "No asignado / Cliente General"
+        ci_socio = "S/D"
+        ultimo_descuento_cobrado = 0.0
+        unidad_giraduria_socio = "Sin Giraduría"
+        unidad_liquidez_socio = "Sin Liquidez"
+        margen_libre_liquidez = 0.0
 
-        if not df_liquidez.empty and (ci_socio != "S/D" or socio_input_clean):
-            search_ci = ci_socio if ci_socio != "S/D" else socio_input_clean
-            col_l = 'emp_ci_clean' if 'emp_ci_clean' in df_liquidez.columns else 'emp_ci'
-            match_l = df_liquidez[df_liquidez[col_l].astype(str).apply(limpiar_ci) == search_ci]
-            
-            if not match_l.empty:
-                r_l = match_l.iloc[0]
-                if not socio_encontrado:
-                    nombre_socio = limpiar_texto(r_l.get('emp_nomape', 'S/D'))
-                    ci_socio = search_ci
-                    socio_encontrado = True
-                unidad_liquidez_socio = limpiar_texto(r_l.get('UNIDAD', 'Sin Liquidez'))
-                
-                presup = limpiar_monto(r_l.get('presupuestado', 0))
-                jub = limpiar_monto(r_l.get('jubilacion', 0))
-                tot_d = jub + limpiar_monto(r_l.get('giraduria', 0)) + limpiar_monto(r_l.get('descuento_cf2', 0)) + limpiar_monto(r_l.get('judicial', 0))
-                margen_libre_liquidez = ((presup - jub) / 2.0) - (tot_d - jub)
-
-    if socio_encontrado:
-        st.success(f"👤 **Socio:** {nombre_socio} | **C.I.:** {ci_socio}")
-        c_s1, c_s2, c_s3, c_s4 = st.columns(4)
-        c_s1.metric("Último Descuento Cobrado", f"Gs. {formato_guarani(ultimo_descuento_cobrado)}")
-        c_s2.metric("Giraduría Registrada", unidad_giraduria_socio)
-        c_s3.metric("Unidad Oficial (Liquidez)", unidad_liquidez_socio)
-        c_s4.metric("Margen Libre (50%)", f"Gs. {formato_guarani(margen_libre_liquidez)}")
-    else:
         if socio_input:
-            st.warning("⚠️ No se encontraron registros coincidentes para ese Número de Socio o Cédula.")
-        else:
-            st.info("💡 Ingresá el N° de Socio arriba para cruzar automáticamente sus descuentos y margen de liquidez.")
-
-    st.markdown("---")
-
-    tipos_prestamo = {
-        '1': {'nombre': 'Préstamo Ordinario', 'comision': 0},
-        '19': {'nombre': 'Préstamo Cumpleaños', 'comision': 0},
-        '9': {'nombre': 'Consumo Electrodoméstico', 'comision': '5%'},
-        '71': {'nombre': 'Refinanciación Especial', 'comision': 100000},
-        '21': {'nombre': 'Consumo Celular', 'comision': '5%'},
-        '8': {'nombre': 'Premium', 'comision': 0},
-        '65': {'nombre': 'Crédito Aniversario', 'comision': 0}, 
-        '18': {'nombre': 'Credito Amigo', 'comision': 0},
-        '78': {'nombre': 'Crédito Vehículo', 'comision': '2%'}, 
-        '33': {'nombre': 'Prestamo Jubilados', 'comision': 0}
-    }
-
-    col_c1, col_c2 = st.columns(2)
-
-    with col_c1:
-        monto_input_raw = st.text_input("Monto Capital (Gs.):", value="0", placeholder="Ej: 2.000.000")
-        monto_capital = limpiar_monto(monto_input_raw)
-        
-        if monto_capital > 0:
-            st.caption(f"💵 **Monto ingresado:** Gs. {formato_guarani(monto_capital)}")
-
-        plazo = st.number_input("Plazo (meses):", min_value=1, value=12, step=1)
-        
-        codigo_p = st.selectbox(
-            "Código / Tipo de Préstamo:", 
-            options=list(tipos_prestamo.keys()),
-            format_func=lambda x: f"Código {x}: {tipos_prestamo[x]['nombre']}"
-        )
-        nombre_p = tipos_prestamo[codigo_p]['nombre']
-
-        es_refinanciacion_natura = (codigo_p == '71' or 'REFINANCIACI' in nombre_p.upper())
-        
-        if not es_refinanciacion_natura:
-            modalidad_credito = st.radio(
-                "📌 Modalidad de Crédito:", 
-                ["🔄 Con Cancelación / Refinanciación", "➕ Crédito Paralelo"], 
-                horizontal=True
-            )
-        else:
-            modalidad_credito = "🔄 Con Cancelación / Refinanciación"
-            st.info("ℹ️ Este tipo de crédito opera automáticamente como **Refinanciación / Cancelación**.")
-
-        tasa_auto = 20.0
-        if nombre_p == 'Préstamo Ordinario':
-            tasa_auto = 26.0
-        elif nombre_p == 'Premium':
-            tasa_auto = 24.0
-        elif nombre_p in ['Préstamo Cumpleaños', 'Consumo Electrodoméstico', 'Consumo Celular', 'Credito Amigo']:
-            tasa_auto = 20.0
-        elif nombre_p == 'Crédito Aniversario':
-            if 1 <= plazo <= 12: tasa_auto = 9.0
-            elif 13 <= plazo <= 18: tasa_auto = 12.0
-            elif 19 <= plazo <= 24: tasa_auto = 14.0
-            elif 25 <= plazo <= 36: tasa_auto = 16.0
-        elif nombre_p == 'Crédito Vehículo':
-            tasa_auto = 18.0 if 0 < plazo <= 48 else 20.0
-        elif nombre_p == 'Refinanciación Especial':
-            tasa_auto = 18.0
-
-        tasa_interes = st.number_input("Tasa de Interés Anual (%):", value=tasa_auto, step=0.5)
-
-    with col_c2:
-        gastos_admin = st.number_input("Gastos Administrativos (%):", value=2.5, step=0.1)
-        fondo_proteccion = st.number_input("Fondo de Protección (%):", value=1.0, step=0.1)
-
-        com_def = tipos_prestamo[codigo_p]['comision']
-        if isinstance(com_def, (int, float)):
-            comision_val = float(com_def)
-        elif isinstance(com_def, str) and com_def.endswith('%'):
-            pct = float(com_def.replace('%', '')) / 100.0
-            comision_val = monto_capital * pct
-        else:
-            comision_val = 0.0
-
-        st.text_input("Comisión (Gs.):", value=f"Gs. {formato_guarani(comision_val)}", disabled=True)
-
-        fecha_hoy = obtener_fecha_hora_local().date()
-        fecha_desembolso = st.date_input("Fecha Desembolso:", value=fecha_hoy)
-
-        fecha_primer_venc_default = obtener_ultimo_dia_mes_siguiente(fecha_desembolso)
-        fecha_primer_venc = st.date_input("Fecha 1er Vencimiento:", value=fecha_primer_venc_default)
-
-    if st.button("🚀 Calcular Plan de Pagos y Evaluar Crédito", use_container_width=True):
-        if monto_capital <= 0:
-            st.error("Por favor ingresá un Monto Capital mayor a 0 para calcular el plan de pagos.")
-        else:
-            capital_con_gastos = monto_capital + (monto_capital * (gastos_admin / 100.0)) + (monto_capital * (fondo_proteccion / 100.0)) + comision_val
-            diff_days = (fecha_primer_venc - fecha_desembolso).days
-            
-            plus = 0.0
-            if diff_days > 30:
-                plus = (capital_con_gastos * (tasa_interes / 100.0) / 365.0) * (diff_days - 30)
-
-            tasa_mensual = (tasa_interes / 100.0) / 12.0
-
-            if tasa_mensual > 0:
-                cuota = capital_con_gastos * (tasa_mensual * ((1 + tasa_mensual) ** plazo)) / (((1 + tasa_mensual) ** plazo) - 1)
-            else:
-                cuota = capital_con_gastos / plazo
-
-            st.markdown("---")
-            st.subheader("🎯 Resultado de la Evaluación Automática")
-
-            es_con_cancelacion = "Con Cancelación" in modalidad_credito
-
-            # EVALUACIÓN CON REGLA MÍNIMA DE GS. 100.000
-            if es_con_cancelacion and cuota <= ultimo_descuento_cobrado and ultimo_descuento_cobrado >= 100000:
-                st.success(
-                    f"✅ **CRÉDITO APROBADO (REFINANCIACIÓN / CANCELACIÓN FACTIBLE)**\n\n"
-                    f"La cuota calculada (**Gs. {formato_guarani(cuota)}**) es menor o igual al último descuento del socio (**Gs. {formato_guarani(ultimo_descuento_cobrado)}**)."
-                )
-            elif cuota <= margen_libre_liquidez and margen_libre_liquidez >= 100000:
-                st.success(
-                    f"✅ **CRÉDITO APROBADO (DENTRO DEL MARGEN LIBRE DE LIQUIDEZ)**\n\n"
-                    f"La cuota de **Gs. {formato_guarani(cuota)}** entra cómodamente en el margen libre de liquidez de las FF.AA. (**Gs. {formato_guarani(margen_libre_liquidez)}**)."
-                )
-            elif ultimo_descuento_cobrado < 100000 and margen_libre_liquidez < 100000:
-                st.error(
-                    f"🔴 **REFINANCIACIÓN NO FACTIBLE (MARGEN INSUFICIENTE < Gs. 100.000)**\n\n"
-                    f"El monto máximo disponible (**Gs. {formato_guarani(max(ultimo_descuento_cobrado, margen_libre_liquidez))}**) es inferior al mínimo operativo requerido.\n"
-                    f"📌 **Recomendación:** No es viablemente factible reestructurar. En caso de mora, proceder con notificación formal."
-                )
-            else:
-                unidad_destino = unidad_liquidez_socio if unidad_liquidez_socio not in ["Sin Liquidez", ""] else "CF2"
-                st.error(
-                    f"⚠️ **ANALIZAR / CONSULTAR CON UNIDAD: {unidad_destino}**\n\n"
-                    f"La cuota calculada (**Gs. {formato_guarani(cuota)}**) supera tanto el último descuento (**Gs. {formato_guarani(ultimo_descuento_cobrado)}**) "
-                    f"como el margen libre de liquidez (**Gs. {formato_guarani(margen_libre_liquidez)}**)."
-                )
-
-            plan_pagos = []
-            saldo_restante = capital_con_gastos
-            total_pagar = 0.0
-
-            intereses_1 = saldo_restante * tasa_mensual
-            amort_1 = cuota - intereses_1
-            cuota_final_1 = cuota + plus
-            saldo_restante -= amort_1
-            total_pagar += cuota_final_1
-
-            plan_pagos.append({
-                'Nro. Cuota': 1,
-                'Fecha Vencimiento': fecha_primer_venc.strftime('%d/%m/%Y'),
-                'Cuota (Gs.)': formato_guarani(cuota_final_1),
-                'Amortización': formato_guarani(amort_1),
-                'Intereses': formato_guarani(intereses_1),
-                'Plus (Gs.)': formato_guarani(plus),
-                'Saldo (Gs.)': formato_guarani(saldo_restante),
-                'Ahorro (Gs.)': '0'
-            })
-
-            curr_venc = fecha_primer_venc
-            for i in range(2, plazo + 1):
-                next_m = curr_venc.month + 1
-                next_y = curr_venc.year
-                if next_m > 12:
-                    next_m = 1
-                    next_y += 1
+            if not df_giradurias.empty:
+                match_g = pd.DataFrame()
+                if 'emp_ci_clean' in df_giradurias.columns:
+                    match_g = df_giradurias[df_giradurias['emp_ci_clean'] == socio_input_clean]
+                if match_g.empty and 'nro_socio' in df_giradurias.columns:
+                    match_g = df_giradurias[df_giradurias['nro_socio'].astype(str).str.strip() == socio_input.strip()]
                 
-                max_d = calendar.monthrange(next_y, next_m)[1]
-                day = min(curr_venc.day, max_d)
-                curr_venc = datetime(next_y, next_m, day).date()
+                if not match_g.empty:
+                    r_g = match_g.iloc[0]
+                    socio_encontrado = True
+                    nombre_socio = limpiar_texto(r_g.get('emp_nomape', 'S/D'))
+                    ci_socio = limpiar_ci(r_g.get('emp_ci', '0'))
+                    ultimo_descuento_cobrado = limpiar_monto(r_g.get('monto_cobrado', 0))
+                    unidad_giraduria_socio = limpiar_texto(r_g.get('unidad_nombre_oficial', 'Sin Asignar'))
 
-                intereses = saldo_restante * tasa_mensual
-                amort = cuota - intereses
-                saldo_restante -= amort
-                cuota_final = cuota
+            if not df_liquidez.empty and (ci_socio != "S/D" or socio_input_clean):
+                search_ci = ci_socio if ci_socio != "S/D" else socio_input_clean
+                col_l = 'emp_ci_clean' if 'emp_ci_clean' in df_liquidez.columns else 'emp_ci'
+                match_l = df_liquidez[df_liquidez[col_l].astype(str).apply(limpiar_ci) == search_ci]
+                
+                if not match_l.empty:
+                    r_l = match_l.iloc[0]
+                    if not socio_encontrado:
+                        nombre_socio = limpiar_texto(r_l.get('emp_nomape', 'S/D'))
+                        ci_socio = search_ci
+                        socio_encontrado = True
+                    unidad_liquidez_socio = limpiar_texto(r_l.get('UNIDAD', 'Sin Liquidez'))
+                    
+                    presup = limpiar_monto(r_l.get('presupuestado', 0))
+                    jub = limpiar_monto(r_l.get('jubilacion', 0))
+                    tot_d = jub + limpiar_monto(r_l.get('giraduria', 0)) + limpiar_monto(r_l.get('descuento_cf2', 0)) + limpiar_monto(r_l.get('judicial', 0))
+                    margen_libre_liquidez = ((presup - jub) / 2.0) - (tot_d - jub)
 
-                if i == plazo:
-                    if saldo_restante < 0:
-                        amort += saldo_restante
-                        cuota_final = amort + intereses
-                    saldo_restante = 0.0
+        if socio_encontrado:
+            st.success(f"👤 **Socio:** {nombre_socio} | **C.I.:** {ci_socio}")
+            c_s1, c_s2, c_s3, c_s4 = st.columns(4)
+            c_s1.metric("Último Descuento Cobrado", f"Gs. {formato_guarani(ultimo_descuento_cobrado)}")
+            c_s2.metric("Giraduría Registrada", unidad_giraduria_socio)
+            c_s3.metric("Unidad Oficial (Liquidez)", unidad_liquidez_socio)
+            c_s4.metric("Margen Libre (50%)", f"Gs. {formato_guarani(margen_libre_liquidez)}")
+        else:
+            if socio_input:
+                st.warning("⚠️ No se encontraron registros coincidentes para ese Número de Socio o Cédula.")
+            else:
+                st.info("💡 Ingresá el N° de Socio arriba para cruzar automáticamente sus descuentos y margen de liquidez.")
 
-                total_pagar += cuota_final
+        st.markdown("---")
+
+        tipos_prestamo = {
+            '1': {'nombre': 'Préstamo Ordinario', 'comision': 0},
+            '19': {'nombre': 'Préstamo Cumpleaños', 'comision': 0},
+            '9': {'nombre': 'Consumo Electrodoméstico', 'comision': '5%'},
+            '71': {'nombre': 'Refinanciación Especial', 'comision': 100000},
+            '21': {'nombre': 'Consumo Celular', 'comision': '5%'},
+            '8': {'nombre': 'Premium', 'comision': 0},
+            '65': {'nombre': 'Crédito Aniversario', 'comision': 0}, 
+            '18': {'nombre': 'Credito Amigo', 'comision': 0},
+            '78': {'nombre': 'Crédito Vehículo', 'comision': '2%'}, 
+            '33': {'nombre': 'Prestamo Jubilados', 'comision': 0}
+        }
+
+        col_c1, col_c2 = st.columns(2)
+
+        with col_c1:
+            monto_input_raw = st.text_input("Monto Capital (Gs.):", value="0", placeholder="Ej: 2.000.000", key="monto_cap_p1")
+            monto_capital = limpiar_monto(monto_input_raw)
+            
+            if monto_capital > 0:
+                st.caption(f"💵 **Monto ingresado:** Gs. {formato_guarani(monto_capital)}")
+
+            plazo = st.number_input("Plazo (meses):", min_value=1, max_value=54, value=12, step=1, key="plazo_p1")
+            
+            codigo_p = st.selectbox(
+                "Código / Tipo de Préstamo:", 
+                options=list(tipos_prestamo.keys()),
+                format_func=lambda x: f"Código {x}: {tipos_prestamo[x]['nombre']}",
+                key="codigo_p1"
+            )
+            nombre_p = tipos_prestamo[codigo_p]['nombre']
+
+            es_refinanciacion_natura = (codigo_p == '71' or 'REFINANCIACI' in nombre_p.upper())
+            
+            if not es_refinanciacion_natura:
+                modalidad_credito = st.radio(
+                    "📌 Modalidad de Crédito:", 
+                    ["🔄 Con Cancelación / Refinanciación", "➕ Crédito Paralelo"], 
+                    horizontal=True,
+                    key="mod_p1"
+                )
+            else:
+                modalidad_credito = "🔄 Con Cancelación / Refinanciación"
+                st.info("ℹ️ Este tipo de crédito opera automáticamente como **Refinanciación / Cancelación**.")
+
+            tasa_auto = 20.0
+            if nombre_p == 'Préstamo Ordinario':
+                tasa_auto = 26.0
+            elif nombre_p == 'Premium':
+                tasa_auto = 24.0
+            elif nombre_p in ['Préstamo Cumpleaños', 'Consumo Electrodoméstico', 'Consumo Celular', 'Credito Amigo']:
+                tasa_auto = 20.0
+            elif nombre_p == 'Crédito Aniversario':
+                if 1 <= plazo <= 12: tasa_auto = 9.0
+                elif 13 <= plazo <= 18: tasa_auto = 12.0
+                elif 19 <= plazo <= 24: tasa_auto = 14.0
+                elif 25 <= plazo <= 36: tasa_auto = 16.0
+            elif nombre_p == 'Crédito Vehículo':
+                tasa_auto = 18.0 if 0 < plazo <= 48 else 20.0
+            elif nombre_p == 'Refinanciación Especial':
+                tasa_auto = 18.0
+
+            tasa_interes = st.number_input("Tasa de Interés Anual (%):", value=tasa_auto, step=0.5, key="tasa_p1")
+
+        with col_c2:
+            gastos_admin = st.number_input("Gastos Administrativos (%):", value=2.5, step=0.1, key="gastos_p1")
+            fondo_proteccion = st.number_input("Fondo de Protección (%):", value=1.0, step=0.1, key="fondo_p1")
+
+            com_def = tipos_prestamo[codigo_p]['comision']
+            if isinstance(com_def, (int, float)):
+                comision_val = float(com_def)
+            elif isinstance(com_def, str) and com_def.endswith('%'):
+                pct = float(com_def.replace('%', '')) / 100.0
+                comision_val = monto_capital * pct
+            else:
+                comision_val = 0.0
+
+            st.text_input("Comisión (Gs.):", value=f"Gs. {formato_guarani(comision_val)}", disabled=True, key="com_p1")
+
+            fecha_hoy = obtener_fecha_hora_local().date()
+            fecha_desembolso = st.date_input("Fecha Desembolso:", value=fecha_hoy, key="fdes_p1")
+
+            fecha_primer_venc_default = obtener_ultimo_dia_mes_siguiente(fecha_desembolso)
+            fecha_primer_venc = st.date_input("Fecha 1er Vencimiento:", value=fecha_primer_venc_default, key="fvenc_p1")
+
+        if st.button("🚀 Calcular Plan de Pagos y Evaluar Crédito", use_container_width=True, key="btn_calc_p1"):
+            if monto_capital <= 0:
+                st.error("Por favor ingresá un Monto Capital mayor a 0 para calcular el plan de pagos.")
+            else:
+                capital_con_gastos = monto_capital + (monto_capital * (gastos_admin / 100.0)) + (monto_capital * (fondo_proteccion / 100.0)) + comision_val
+                diff_days = (fecha_primer_venc - fecha_desembolso).days
+                
+                plus = 0.0
+                if diff_days > 30:
+                    plus = (capital_con_gastos * (tasa_interes / 100.0) / 365.0) * (diff_days - 30)
+
+                tasa_mensual = (tasa_interes / 100.0) / 12.0
+
+                if tasa_mensual > 0:
+                    cuota = capital_con_gastos * (tasa_mensual * ((1 + tasa_mensual) ** plazo)) / (((1 + tasa_mensual) ** plazo) - 1)
+                else:
+                    cuota = capital_con_gastos / plazo
+
+                st.markdown("---")
+                st.subheader("🎯 Resultado de la Evaluación Automática")
+
+                es_con_cancelacion = "Con Cancelación" in modalidad_credito
+
+                if es_con_cancelacion and cuota <= ultimo_descuento_cobrado and ultimo_descuento_cobrado >= 100000:
+                    st.success(
+                        f"✅ **CRÉDITO APROBADO (REFINANCIACIÓN / CANCELACIÓN FACTIBLE)**\n\n"
+                        f"La cuota calculada (**Gs. {formato_guarani(cuota)}**) es menor o igual al último descuento del socio (**Gs. {formato_guarani(ultimo_descuento_cobrado)}**)."
+                    )
+                elif cuota <= margen_libre_liquidez and margen_libre_liquidez >= 100000:
+                    st.success(
+                        f"✅ **CRÉDITO APROBADO (DENTRO DEL MARGEN LIBRE DE LIQUIDEZ)**\n\n"
+                        f"La cuota de **Gs. {formato_guarani(cuota)}** entra cómodamente en el margen libre de liquidez de las FF.AA. (**Gs. {formato_guarani(margen_libre_liquidez)}**)."
+                    )
+                elif ultimo_descuento_cobrado < 100000 and margen_libre_liquidez < 100000:
+                    st.error(
+                        f"🔴 **REFINANCIACIÓN NO FACTIBLE (MARGEN INSUFICIENTE < Gs. 100.000)**\n\n"
+                        f"El monto máximo disponible (**Gs. {formato_guarani(max(ultimo_descuento_cobrado, margen_libre_liquidez))}**) es inferior al mínimo operativo requerido.\n"
+                        f"📌 **Recomendación:** No es viablemente factible reestructurar. En caso de mora, proceder con notificación formal."
+                    )
+                else:
+                    unidad_destino = unidad_liquidez_socio if unidad_liquidez_socio not in ["Sin Liquidez", ""] else "CF2"
+                    st.error(
+                        f"⚠️ **ANALIZAR / CONSULTAR CON UNIDAD: {unidad_destino}**\n\n"
+                        f"La cuota calculada (**Gs. {formato_guarani(cuota)}**) supera tanto el último descuento (**Gs. {formato_guarani(ultimo_descuento_cobrado)}**) "
+                        f"como el margen libre de liquidez (**Gs. {formato_guarani(margen_libre_liquidez)}**)."
+                    )
+
+                plan_pagos = []
+                saldo_restante = capital_con_gastos
+                total_pagar = 0.0
+
+                intereses_1 = saldo_restante * tasa_mensual
+                amort_1 = cuota - intereses_1
+                cuota_final_1 = cuota + plus
+                saldo_restante -= amort_1
+                total_pagar += cuota_final_1
 
                 plan_pagos.append({
-                    'Nro. Cuota': i,
-                    'Fecha Vencimiento': curr_venc.strftime('%d/%m/%Y'),
-                    'Cuota (Gs.)': formato_guarani(cuota_final),
-                    'Amortización': formato_guarani(amort),
-                    'Intereses': formato_guarani(intereses),
-                    'Plus (Gs.)': '0',
+                    'Nro. Cuota': 1,
+                    'Fecha Vencimiento': fecha_primer_venc.strftime('%d/%m/%Y'),
+                    'Cuota (Gs.)': formato_guarani(cuota_final_1),
+                    'Amortización': formato_guarani(amort_1),
+                    'Intereses': formato_guarani(intereses_1),
+                    'Plus (Gs.)': formato_guarani(plus),
                     'Saldo (Gs.)': formato_guarani(saldo_restante),
                     'Ahorro (Gs.)': '0'
                 })
 
-            df_plan = pd.DataFrame(plan_pagos)
+                curr_venc = fecha_primer_venc
+                for i in range(2, plazo + 1):
+                    next_m = curr_venc.month + 1
+                    next_y = curr_venc.year
+                    if next_m > 12:
+                        next_m = 1
+                        next_y += 1
+                    
+                    max_d = calendar.monthrange(next_y, next_m)[1]
+                    day = min(curr_venc.day, max_d)
+                    curr_venc = datetime(next_y, next_m, day).date()
 
-            st.markdown("---")
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Capital con Gastos", f"Gs. {formato_guarani(capital_con_gastos)}")
-            m2.metric("Plus Primera Cuota", f"Gs. {formato_guarani(plus)}")
-            m3.metric("Total a Pagar", f"Gs. {formato_guarani(total_pagar)}")
+                    intereses = saldo_restante * tasa_mensual
+                    amort = cuota - intereses
+                    saldo_restante -= amort
+                    cuota_final = cuota
 
-            st.subheader("📋 Tabla Amortización de Pagos")
-            st.dataframe(df_plan, use_container_width=True)
+                    if i == plazo:
+                        if saldo_restante < 0:
+                            amort += saldo_restante
+                            cuota_final = amort + intereses
+                        saldo_restante = 0.0
 
-            col_down1, col_down2 = st.columns(2)
+                    total_pagar += cuota_final
 
-            with col_down1:
-                out_plan = io.BytesIO()
-                with pd.ExcelWriter(out_plan, engine='openpyxl') as writer:
-                    df_plan.to_excel(writer, sheet_name='Simulacion_Prestamo', index=False)
+                    plan_pagos.append({
+                        'Nro. Cuota': i,
+                        'Fecha Vencimiento': curr_venc.strftime('%d/%m/%Y'),
+                        'Cuota (Gs.)': formato_guarani(cuota_final),
+                        'Amortización': formato_guarani(amort),
+                        'Intereses': formato_guarani(intereses),
+                        'Plus (Gs.)': '0',
+                        'Saldo (Gs.)': formato_guarani(saldo_restante),
+                        'Ahorro (Gs.)': '0'
+                    })
+
+                df_plan = pd.DataFrame(plan_pagos)
+
+                st.markdown("---")
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Capital con Gastos", f"Gs. {formato_guarani(capital_con_gastos)}")
+                m2.metric("Plus Primera Cuota", f"Gs. {formato_guarani(plus)}")
+                m3.metric("Total a Pagar", f"Gs. {formato_guarani(total_pagar)}")
+
+                st.subheader("📋 Tabla Amortización de Pagos")
+                st.dataframe(df_plan, use_container_width=True)
+
+                col_down1, col_down2 = st.columns(2)
+
+                with col_down1:
+                    out_plan = io.BytesIO()
+                    with pd.ExcelWriter(out_plan, engine='openpyxl') as writer:
+                        df_plan.to_excel(writer, sheet_name='Simulacion_Prestamo', index=False)
+                    
+                    st.download_button(
+                        label="📥 Descargar Simulación de Préstamo (.XLSX)",
+                        data=out_plan.getvalue(),
+                        file_name=f"Simulacion_Prestamo_{int(monto_capital)}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
+
+                with col_down2:
+                    pdf_sim_bytes = generar_pdf_simulacion_prestamo(
+                        nombre_socio,
+                        ci_socio,
+                        f"Código {codigo_p} - {nombre_p}",
+                        monto_capital,
+                        plazo,
+                        tasa_interes,
+                        capital_con_gastos,
+                        plus,
+                        total_pagar,
+                        df_plan
+                    )
+
+                    st.download_button(
+                        label="📄 Descargar Simulación de Préstamo (.PDF)",
+                        data=pdf_sim_bytes,
+                        file_name=f"Simulacion_Prestamo_{ci_socio}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+
+    # -------------------------------------------------------------
+    # PESTAÑA 2: ESTADO DE CUENTA Y REFINANCIACIÓN AUTOMÁTICA
+    # -------------------------------------------------------------
+    with sub_tab2:
+        st.markdown("### 📊 Estado de Cuenta y Evaluación de Refinanciación Automática")
+        
+        soc_search_ec = st.text_input("🔍 Buscar Socio (Cédula, N° Socio o Nombre):", placeholder="Ej: 5511820 o 9946", key="ec_socio_search").strip()
+        soc_search_clean = limpiar_ci(soc_search_ec)
+
+        socio_ec_found = False
+        nom_ec = "Cliente General / No registrado"
+        ci_ec = "S/D"
+        ult_desc_ec = 0.0
+        u_gir_ec = "Sin Giraduría"
+        u_liq_ec = "Sin Liquidez"
+        margen_ec = 0.0
+
+        if soc_search_ec:
+            if not df_giradurias.empty:
+                m_g_ec = pd.DataFrame()
+                if 'emp_ci_clean' in df_giradurias.columns:
+                    m_g_ec = df_giradurias[df_giradurias['emp_ci_clean'] == soc_search_clean]
+                if m_g_ec.empty and 'nro_socio' in df_giradurias.columns:
+                    m_g_ec = df_giradurias[df_giradurias['nro_socio'].astype(str).str.strip() == soc_search_ec.strip()]
+                if m_g_ec.empty and 'emp_nomape' in df_giradurias.columns:
+                    m_g_ec = df_giradurias[df_giradurias['emp_nomape'].astype(str).str.contains(soc_search_ec, case=False, na=False)]
+
+                if not m_g_ec.empty:
+                    r_g_ec = m_g_ec.iloc[0]
+                    socio_ec_found = True
+                    nom_ec = limpiar_texto(r_g_ec.get('emp_nomape', 'S/D'))
+                    ci_ec = limpiar_ci(r_g_ec.get('emp_ci', '0'))
+                    ult_desc_ec = limpiar_monto(r_g_ec.get('monto_cobrado', 0))
+                    u_gir_ec = limpiar_texto(r_g_ec.get('unidad_nombre_oficial', 'Sin Asignar'))
+
+            if not df_liquidez.empty and (ci_ec != "S/D" or soc_search_clean):
+                s_ci_ec = ci_ec if ci_ec != "S/D" else soc_search_clean
+                col_l_ec = 'emp_ci_clean' if 'emp_ci_clean' in df_liquidez.columns else 'emp_ci'
+                m_l_ec = df_liquidez[df_liquidez[col_l_ec].astype(str).apply(limpiar_ci) == s_ci_ec]
                 
-                st.download_button(
-                    label="📥 Descargar Simulación de Préstamo (.XLSX)",
-                    data=out_plan.getvalue(),
-                    file_name=f"Simulacion_Prestamo_{int(monto_capital)}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
+                if not m_l_ec.empty:
+                    r_l_ec = m_l_ec.iloc[0]
+                    if not socio_ec_found:
+                        nom_ec = limpiar_texto(r_l_ec.get('emp_nomape', 'S/D'))
+                        ci_ec = s_ci_ec
+                        socio_ec_found = True
+                    u_liq_ec = limpiar_texto(r_l_ec.get('UNIDAD', 'Sin Liquidez'))
+                    
+                    presup_e = limpiar_monto(r_l_ec.get('presupuestado', 0))
+                    jub_e = limpiar_monto(r_l_ec.get('jubilacion', 0))
+                    tot_d_e = jub_e + limpiar_monto(r_l_ec.get('giraduria', 0)) + limpiar_monto(r_l_ec.get('descuento_cf2', 0)) + limpiar_monto(r_l_ec.get('judicial', 0))
+                    margen_ec = ((presup_e - jub_e) / 2.0) - (tot_d_e - jub_e)
+
+        if socio_ec_found:
+            st.success(f"👤 **Socio Ficha:** {nom_ec} | **C.I.:** {ci_ec}")
+            c_e1, c_e2, c_e3, c_e4 = st.columns(4)
+            c_e1.metric("Último Descuento Cobrado", f"Gs. {formato_guarani(ult_desc_ec)}")
+            c_e2.metric("Giraduría Asignada", u_gir_ec)
+            c_e3.metric("Unidad Liquidez (FF.AA.)", u_liq_ec)
+            c_e4.metric("Margen Disponible (50%)", f"Gs. {formato_guarani(margen_ec)}")
+        else:
+            if soc_search_ec:
+                st.warning("⚠️ No se encontraron registros coincidentes para la búsqueda.")
+            else:
+                st.info("💡 Buscá a un socio para sincronizar su último descuento y límites de liquidez.")
+
+        st.markdown("---")
+        st.markdown("#### 💳 1. Detalle de Créditos y Deudas Sociales del Socio")
+
+        # PRIMER CRÉDITO PRINCIPAL
+        with st.expander("📌 Crédito N° 1 y Conceptos Sociales Fijos", expanded=True):
+            col_cr1_a, col_cr1_b = st.columns(2)
+            with col_cr1_a:
+                nro_credito_1 = st.text_input("N° de Crédito Principal:", value="001", key="ec_nro_c1")
+                cap_adeudado_1 = limpiar_monto(st.text_input("Capital Adeudado (Gs.):", value="0", key="ec_cap_c1"))
+                int_vencido_1 = limpiar_monto(st.text_input("Intereses Vencidos (Gs.):", value="0", key="ec_intv_c1"))
+                int_moratorio_1 = limpiar_monto(st.text_input("Interés Moratorio (Gs.):", value="0", key="ec_intm_c1"))
+                int_punitorio_1 = limpiar_monto(st.text_input("Interés Punitorio (Gs.):", value="0", key="ec_intp_c1"))
+
+            with col_cr1_b:
+                st.markdown("**Conceptos Sociales (Única aplicación):**")
+                m_aporte = limpiar_monto(st.text_input("Aporte (Gs.):", value="0", key="ec_soc_aporte"))
+                m_mantenimiento = limpiar_monto(st.text_input("Mantenimiento Local Social (Gs.):", value="0", key="ec_soc_mant"))
+                m_solidaridad = limpiar_monto(st.text_input("Solidaridad (Gs.):", value="0", key="ec_soc_solid"))
+                m_sorteo = limpiar_monto(st.text_input("Sorteo (Gs.):", value="0", key="ec_soc_sorteo"))
+
+        subtotal_credito_1 = cap_adeudado_1 + int_vencido_1 + int_moratorio_1 + int_punitorio_1
+        total_sociales = m_aporte + m_mantenimiento + m_solidaridad + m_sorteo
+
+        # MANEJO DINÁMICO DE CRÉDITOS ADICIONALES
+        col_btn_add, col_btn_rem = st.columns([2, 2])
+        with col_btn_add:
+            if st.button("➕ Agregar Otro Crédito Adicional", use_container_width=True):
+                st.session_state["num_creditos_adicionales"] += 1
+                st.rerun()
+        with col_btn_rem:
+            if st.session_state["num_creditos_adicionales"] > 0:
+                if st.button("🗑️ Eliminar Último Crédito Adicional", use_container_width=True):
+                    st.session_state["num_creditos_adicionales"] -= 1
+                    st.rerun()
+
+        subtotales_creditos_adicionales = 0.0
+
+        for i in range(st.session_state["num_creditos_adicionales"]):
+            idx_cred = i + 2
+            with st.expander(f"📌 Crédito Adicional N° {idx_cred}", expanded=True):
+                c_a1, c_a2 = st.columns(2)
+                with c_a1:
+                    nro_cred_i = st.text_input(f"N° de Crédito #{idx_cred}:", value=f"00{idx_cred}", key=f"ec_nro_c_{idx_cred}")
+                    cap_adeud_i = limpiar_monto(st.text_input(f"Capital Adeudado #{idx_cred} (Gs.):", value="0", key=f"ec_cap_c_{idx_cred}"))
+                with c_a2:
+                    int_venc_i = limpiar_monto(st.text_input(f"Intereses Vencidos #{idx_cred} (Gs.):", value="0", key=f"ec_intv_c_{idx_cred}"))
+                    int_mora_i = limpiar_monto(st.text_input(f"Interés Moratorio #{idx_cred} (Gs.):", value="0", key=f"ec_intm_c_{idx_cred}"))
+                    int_puni_i = limpiar_monto(st.text_input(f"Interés Punitorio #{idx_cred} (Gs.):", value="0", key=f"ec_intp_c_{idx_cred}"))
+
+                subtotales_creditos_adicionales += (cap_adeud_i + int_venc_i + int_mora_i + int_puni_i)
+
+        total_todos_creditos = subtotal_credito_1 + subtotales_creditos_adicionales
+
+        st.markdown("---")
+        st.markdown("#### 💵 2. Retiro de Efectivo Adicional y Deuda Total")
+
+        col_ef1, col_ef2 = st.columns(2)
+        with col_ef1:
+            retira_efectivo = st.checkbox("💵 ¿Desea retirar dinero en efectivo adicional?", value=False, key="chk_retira_efectivo")
+            if retira_efectivo:
+                monto_efectivo_retira = limpiar_monto(st.text_input("Monto en Efectivo a Retirar (Gs.):", value="0", key="ec_efectivo_val"))
+            else:
+                monto_efectivo_retira = 0.0
+
+        with col_ef2:
+            monto_deuda_base_total = total_todos_creditos + total_sociales + monto_efectivo_retira
+            st.metric("Total Deuda / Base Refinanciación", f"Gs. {formato_guarani(monto_deuda_base_total)}")
+
+        st.markdown("---")
+        st.markdown("#### ⚙️ 3. Condicionamiento del Nuevo Crédito Refinanciado")
+
+        c_p_ref1, c_p_ref2, c_p_ref3 = st.columns(3)
+        with c_p_ref1:
+            tasa_refinanciacion = st.number_input("Tasa de Interés Refinanciación (% Anual):", value=18.0, step=0.5, key="ec_tasa_ref")
+        with c_p_ref2:
+            gastos_refinanciacion = st.number_input("Gastos Admin. + Fondo Protección (%):", value=3.5, step=0.1, key="ec_gastos_ref")
+        with c_p_ref3:
+            comision_fija_ref = st.number_input("Comisión Fija Refinanciación (Gs.):", value=100000.0, step=10000.0, key="ec_com_ref")
+
+        monto_capital_refinanciar = monto_deuda_base_total + (monto_deuda_base_total * (gastos_refinanciacion / 100.0)) + comision_fija_ref
+
+        if st.button("🚀 Analizar Plazo Óptimo y Evaluar Refinanciación", use_container_width=True, key="btn_evaluar_refinanciacion"):
+            if monto_deuda_base_total <= 0:
+                st.error("Por favor ingresá saldos de deuda mayores a Gs. 0 para analizar el estado de cuenta.")
+            else:
+                st.markdown("---")
+                st.subheader("🤖 Diagnóstico Automático de Plazo y Factibilidad")
+
+                tope_comparacion = ult_desc_ec if ult_desc_ec > 0 else margen_ec
+                
+                plazos_disponibles = [12, 18, 24, 30, 36, 42, 48, 54] # HASTA 54 MESES MÁXIMO
+                tasa_m_ref = (tasa_refinanciacion / 100.0) / 12.0
+
+                plazo_optimo = 0
+                cuota_optima = 0.0
+                eval_filas = []
+
+                for p in plazos_disponibles:
+                    if tasa_m_ref > 0:
+                        c_m = monto_capital_refinanciar * (tasa_m_ref * ((1 + tasa_m_ref) ** p)) / (((1 + tasa_m_ref) ** p) - 1)
+                    else:
+                        c_m = monto_capital_refinanciar / p
+
+                    cumple = (c_m <= tope_comparacion) and (tope_comparacion >= 100000)
+                    if cumple and plazo_optimo == 0:
+                        plazo_optimo = p
+                        cuota_optima = c_m
+
+                    eval_filas.append({
+                        "Plazo (Meses)": f"{p} meses",
+                        "Cuota Calculada (Gs.)": f"Gs. {formato_guarani(c_m)}",
+                        "Límite Socio (Gs.)": f"Gs. {formato_guarani(tope_comparacion)}",
+                        "Cumple Límite": "✅ APROBADO" if cumple else "❌ SUPERA MÁXIMO"
+                    })
+
+                df_eval_plazos = pd.DataFrame(eval_filas)
+
+                if tope_comparacion < 100000:
+                    resultado_txt = "🔴 REFINANCIACIÓN NO FACTIBLE (Límite / Último descuento < Gs. 100.000). Se sugiere proceder a notificación de pago si hay mora."
+                    st.error(resultado_txt)
+                elif plazo_optimo > 0:
+                    resultado_txt = f"✅ REFINANCIACIÓN APROBADA A {plazo_optimo} MESES con una cuota recomendada de Gs. {formato_guarani(cuota_optima)} (dentro del tope de Gs. {formato_guarani(tope_comparacion)})."
+                    st.success(
+                        f"🎯 **REFINANCIACIÓN FACTIBLE Y RECOMENDADA:**\n\n"
+                        f"Para que el socio pague una cuota menor o igual a su último descuento (**Gs. {formato_guarani(tope_comparacion)}**), "
+                        f"la refinanciación debe estructurarse a **{plazo_optimo} meses** con una cuota mensual de **Gs. {formato_guarani(cuota_optima)}**."
+                    )
+                else:
+                    resultado_txt = f"⚠️ REFINANCIACIÓN NO FACTIBLE A PLAZO MÁXIMO DE 54 MESES. La cuota mínima posible supera el último descuento del socio (Gs. {formato_guarani(tope_comparacion)})."
+                    st.error(resultado_txt)
+
+                st.markdown("##### 📋 Tabla Comparativa por Plazos (Hasta 54 Meses):")
+                st.dataframe(df_eval_plazos, use_container_width=True)
+
+                st.markdown("---")
+                pdf_ec_bytes = generar_pdf_estado_cuenta(
+                    nom_ec,
+                    ci_ec,
+                    u_gir_ec,
+                    u_liq_ec,
+                    ult_desc_ec,
+                    total_todos_creditos,
+                    total_sociales,
+                    monto_efectivo_retira,
+                    monto_deuda_base_total,
+                    resultado_txt,
+                    plazo_optimo,
+                    cuota_optima
                 )
 
-            with col_down2:
-                pdf_sim_bytes = generar_pdf_simulacion_prestamo(
-                    nombre_socio,
-                    ci_socio,
-                    f"Código {codigo_p} - {nombre_p}",
-                    monto_capital,
-                    plazo,
-                    tasa_interes,
-                    capital_con_gastos,
-                    plus,
-                    total_pagar,
-                    df_plan
-                )
-
                 st.download_button(
-                    label="📄 Descargar Simulación de Préstamo (.PDF)",
-                    data=pdf_sim_bytes,
-                    file_name=f"Simulacion_Prestamo_{ci_socio}.pdf",
+                    label="📄 Descargar Estado de Cuenta y Propuesta de Refinanciación (.PDF)",
+                    data=pdf_ec_bytes,
+                    file_name=f"Estado_Cuenta_Refinanciacion_{ci_ec}.pdf",
                     mime="application/pdf",
                     use_container_width=True
                 )
