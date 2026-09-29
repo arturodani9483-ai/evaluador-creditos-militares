@@ -34,7 +34,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🎨 ESTILO VISUAL PERSONALIZADO (BARRA LATERAL Y BOTÓN CERRAR SESIÓN ORIGINAL)
+# 🎨 ESTILO VISUAL PERSONALIZADO
 # ==========================================
 st.markdown("""
 <style>
@@ -51,7 +51,7 @@ st.markdown("""
         letter-spacing: -0.3px;
     }
 
-    /* RESTAURACIÓN DE LA BARRA LATERAL (SIDEBAR) */
+    /* BARRA LATERAL (SIDEBAR) */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0a2540 0%, #003848 60%, #00a884 100%) !important;
     }
@@ -66,7 +66,7 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* BOTÓN CERRAR SESIÓN EN SIDEBAR (VERDE MENTA ORIGINAL RESTAURADO) */
+    /* BOTÓN CERRAR SESIÓN EN SIDEBAR (VERDE MENTA ORIGINAL) */
     [data-testid="stSidebar"] div.stButton > button {
         background: linear-gradient(135deg, #00a884 0%, #008f70 100%) !important;
         color: #ffffff !important;
@@ -120,7 +120,7 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(0, 168, 132, 0.4) !important;
     }
 
-    /* TAMAÑO DE FUENTE EN CUADROS / MÉTRICAS (Muestra montos completos) */
+    /* TAMAÑO DE FUENTE EN CUADROS / MÉTRICAS */
     [data-testid="stMetricValue"] {
         font-size: 1.15rem !important;
         font-weight: 800 !important;
@@ -158,7 +158,7 @@ st.markdown("""
         font-weight: 600 !important;
     }
 
-    /* CAJAS DE ARCHIVOS (FILE UPLOADER - VISIBILIDAD TOTAL) */
+    /* CAJAS DE ARCHIVOS (FILE UPLOADER) */
     [data-testid="stFileUploader"] {
         background-color: #ffffff !important;
         border: 2px dashed #00a884 !important;
@@ -183,7 +183,7 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* EXPANDERS / DESPLEGABLES ("Crédito N° 1 y Conceptos Sociales") */
+    /* EXPANDERS / DESPLEGABLES */
     div[data-testid="stExpander"] {
         background-color: #ffffff !important;
         border-radius: 14px !important;
@@ -306,7 +306,9 @@ USUARIOS_AUTORIZADOS = {
     "agustin": "cobragus",
     "estela": "giradurias",
     "martin": "mllamas",
-    "yennifer": "280308"
+    "yennifer": "280308",
+    "juan": "171002",
+    "milena": "080703"
 }
 
 USUARIOS_EDITORES_DICTAMEN = ["arthuro", "estela", "martin"]
@@ -386,7 +388,7 @@ elif es_auditor_hacienda:
     st.sidebar.caption("🛡️ Rol: Auditor / Evaluador")
 elif es_editor:
     st.sidebar.caption("✍️ Rol: Editor / Evaluador")
-elif usuario_actual == "yennifer":
+elif usuario_actual in ["yennifer", "juan", "milena"]:
     st.sidebar.caption("🔍 Rol: Operador de Evaluaciones y Créditos")
 else:
     st.sidebar.caption("🔒 Rol: Consulta general")
@@ -398,14 +400,16 @@ if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
 
 st.sidebar.markdown("---")
 
-if usuario_actual == "yennifer":
+if usuario_actual in ["yennifer", "juan", "milena"]:
     opciones_menu = [
         "🔍 Evaluador de Liquidez (FF.AA.)",
+        "📥 Derivaciones Internas",
         "🧮 Calculadora de Préstamos"
     ]
 else:
     opciones_menu = [
         "🔍 Evaluador de Liquidez (FF.AA.)", 
+        "📥 Derivaciones Internas",
         "📱 Giradurías Teléfonos",
         "📊 Gestión y Diagnóstico de Cobranzas",
         "📋 Dictamen del Girador",
@@ -428,6 +432,7 @@ DB_HISTORIAL_GIRADURIAS_FILE = "base_historial_giradurias.csv"
 DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
 DB_TELEFONOS_FILE = "Giraduria con numero de telefono.xlsx"
 DB_HISTORIAL_CONTACTOS_FILE = "base_historial_contactos.csv"
+DB_DERIVACIONES_FILE = "base_derivaciones_internas.csv"
 
 MAPEO_UNIDADES = {
     "1": "1RA DC", "2": "2da DC", "3": "3ra Dc", "4": "Epoe", "5": "I CE",
@@ -841,6 +846,46 @@ def cargar_dictamenes():
 
 def guardar_dictamenes(df):
     df.to_csv(DB_DICTAMENES_FILE, index=False)
+
+# ==========================================
+# 📥 FUNCIONES DE DERIVACIONES INTERNAS
+# ==========================================
+def cargar_derivaciones():
+    if os.path.exists(DB_DERIVACIONES_FILE):
+        try:
+            return pd.read_csv(DB_DERIVACIONES_FILE, dtype=str)
+        except:
+            pass
+    return pd.DataFrame(columns=[
+        'ID_DERIVACION', 'FECHA_ENVIO', 'REMITENTE', 'DESTINATARIO', 
+        'CEDULA', 'SOCIO_NOMBRE', 'DESCRIPCION_CASO', 'PERMITE_EFECTIVO', 
+        'MONTO_EFECTIVO_AUTORIZADO', 'ESTADO_TRAMITE', 'VISTO', 'FECHA_VISTO'
+    ])
+
+def guardar_derivaciones(df):
+    df.to_csv(DB_DERIVACIONES_FILE, index=False)
+
+def crear_derivacion(remitente, destinatario, cedula, socio_nombre, desc_caso, permite_efectivo, monto_efectivo):
+    df_d = cargar_derivaciones()
+    fecha_ahora = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
+    id_new = str(len(df_d) + 1).zfill(5)
+    
+    nuevo_reg = pd.DataFrame([{
+        'ID_DERIVACION': id_new,
+        'FECHA_ENVIO': fecha_ahora,
+        'REMITENTE': remitente.lower().strip(),
+        'DESTINATARIO': destinatario.lower().strip(),
+        'CEDULA': limpiar_ci(cedula),
+        'SOCIO_NOMBRE': socio_nombre,
+        'DESCRIPCION_CASO': desc_caso,
+        'PERMITE_EFECTIVO': 'SI' if permite_efectivo else 'NO',
+        'MONTO_EFECTIVO_AUTORIZADO': str(monto_efectivo),
+        'ESTADO_TRAMITE': '🟡 En Proceso',
+        'VISTO': 'NO',
+        'FECHA_VISTO': '-'
+    }])
+    df_d = pd.concat([df_d, nuevo_reg], ignore_index=True)
+    guardar_derivaciones(df_d)
 
 def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubilacion, tot_desc, liquido, limite, cuota, estado, obs=""):
     pdf = FPDF()
@@ -1370,51 +1415,32 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                 st.info(f"💡 **Margen disponible para nuevos descuentos:** Gs. {formato_guarani(margen_deuda_restante)}")
 
         st.markdown("---")
-        st.subheader("📜 Historial de Descuentos del Socio")
+        st.subheader("📤 Derivar Caso / Ficha a un Compañero")
         
-        if es_socio and not df_fuente_giradurias.empty:
-            historial_socio = pd.DataFrame()
-            if 'emp_ci_clean' in df_fuente_giradurias.columns and cedula_militar:
-                historial_socio = df_fuente_giradurias[df_fuente_giradurias['emp_ci_clean'] == cedula_militar]
-            
-            if historial_socio.empty and 'nro_socio' in df_fuente_giradurias.columns:
-                historial_socio = df_fuente_giradurias[df_fuente_giradurias['nro_socio'].astype(str).str.strip() == str(nro_socio).strip()]
-
-            if not historial_socio.empty:
-                rows_historia = []
-                for _, h_row in historial_socio.iterrows():
-                    p_val = h_row.get('periodo', 'Mes Actual')
-                    u_env = h_row.get('unidad_nombre_oficial', 'Sin Asignar')
-                    m_env = limpiar_monto(h_row.get('monto_enviado', 0))
-                    m_cob = limpiar_monto(h_row.get('monto_cobrado', 0))
-                    m_rec = limpiar_monto(h_row.get('monto_rechazado', 0))
-                    if m_rec == 0 and m_env > m_cob:
-                        m_rec = m_env - m_cob
-
-                    if m_cob == m_env and m_env > 0:
-                        est_hist = "✅ COBRADO COMPLETO"
-                    elif m_cob > 0 and m_cob < m_env:
-                        est_hist = "⚠️ PAGO PARCIAL"
-                    elif m_env > 0 and m_cob == 0:
-                        est_hist = "🚨 RECHAZADO / NULO"
-                    else:
-                        est_hist = "REGISTRADO"
-
-                    rows_historia.append({
-                        "Período / Mes": p_val,
-                        "Giraduría Enviada": u_env,
-                        "Monto Enviado (Gs.)": f"Gs. {formato_guarani(m_env)}",
-                        "Monto Cobrado (Gs.)": f"Gs. {formato_guarani(m_cob)}",
-                        "Monto Rechazado (Gs.)": f"Gs. {formato_guarani(m_rec)}",
-                        "Estado": est_hist
-                    })
-
-                df_hist_view = pd.DataFrame(rows_historia)
-                st.dataframe(df_hist_view, use_container_width=True)
-            else:
-                st.info("No se registran antecedentes previos de descuentos en el historial.")
-        else:
-            st.info("El militar consultado no figura en el historial registrado de socios.")
+        with st.expander("📤 Enviar este Estado / Ficha Internamente a un Compañero", expanded=False):
+            usuarios_destino = [u.capitalize() for u in USUARIOS_AUTORIZADOS.keys() if u != usuario_actual]
+            col_d1, col_d2 = st.columns(2)
+            with col_d1:
+                destinatario_sel = st.selectbox("Seleccionar Compañero Destino:", usuarios_destino, key="der_dest_liq")
+                obs_derivacion = st.text_area("Observación / Indicación para el compañero:", placeholder="Ej: Revisar refinanciación / Para cobrar en giraduría", key="der_obs_liq")
+            with col_d2:
+                permite_efectivo_chk = st.checkbox("🔑 Autorizar Modificación de Retiro de Efectivo", value=False, key="der_efec_liq")
+                monto_efectivo_aut = 0.0
+                if permite_efectivo_chk:
+                    monto_efectivo_aut = limpiar_monto(st.text_input("Monto Sugerido en Efectivo (Gs.):", value="0", key="der_monto_efec_liq"))
+                
+                if st.button("🚀 Confirmar y Enviar Derivación Interna", use_container_width=True, key="btn_enviar_der_liq"):
+                    crear_derivacion(
+                        remitente=usuario_actual,
+                        destinatario=destinatario_sel.lower(),
+                        cedula=cedula_militar,
+                        socio_nombre=nombre,
+                        desc_caso=obs_derivacion,
+                        permite_efectivo=permite_efectivo_chk,
+                        monto_efectivo=monto_efectivo_aut
+                    )
+                    st.success(f"✅ ¡Caso derivado exitosamente a **{destinatario_sel}**!")
+                    st.rerun()
 
         dict_match = df_dictamenes[df_dictamenes['CEDULA'].astype(str).apply(limpiar_ci) == cedula_militar]
         obs_dictamen = dict_match.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_match.empty else "Sin observaciones previas."
@@ -1437,7 +1463,98 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
         st.warning("⚠️ No se encontraron resultados coincidentes en las bases de datos.")
 
 # ==========================================
-# 📱 MÓDULO 2: GIRADURÍAS TELÉFONOS
+# 📥 MÓDULO NUEVO: DERIVACIONES INTERNAS
+# ==========================================
+elif opcion == "📥 Derivaciones Internas":
+    st.subheader("📥 Bandeja de Casos y Derivaciones Internas entre Compañeros")
+    
+    df_deriv = cargar_derivaciones()
+
+    tab_der1, tab_der2 = st.tabs(["📥 Mis Casos Recibidos", "📤 Mis Casos Enviados / Auditoría Admin"])
+
+    with tab_der1:
+        mis_recibidos = df_deriv[df_deriv['DESTINATARIO'] == usuario_actual] if not df_deriv.empty else pd.DataFrame()
+        
+        if mis_recibidos.empty:
+            st.info("🟢 **Sin derivaciones pendientes:** No tenés casos asignados actualmente en tu bandeja.")
+        else:
+            st.success(f"📋 Tenés **{len(mis_recibidos)}** caso(s) asignado(s) en tu bandeja de tareas.")
+            
+            for idx, r_der in mis_recibidos.iterrows():
+                id_d = r_der.get('ID_DERIVACION', '')
+                fec_e = r_der.get('FECHA_ENVIO', '')
+                rem_e = r_der.get('REMITENTE', '').capitalize()
+                ced_e = r_der.get('CEDULA', '')
+                nom_e = r_der.get('SOCIO_NOMBRE', '')
+                obs_e = r_der.get('DESCRIPCION_CASO', '')
+                est_e = r_der.get('ESTADO_TRAMITE', '🟡 En Proceso')
+                perm_ef = r_der.get('PERMITE_EFECTIVO', 'NO') == 'SI'
+                monto_ef_aut = limpiar_monto(r_der.get('MONTO_EFECTIVO_AUTORIZADO', 0))
+                visto_status = r_der.get('VISTO', 'NO')
+
+                with st.expander(f"📌 Caso N° {id_d} | Socio: {nom_e} (C.I.: {ced_e}) - Estado: {est_e}", expanded=False):
+                    if visto_status == 'NO':
+                        f_visto_ahora = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
+                        df_deriv.loc[df_deriv['ID_DERIVACION'] == id_d, 'VISTO'] = 'SI'
+                        df_deriv.loc[df_deriv['ID_DERIVACION'] == id_d, 'FECHA_VISTO'] = f_visto_ahora
+                        guardar_derivaciones(df_deriv)
+                        st.caption(f"👀 **Visto marcado automáticamente el:** {f_visto_ahora}")
+
+                    col_r1, col_r2 = st.columns(2)
+                    with col_r1:
+                        st.markdown(f"**Enviado por:** {rem_e} el {fec_e}")
+                        st.markdown(f"**Socio / Militar:** {nom_e}")
+                        st.markdown(f"**Cédula:** {ced_e}")
+                        st.info(f"📝 **Instrucción / Nota:** {obs_e if obs_e else 'Sin nota adjunta.'}")
+
+                    with col_r2:
+                        st.markdown("### ⚙️ Gestión de Estado del Trámite")
+                        nuevo_estado = st.selectbox(
+                            "Actualizar Estado del Caso:",
+                            ["🟡 En Proceso", "🟢 Atendido", "✅ Procesado"],
+                            index=["🟡 En Proceso", "🟢 Atendido", "✅ Procesado"].index(est_e) if est_e in ["🟡 En Proceso", "🟢 Atendido", "✅ Procesado"] else 0,
+                            key=f"sel_est_{id_d}"
+                        )
+
+                        if perm_ef:
+                            st.success("🔑 **AUTORIZADO POR ADMINISTRADOR:** Podés ajustar el monto a retirar en efectivo.")
+                            monto_mod_efec = st.number_input("Monto Final a Retirar en Efectivo (Gs.):", value=monto_ef_aut, step=50000.0, key=f"inp_efec_{id_d}")
+                        else:
+                            st.warning("🔒 **RETIRO NO AUTORIZADO:** El administrador no marcó retiro de efectivo. Campo bloqueado.")
+                            monto_mod_efec = 0.0
+                            st.text_input("Monto en Efectivo:", value="Gs. 0 (Bloqueado por Admin)", disabled=True, key=f"dis_efec_{id_d}")
+
+                        if st.button("💾 Guardar Cambios del Caso", key=f"btn_save_case_{id_d}", use_container_width=True):
+                            df_deriv.loc[df_deriv['ID_DERIVACION'] == id_d, 'ESTADO_TRAMITE'] = nuevo_estado
+                            if perm_ef:
+                                df_deriv.loc[df_deriv['ID_DERIVACION'] == id_d, 'MONTO_EFECTIVO_AUTORIZADO'] = str(monto_mod_efec)
+                            guardar_derivaciones(df_deriv)
+                            st.success("✅ ¡Caso actualizado correctamente!")
+                            st.rerun()
+
+    with tab_der2:
+        st.markdown("### 📤 Historial de Derivaciones Enviadas y Control de Lectura")
+        
+        if es_admin_base:
+            st.info("⭐ **Vista de Administrador:** Podés monitorear el estado de TODAS las derivaciones del sistema.")
+            df_view_d = df_deriv.copy()
+        else:
+            df_view_d = df_deriv[df_deriv['REMITENTE'] == usuario_actual] if not df_deriv.empty else pd.DataFrame()
+
+        if df_view_d.empty:
+            st.info("No tenés derivaciones registradas en el historial.")
+        else:
+            df_formatted_d = df_view_d.copy()
+            df_formatted_d['Visto por Destinatario'] = df_formatted_d.apply(
+                lambda row: f"✅ Visto el {row['FECHA_VISTO']}" if row['VISTO'] == 'SI' else "⏳ Pendiente de Lectura", axis=1
+            )
+            df_formatted_d['Monto Efectivo'] = df_formatted_d['MONTO_EFECTIVO_AUTORIZADO'].apply(lambda x: f"Gs. {formato_guarani(limpiar_monto(x))}")
+            
+            cols_show = ['ID_DERIVACION', 'FECHA_ENVIO', 'REMITENTE', 'DESTINATARIO', 'SOCIO_NOMBRE', 'CEDULA', 'ESTADO_TRAMITE', 'Visto por Destinatario', 'PERMITE_EFECTIVO', 'Monto Efectivo', 'DESCRIPCION_CASO']
+            st.dataframe(df_formatted_d[cols_show], use_container_width=True)
+
+# ==========================================
+# 📱 MÓDULO 3: GIRADURÍAS TELÉFONOS
 # ==========================================
 elif opcion == "📱 Giradurías Teléfonos":
     st.subheader("📱 Módulo de Gestión de Contacto y Teléfonos de Socios")
@@ -1551,7 +1668,7 @@ elif opcion == "📱 Giradurías Teléfonos":
                 st.success("🟢 **Estado:** Sin contacto previo registrado en el sistema.")
 
 # ==========================================
-# 📊 MÓDULO 3: GESTIÓN DE COBRANZAS
+# 📊 MÓDULO 4: GESTIÓN DE COBRANZAS
 # ==========================================
 elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
     st.subheader("📊 Módulo de Diagnóstico de Cobranzas, Estadísticas y Reportes")
@@ -1729,7 +1846,7 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
                 st.bar_chart(data=df_metrics, x='unidad_nombre_oficial', y='% Cobrado')
 
 # ==========================================
-# 📋 MÓDULO 4: DICTAMEN DEL GIRADOR
+# 📋 MÓDULO 5: DICTAMEN DEL GIRADOR
 # ==========================================
 elif opcion == "📋 Dictamen del Girador":
     st.subheader("📋 Módulo de Registro de Dictamen de Giraduría")
@@ -1853,7 +1970,7 @@ elif opcion == "📋 Dictamen del Girador":
             )
 
 # ==========================================
-# 🛡️ MÓDULO 5: AUDITORÍA Y NOTA DE HACIENDA
+# 🛡️ MÓDULO 6: AUDITORÍA Y NOTA DE HACIENDA
 # ==========================================
 elif opcion == "🛡️ Auditoría y Cruce de Planillas":
     st.subheader("🛡️ Sistema de Auditoría y Cruce de Planillas (Hacienda)")
@@ -1861,7 +1978,7 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
     if not es_auditor_hacienda:
         st.error("🔒 **Acceso denegado:** Este módulo es exclusivo para los usuarios autorizados (`Arthuro` y `Martín`).")
     else:
-        tab1, tab2 = st.tabs(["🔍 Ejecutar Cruce y Auditoría", "✉️ Generar Nota Oficial (MEF)"])
+        tab1, tab2 = st.tabs(["🔍 Ejecutar Cruce y Auditoría", "✉️️ Generar Nota Oficial (MEF)"])
 
         with tab1:
             st.markdown("Subí las planillas en formato **Excel (.xlsx / .xls)** o **CSV (.csv)**.")
@@ -2127,7 +2244,7 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
             st.write(f"📊 **Totales calculados para la Nota:** Monto Gs. `{formato_guarani(m_tot)}` | Beneficiarios: `{c_ben}`")
 
 # ==========================================
-# 🧮 MÓDULO 6: CALCULADORA FINANCIERA DE PRÉSTAMOS Y ESTADO DE CUENTA
+# 🧮 MÓDULO 7: CALCULADORA FINANCIERA DE PRÉSTAMOS Y ESTADO DE CUENTA
 # ==========================================
 elif opcion == "🧮 Calculadora de Préstamos":
     st.subheader("🧮 Módulo de Operaciones Financieras, Préstamos y Estado de Cuenta")
@@ -2663,8 +2780,36 @@ elif opcion == "🧮 Calculadora de Préstamos":
                     use_container_width=True
                 )
 
+        st.markdown("---")
+        st.subheader("📤 Derivar Estado de Cuenta a un Compañero")
+        
+        with st.expander("📤 Enviar Estado de Cuenta Internamente", expanded=False):
+            usuarios_destino_ec = [u.capitalize() for u in USUARIOS_AUTORIZADOS.keys() if u != usuario_actual]
+            col_dec1, col_dec2 = st.columns(2)
+            with col_dec1:
+                dest_ec_sel = st.selectbox("Seleccionar Compañero Destino:", usuarios_destino_ec, key="der_dest_ec")
+                obs_ec_der = st.text_area("Observación para el compañero:", placeholder="Ej: Para confección de cheque / Verificar si autoriza retiro", key="der_obs_ec")
+            with col_dec2:
+                permite_efec_ec_chk = st.checkbox("🔑 Autorizar Modificación de Retiro de Efectivo", value=retira_efectivo if 'retira_efectivo' in locals() else False, key="der_efec_ec")
+                m_efec_ec_aut = monto_efectivo_retira if 'monto_efectivo_retira' in locals() else 0.0
+                if permite_efec_ec_chk:
+                    m_efec_ec_aut = limpiar_monto(st.text_input("Monto Sugerido en Efectivo (Gs.):", value=str(int(m_efec_ec_aut)), key="der_monto_efec_ec"))
+                
+                if st.button("🚀 Confirmar y Enviar Derivación de Estado de Cuenta", use_container_width=True, key="btn_enviar_der_ec"):
+                    crear_derivacion(
+                        remitente=usuario_actual,
+                        destinatario=dest_ec_sel.lower(),
+                        cedula=ci_ec if 'ci_ec' in locals() else "0",
+                        socio_nombre=nom_ec if 'nom_ec' in locals() else "Socio",
+                        desc_caso=obs_ec_der,
+                        permite_efectivo=permite_efec_ec_chk,
+                        monto_efectivo=m_efec_ec_aut
+                    )
+                    st.success(f"✅ ¡Estado de cuenta derivado con éxito a **{dest_ec_sel}**!")
+                    st.rerun()
+
 # ==========================================
-# 📥 MÓDULO 7: CARGAR BASE MENSUAL
+# 📥 MÓDULO 8: CARGAR BASE MENSUAL
 # ==========================================
 elif opcion == "📥 Cargar Base Mensual":
     st.subheader("📥 Administración y Carga de Bases Mensuales")
@@ -2770,8 +2915,8 @@ elif opcion == "📥 Cargar Base Mensual":
                 elif usr in USUARIOS_AUDITORIA_HACIENDA:
                     rol_txt = "🛡️ Auditor / Evaluador"
                 elif usr in USUARIOS_EDITORES_DICTAMEN:
-                    rol_txt = "✍️ Editor / Evaluador"
-                elif usr == "yennifer":
+                    rol_txt = "✍️️ Editor / Evaluador"
+                elif usr in ["yennifer", "juan", "milena"]:
                     rol_txt = "🔍 Operador de Evaluaciones y Créditos"
                 else:
                     rol_txt = "🔒 Consulta General"
