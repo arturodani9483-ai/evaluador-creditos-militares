@@ -386,7 +386,7 @@ st.sidebar.markdown(f"👤 **Usuario activo:** `{usuario_actual.capitalize()}`")
 if es_admin_base:
     st.sidebar.caption("⭐ Rol: Administrador General")
 elif es_auditor_hacienda:
-    st.sidebar.caption("🛡️️ Rol: Auditor / Evaluador")
+    st.sidebar.caption("🛡 Rol: Auditor / Evaluador")
 elif es_editor:
     st.sidebar.caption("✍️ Rol: Editor / Evaluador")
 elif usuario_actual in ["yennifer", "juan", "milena"]:
@@ -443,7 +443,7 @@ MAPEO_UNIDADES = {
     "25": "III CE", "26": "4ta DI", "27": "5ta DI", "28": "6ta DI", "29": "2da DI",
     "30": "3ra DI", "31": "Ingenieria", "32": "1ra DI",
     "35": "Comcome Oficiales", "36": "Comcome Sub Oficiales", "37": "Suprema corte", "39": "Comcome Empleados",
-    "42": "Regimiento", "44": "Sanidad", "46": "Digetren", "50": "Esc. Caballeria",
+    "42": "Regimiento", "46": "Digetren", "50": "Esc. Caballeria",
     "54": "IAEE", "62": "EIME", "70": "Batallon", "73": "CECOPAZ", "82": "Armada",
     "83": "Aerea", "86": "Policia"
 }
@@ -474,19 +474,42 @@ def limpiar_ci(val):
     except:
         return ""
 
+# ==========================================
+# 🔧 FUNCIÓN LIMPIAR_MONTO CORREGIDA (CERO MULTIPLICACIÓN EXTRA)
+# ==========================================
 def limpiar_monto(val):
     try:
-        if isinstance(val, (pd.Series, list)):
-            val = val[0] if len(val) > 0 else 0.0
-        s = str(val).replace('.', '').replace(',', '.').strip()
-        numeros = re.findall(r'[-+]?\d*\.\d+|\d+', s)
-        return float(numeros[0]) if numeros else 0.0
+        if val is None or pd.isna(val):
+            return 0.0
+        if isinstance(val, (int, float)):
+            return float(val)
+        
+        s = str(val).strip()
+        if not s:
+            return 0.0
+            
+        # Si contiene puntos de miles pero no comas (ejemplo: "1.300.000")
+        if '.' in s and ',' not in s:
+            s_clean = s.replace('.', '')
+        # Si tiene comas de decimales o miles (ejemplo: "1.300.000,00" o "1300000,00")
+        elif ',' in s and '.' in s:
+            s_clean = s.replace('.', '').replace(',', '.')
+        elif ',' in s:
+            s_clean = s.replace(',', '.')
+        else:
+            s_clean = s
+
+        numeros = re.findall(r'[-+]?\d*\.?\d+', s_clean)
+        if numeros:
+            return float(numeros[0])
+        return 0.0
     except:
         return 0.0
 
 def formato_guarani(val):
     try:
-        return f"{int(round(float(val))):,}".replace(',', '.')
+        m = limpiar_monto(val)
+        return f"{int(round(m)):,}".replace(',', '.')
     except:
         return "0"
 
@@ -849,7 +872,7 @@ def guardar_dictamenes(df):
     df.to_csv(DB_DICTAMENES_FILE, index=False)
 
 # ==========================================
-# 📥 FUNCIONES DE DERIVACIONES INTERNAS Y ESTADO COMPLETO
+# 📥 DERIVACIONES INTERNAS Y BASE DE DATOS
 # ==========================================
 def cargar_derivaciones():
     if os.path.exists(DB_DERIVACIONES_FILE):
@@ -1522,7 +1545,7 @@ elif opcion == "📥 Derivaciones Internas":
                             key=f"sel_est_{id_d}"
                         )
 
-                    # RECONSTRUCCIÓN COMPLETA Y FIEL DEL ESTADO DE CUENTA RECIBIDO
+                    # RECONSTRUCCIÓN COMPLETA DEL ESTADO DE CUENTA RECIBIDO
                     datos_ec = {}
                     try:
                         datos_ec = json.loads(json_ec_raw) if json_ec_raw and json_ec_raw != 'nan' else {}
@@ -1908,7 +1931,7 @@ elif opcion == "📋 Dictamen del Girador":
     if df_liquidez.empty and df_giradurias.empty:
         st.info("Cargá las bases de liquidez o giradurías primero.")
     else:
-        tipo_busq_g = st.radio("Buscar por:", ["💳 Cédula", "🏷️️ N° Socio", "👤 Nombre / Apellido"], horizontal=True)
+        tipo_busq_g = st.radio("Buscar por:", ["💳 Cédula", "🏷 N° Socio", "👤 Nombre / Apellido"], horizontal=True)
         matches_g = pd.DataFrame()
 
         if tipo_busq_g == "💳 Cédula":
@@ -2502,7 +2525,7 @@ elif opcion == "🧮 Calculadora de Préstamos":
                 else:
                     unidad_destino = unidad_liquidez_socio if unidad_liquidez_socio not in ["Sin Liquidez", ""] else "CF2"
                     st.error(
-                        f"⚠️ **ANALIZAR / CONSULTAR CON UNIDAD: {unidad_destino}**\n\n"
+                        f"⚠️️ **ANALIZAR / CONSULTAR CON UNIDAD: {unidad_destino}**\n\n"
                         f"La cuota calculada (**Gs. {formato_guarani(cuota)}**) supera tanto el último descuento (**Gs. {formato_guarani(ultimo_descuento_cobrado)}**) "
                         f"como el margen libre de liquidez (**Gs. {formato_guarani(margen_libre_liquidez)}**)."
                     )
@@ -2753,7 +2776,10 @@ elif opcion == "🧮 Calculadora de Préstamos":
         with col_ef1:
             retira_efectivo = st.checkbox("💵 ¿Desea retirar dinero en efectivo adicional?", value=False, key="chk_retira_efectivo")
             if retira_efectivo:
-                monto_efectivo_retira = limpiar_monto(st.text_input("Monto en Efectivo a Retirar (Gs.):", value="0", key="ec_efectivo_val"))
+                str_efec_input = st.text_input("Monto en Efectivo a Retirar (Gs.):", value="0", key="ec_efectivo_val_txt")
+                monto_efectivo_retira = limpiar_monto(str_efec_input)
+                if monto_efectivo_retira > 0:
+                    st.caption(f"💵 **Efectivo Confirmado:** Gs. {formato_guarani(monto_efectivo_retira)}")
             else:
                 monto_efectivo_retira = 0.0
 
@@ -2763,10 +2789,10 @@ elif opcion == "🧮 Calculadora de Préstamos":
 
         # ALERTA DE CHEQUE DE 20 MILLONES O MÁS EN ESTADO DE CUENTA
         if monto_deuda_base_total >= 20000000:
-            st.error(f"🚨 **¡ALERTA DE CHEQUE OBLIGATORIO!** El total del caso asciende a **Gs. {formato_guarani(monto_deuda_base_total)}** (supera o iguala los 20.000.000 Gs.). Se debe mandar a confeccionar el cheque correspondiente.")
+            st.error(f"🚨 **¡ALERTA DE CHEQUE OBLIGATORIO!** El total del caso asciende a **Gs. {formato_guarani(monto_deuda_base_total)}** (alcanza o supera los Gs. 20.000.000). Se debe mandar a confeccionar el cheque correspondiente.")
 
         st.markdown("---")
-        st.markdown("#### ⚙️ 3. Condicionamiento del Nuevo Crédito Refinanciado")
+        st.markdown("#### ⚙️️ 3. Condicionamiento del Nuevo Crédito Refinanciado")
 
         c_p_ref1, c_p_ref2, c_p_ref3 = st.columns(3)
         with c_p_ref1:
@@ -2874,7 +2900,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
                     m_efec_ec_aut = limpiar_monto(st.text_input("Monto Sugerido en Efectivo (Gs.):", value=str(int(m_efec_ec_aut)), key="der_monto_efec_ec"))
                 
                 if st.button("🚀 Confirmar y Enviar Derivación de Estado de Cuenta", use_container_width=True, key="btn_enviar_der_ec"):
-                    # CONSTRUCCIÓN DEL DICCIONARIO COMPLETO PARA GUARDAR EN JSON
                     datos_estado_cuenta_full = {
                         "creditos": creditos_lista_guardar,
                         "sociales": {
@@ -2964,7 +2989,7 @@ elif opcion == "📥 Cargar Base Mensual":
             if not df_giradurias.empty:
                 st.info(f"📊 **Estado actual:** {len(df_giradurias):,} registros en base actual.")
             else:
-                st.warning("⚠️ Sin datos de giradurías cargados actualmente.")
+                st.warning("⚠️️ Sin datos de giradurías cargados actualmente.")
 
             archivo_g = st.file_uploader("📥 Cargar Base Enviado / Cobrado Giradurías (.xlsx / .xls)", type=["xlsx", "xls"], key="u_giradurias")
             
