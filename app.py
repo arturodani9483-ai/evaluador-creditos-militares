@@ -475,7 +475,7 @@ def limpiar_ci(val):
         return ""
 
 # ==========================================
-# 🔧 FUNCIÓN LIMPIAR_MONTO CORREGIDA (CERO MULTIPLICACIÓN EXTRA)
+# 🔧 FUNCIÓN LIMPIAR_MONTO ESTRICTA (ENTEROS SIN DECIMALES)
 # ==========================================
 def limpiar_monto(val):
     try:
@@ -488,10 +488,9 @@ def limpiar_monto(val):
         if not s:
             return 0.0
             
-        # Si contiene puntos de miles pero no comas (ejemplo: "1.300.000")
+        # Limpieza estricta de separadores de miles
         if '.' in s and ',' not in s:
             s_clean = s.replace('.', '')
-        # Si tiene comas de decimales o miles (ejemplo: "1.300.000,00" o "1300000,00")
         elif ',' in s and '.' in s:
             s_clean = s.replace('.', '').replace(',', '.')
         elif ',' in s:
@@ -872,7 +871,7 @@ def guardar_dictamenes(df):
     df.to_csv(DB_DICTAMENES_FILE, index=False)
 
 # ==========================================
-# 📥 DERIVACIONES INTERNAS Y BASE DE DATOS
+# 📥 DERIVACIONES INTERNAS Y BASE DE DATOS (CORREGIDO PURE ENTERO)
 # ==========================================
 def cargar_derivaciones():
     if os.path.exists(DB_DERIVACIONES_FILE):
@@ -894,6 +893,9 @@ def crear_derivacion(remitente, destinatario, cedula, socio_nombre, desc_caso, p
     fecha_ahora = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
     id_new = str(len(df_d) + 1).zfill(5)
     
+    # FORZADO A NÚMERO ENTERO PURO (Evita que el monto total sustituya al efectivo)
+    monto_efec_entero = int(round(limpiar_monto(monto_efectivo)))
+
     json_ec = json.dumps(datos_ec_dict) if datos_ec_dict else "{}"
 
     nuevo_reg = pd.DataFrame([{
@@ -905,7 +907,7 @@ def crear_derivacion(remitente, destinatario, cedula, socio_nombre, desc_caso, p
         'SOCIO_NOMBRE': socio_nombre,
         'DESCRIPCION_CASO': desc_caso,
         'PERMITE_EFECTIVO': 'SI' if permite_efectivo else 'NO',
-        'MONTO_EFECTIVO_AUTORIZADO': str(monto_efectivo),
+        'MONTO_EFECTIVO_AUTORIZADO': str(monto_efec_entero),
         'ESTADO_TRAMITE': '🟡 En Proceso',
         'VISTO': 'NO',
         'FECHA_VISTO': '-',
@@ -1434,7 +1436,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             if total_deudas_actuales > limite_50:
                 exceso_actual = total_deudas_actuales - limite_50
                 st.warning(
-                    f"⚠️ **ATENCIÓN: Los descuentos de deudas actuales (Gs. {formato_guarani(total_deudas_actuales)}) "
+                    f"⚠️️ **ATENCIÓN: Los descuentos de deudas actuales (Gs. {formato_guarani(total_deudas_actuales)}) "
                     f"ya superan el límite del 50% por Gs. {formato_guarani(exceso_actual)}.**\n\n"
                     f"📌 **RECOMENDACIÓN:** Consultar disponibilidad con **CF2** para evaluar margen o beneficios especiales."
                 )
@@ -1452,9 +1454,9 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                 obs_derivacion = st.text_area("Observación / Indicación para el compañero:", placeholder="Ej: Revisar refinanciación / Para cobrar en giraduría", key="der_obs_liq")
             with col_d2:
                 permite_efectivo_chk = st.checkbox("🔑 Autorizar Modificación de Retiro de Efectivo", value=False, key="der_efec_liq")
-                monto_efectivo_aut = 0.0
+                monto_efectivo_aut = 0
                 if permite_efectivo_chk:
-                    monto_efectivo_aut = limpiar_monto(st.text_input("Monto Sugerido en Efectivo (Gs.):", value="0", key="der_monto_efec_liq"))
+                    monto_efectivo_aut = int(round(limpiar_monto(st.text_input("Monto Sugerido en Efectivo (Gs.):", value="0", key="der_monto_efec_liq"))))
                 
                 if st.button("🚀 Confirmar y Enviar Derivación Interna", use_container_width=True, key="btn_enviar_der_liq"):
                     crear_derivacion(
@@ -1490,7 +1492,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
         st.warning("⚠️ No se encontraron resultados coincidentes en las bases de datos.")
 
 # ==========================================
-# 📥 MÓDULO DERIVACIONES INTERNAS Y VISUALIZACIÓN DE ESTADO COMPLETO
+# 📥 MÓDULO DERIVACIONES INTERNAS (RECONSTRUCCIÓN DE EFECTIVO EXACTO)
 # ==========================================
 elif opcion == "📥 Derivaciones Internas":
     st.subheader("📥 Bandeja de Casos y Derivaciones Internas entre Compañeros")
@@ -1516,7 +1518,7 @@ elif opcion == "📥 Derivaciones Internas":
                 obs_e = r_der.get('DESCRIPCION_CASO', '')
                 est_e = r_der.get('ESTADO_TRAMITE', '🟡 En Proceso')
                 perm_ef = r_der.get('PERMITE_EFECTIVO', 'NO') == 'SI'
-                monto_ef_aut = limpiar_monto(r_der.get('MONTO_EFECTIVO_AUTORIZADO', 0))
+                monto_ef_aut = int(round(limpiar_monto(r_der.get('MONTO_EFECTIVO_AUTORIZADO', 0))))
                 visto_status = r_der.get('VISTO', 'NO')
                 json_ec_raw = r_der.get('DATOS_ESTADO_CUENTA_JSON', '{}')
 
@@ -1595,10 +1597,10 @@ elif opcion == "📥 Derivaciones Internas":
                     
                     if perm_ef:
                         st.success("🔑 **AUTORIZADO POR ADMINISTRADOR:** Podés modificar el monto a retirar en efectivo.")
-                        monto_mod_efec = st.number_input("Monto en Efectivo a Retirar (Gs.):", value=monto_ef_aut, step=50000.0, key=f"inp_efec_{id_d}")
+                        monto_mod_efec = int(round(limpiar_monto(st.text_input("Monto en Efectivo a Retirar (Gs.):", value=str(monto_ef_aut), key=f"inp_efec_{id_d}"))))
                     else:
                         st.warning("🔒 **RETIRO NO AUTORIZADO:** El administrador bloqueó el ajuste de efectivo.")
-                        monto_mod_efec = 0.0
+                        monto_mod_efec = 0
                         st.text_input("Monto en Efectivo:", value="Gs. 0 (Campo Bloqueado)", disabled=True, key=f"dis_efec_{id_d}")
 
                     if st.button("💾 Guardar Cambios del Caso", key=f"btn_save_case_{id_d}", use_container_width=True):
@@ -1625,6 +1627,8 @@ elif opcion == "📥 Derivaciones Internas":
             df_formatted_d['Visto por Destinatario'] = df_formatted_d.apply(
                 lambda row: f"✅ Visto el {row['FECHA_VISTO']}" if row['VISTO'] == 'SI' else "⏳ Pendiente de Lectura", axis=1
             )
+            
+            # FORMATO ENTERO ESTRICTO SIN DECIMALES EN LA TABLA
             df_formatted_d['Monto Efectivo'] = df_formatted_d['MONTO_EFECTIVO_AUTORIZADO'].apply(lambda x: f"Gs. {formato_guarani(limpiar_monto(x))}")
             
             cols_show = ['ID_DERIVACION', 'FECHA_ENVIO', 'REMITENTE', 'DESTINATARIO', 'SOCIO_NOMBRE', 'CEDULA', 'ESTADO_TRAMITE', 'Visto por Destinatario', 'PERMITE_EFECTIVO', 'Monto Efectivo', 'DESCRIPCION_CASO']
@@ -2525,7 +2529,7 @@ elif opcion == "🧮 Calculadora de Préstamos":
                 else:
                     unidad_destino = unidad_liquidez_socio if unidad_liquidez_socio not in ["Sin Liquidez", ""] else "CF2"
                     st.error(
-                        f"⚠️️ **ANALIZAR / CONSULTAR CON UNIDAD: {unidad_destino}**\n\n"
+                        f"⚠ **ANALIZAR / CONSULTAR CON UNIDAD: {unidad_destino}**\n\n"
                         f"La cuota calculada (**Gs. {formato_guarani(cuota)}**) supera tanto el último descuento (**Gs. {formato_guarani(ultimo_descuento_cobrado)}**) "
                         f"como el margen libre de liquidez (**Gs. {formato_guarani(margen_libre_liquidez)}**)."
                     )
@@ -2777,11 +2781,11 @@ elif opcion == "🧮 Calculadora de Préstamos":
             retira_efectivo = st.checkbox("💵 ¿Desea retirar dinero en efectivo adicional?", value=False, key="chk_retira_efectivo")
             if retira_efectivo:
                 str_efec_input = st.text_input("Monto en Efectivo a Retirar (Gs.):", value="0", key="ec_efectivo_val_txt")
-                monto_efectivo_retira = limpiar_monto(str_efec_input)
+                monto_efectivo_retira = int(round(limpiar_monto(str_efec_input)))
                 if monto_efectivo_retira > 0:
                     st.caption(f"💵 **Efectivo Confirmado:** Gs. {formato_guarani(monto_efectivo_retira)}")
             else:
-                monto_efectivo_retira = 0.0
+                monto_efectivo_retira = 0
 
         with col_ef2:
             monto_deuda_base_total = total_todos_creditos + total_sociales + monto_efectivo_retira
@@ -2792,7 +2796,7 @@ elif opcion == "🧮 Calculadora de Préstamos":
             st.error(f"🚨 **¡ALERTA DE CHEQUE OBLIGATORIO!** El total del caso asciende a **Gs. {formato_guarani(monto_deuda_base_total)}** (alcanza o supera los Gs. 20.000.000). Se debe mandar a confeccionar el cheque correspondiente.")
 
         st.markdown("---")
-        st.markdown("#### ⚙️️ 3. Condicionamiento del Nuevo Crédito Refinanciado")
+        st.markdown("#### ⚙ 3. Condicionamiento del Nuevo Crédito Refinanciado")
 
         c_p_ref1, c_p_ref2, c_p_ref3 = st.columns(3)
         with c_p_ref1:
@@ -2895,9 +2899,9 @@ elif opcion == "🧮 Calculadora de Préstamos":
                 obs_ec_der = st.text_area("Observación para el compañero:", placeholder="Ej: Para confección de cheque / Verificar si autoriza retiro", key="der_obs_ec")
             with col_dec2:
                 permite_efec_ec_chk = st.checkbox("🔑 Autorizar Modificación de Retiro de Efectivo", value=retira_efectivo if 'retira_efectivo' in locals() else False, key="der_efec_ec")
-                m_efec_ec_aut = monto_efectivo_retira if 'monto_efectivo_retira' in locals() else 0.0
+                m_efec_ec_aut = monto_efectivo_retira if 'monto_efectivo_retira' in locals() else 0
                 if permite_efec_ec_chk:
-                    m_efec_ec_aut = limpiar_monto(st.text_input("Monto Sugerido en Efectivo (Gs.):", value=str(int(m_efec_ec_aut)), key="der_monto_efec_ec"))
+                    m_efec_ec_aut = int(round(limpiar_monto(st.text_input("Monto Sugerido en Efectivo (Gs.):", value=str(int(m_efec_ec_aut)), key="der_monto_efec_ec"))))
                 
                 if st.button("🚀 Confirmar y Enviar Derivación de Estado de Cuenta", use_container_width=True, key="btn_enviar_der_ec"):
                     datos_estado_cuenta_full = {
@@ -2909,7 +2913,7 @@ elif opcion == "🧮 Calculadora de Préstamos":
                             "sorteo": m_sorteo
                         },
                         "monto_efectivo": m_efec_ec_aut,
-                        "total_deuda": monto_deuda_base_total if 'monto_deuda_base_total' in locals() else 0.0
+                        "total_deuda": monto_deuda_base_total if 'monto_deuda_base_total' in locals() else 0
                     }
 
                     crear_derivacion(
@@ -2989,7 +2993,7 @@ elif opcion == "📥 Cargar Base Mensual":
             if not df_giradurias.empty:
                 st.info(f"📊 **Estado actual:** {len(df_giradurias):,} registros en base actual.")
             else:
-                st.warning("⚠️️ Sin datos de giradurías cargados actualmente.")
+                st.warning("⚠ Sin datos de giradurías cargados actualmente.")
 
             archivo_g = st.file_uploader("📥 Cargar Base Enviado / Cobrado Giradurías (.xlsx / .xls)", type=["xlsx", "xls"], key="u_giradurias")
             
