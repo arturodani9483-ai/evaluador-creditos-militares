@@ -34,7 +34,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🎨 ESTILO VISUAL PERSONALIZADO (BARRA LATERAL ORIGINAL RESTAURADA)
+# 🎨 ESTILO VISUAL PERSONALIZADO (BARRA LATERAL Y BOTÓN CERRAR SESIÓN ORIGINAL)
 # ==========================================
 st.markdown("""
 <style>
@@ -51,12 +51,12 @@ st.markdown("""
         letter-spacing: -0.3px;
     }
 
-    /* RESTAURACIÓN EXACTA DE LA BARRA LATERAL (SIDEBAR) */
+    /* RESTAURACIÓN DE LA BARRA LATERAL (SIDEBAR) */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0a2540 0%, #003848 60%, #00a884 100%) !important;
     }
 
-    /* Forzar textos en blanco en la sidebar */
+    /* Textos generales en la sidebar */
     [data-testid="stSidebar"] *, 
     [data-testid="stSidebar"] p, 
     [data-testid="stSidebar"] label, 
@@ -64,6 +64,27 @@ st.markdown("""
     [data-testid="stSidebar"] div,
     [data-testid="stSidebar"] .stMarkdown {
         color: #ffffff !important;
+    }
+
+    /* BOTÓN CERRAR SESIÓN EN SIDEBAR (VERDE MENTA ORIGINAL RESTAURADO) */
+    [data-testid="stSidebar"] div.stButton > button {
+        background: linear-gradient(135deg, #00a884 0%, #008f70 100%) !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        border-radius: 10px !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(0, 168, 132, 0.35) !important;
+        transition: all 0.2s ease-in-out !important;
+    }
+
+    [data-testid="stSidebar"] div.stButton > button * {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
+
+    [data-testid="stSidebar"] div.stButton > button:hover {
+        background: linear-gradient(135deg, #008f70 0%, #00755b 100%) !important;
+        transform: translateY(-2px);
     }
 
     /* Botones de radio de Navegación de Módulos */
