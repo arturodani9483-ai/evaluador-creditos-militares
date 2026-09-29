@@ -386,7 +386,7 @@ st.sidebar.markdown(f"👤 **Usuario activo:** `{usuario_actual.capitalize()}`")
 if es_admin_base:
     st.sidebar.caption("⭐ Rol: Administrador General")
 elif es_auditor_hacienda:
-    st.sidebar.caption("🛡️ Rol: Auditor / Evaluador")
+    st.sidebar.caption("🛡️️ Rol: Auditor / Evaluador")
 elif es_editor:
     st.sidebar.caption("✍️ Rol: Editor / Evaluador")
 elif usuario_actual in ["yennifer", "juan", "milena"]:
@@ -486,7 +486,7 @@ def limpiar_monto(val):
 
 def formato_guarani(val):
     try:
-        return f"{int(round(val)):,}".replace(',', '.')
+        return f"{int(round(float(val))):,}".replace(',', '.')
     except:
         return "0"
 
@@ -1309,7 +1309,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                 st.warning("💳 **Estado de Socio:** `No socio`")
         with col_info3:
             if figura_en_liquidez:
-                st.info(f"🏛️️ **Unidad en Liquidez:** {unidad_militar}")
+                st.info(f"🏛 **Unidad en Liquidez:** {unidad_militar}")
             else:
                 st.warning(f"🏛️ **Unidad en Liquidez:** No figura en Liquidez (Socio en {unidad_enviada_giraduria if unidad_enviada_giraduria else 'Giradurías Externas'})")
 
@@ -1467,7 +1467,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
         st.warning("⚠️ No se encontraron resultados coincidentes en las bases de datos.")
 
 # ==========================================
-# 📥 MÓDULO NUEVO: DERIVACIONES INTERNAS Y VISUALIZACIÓN DE ESTADO COMPLETO
+# 📥 MÓDULO DERIVACIONES INTERNAS Y VISUALIZACIÓN DE ESTADO COMPLETO
 # ==========================================
 elif opcion == "📥 Derivaciones Internas":
     st.subheader("📥 Bandeja de Casos y Derivaciones Internas entre Compañeros")
@@ -1522,7 +1522,7 @@ elif opcion == "📥 Derivaciones Internas":
                             key=f"sel_est_{id_d}"
                         )
 
-                    # RECONSTRUCCIÓN COMPLETA DEL ESTADO DE CUENTA RECIBIDO
+                    # RECONSTRUCCIÓN COMPLETA Y FIEL DEL ESTADO DE CUENTA RECIBIDO
                     datos_ec = {}
                     try:
                         datos_ec = json.loads(json_ec_raw) if json_ec_raw and json_ec_raw != 'nan' else {}
@@ -1536,12 +1536,17 @@ elif opcion == "📥 Derivaciones Internas":
                         list_creditos = datos_ec.get('creditos', [])
                         c_soc = datos_ec.get('sociales', {})
                         
+                        # ALERTA DE CHEQUE EN CASO DERIVADO (20 MILLONES O MÁS)
+                        tot_deuda_der = limpiar_monto(datos_ec.get('total_deuda', 0))
+                        if tot_deuda_der >= 20000000:
+                            st.error(f"🚨 **¡ALERTA DE CHEQUE OBLIGATORIO!** El total del caso asciende a **Gs. {formato_guarani(tot_deuda_der)}**. Se debe mandar a confeccionar el cheque correspondiente.")
+
                         for idx_c, cred in enumerate(list_creditos):
                             nro_c = cred.get('nro', f'00{idx_c+1}')
-                            c_adeud = cred.get('capital', 0)
-                            i_venc = cred.get('int_vencido', 0)
-                            i_mora = cred.get('int_moratorio', 0)
-                            i_puni = cred.get('int_punitorio', 0)
+                            c_adeud = limpiar_monto(cred.get('capital', 0))
+                            i_venc = limpiar_monto(cred.get('int_vencido', 0))
+                            i_mora = limpiar_monto(cred.get('int_moratorio', 0))
+                            i_puni = limpiar_monto(cred.get('int_punitorio', 0))
                             
                             st.markdown(f"**📌 Crédito N° {nro_c}:**")
                             col_cr_view1, col_cr_view2 = st.columns(2)
@@ -1903,7 +1908,7 @@ elif opcion == "📋 Dictamen del Girador":
     if df_liquidez.empty and df_giradurias.empty:
         st.info("Cargá las bases de liquidez o giradurías primero.")
     else:
-        tipo_busq_g = st.radio("Buscar por:", ["💳 Cédula", "🏷️ N° Socio", "👤 Nombre / Apellido"], horizontal=True)
+        tipo_busq_g = st.radio("Buscar por:", ["💳 Cédula", "🏷️️ N° Socio", "👤 Nombre / Apellido"], horizontal=True)
         matches_g = pd.DataFrame()
 
         if tipo_busq_g == "💳 Cédula":
@@ -2021,7 +2026,7 @@ elif opcion == "📋 Dictamen del Girador":
 # ==========================================
 # 🛡️ MÓDULO 6: AUDITORÍA Y NOTA DE HACIENDA
 # ==========================================
-elif opcion == "🛡️️ Auditoría y Cruce de Planillas":
+elif opcion == "🛡 Auditoría y Cruce de Planillas":
     st.subheader("🛡️ Sistema de Auditoría y Cruce de Planillas (Hacienda)")
     
     if not es_auditor_hacienda:
@@ -2388,6 +2393,10 @@ elif opcion == "🧮 Calculadora de Préstamos":
             if monto_capital > 0:
                 st.caption(f"💵 **Monto ingresado:** Gs. {formato_guarani(monto_capital)}")
 
+            # ALERTA DE CHEQUE DE 20 MILLONES O MÁS EN EL SIMULADOR
+            if monto_capital >= 20000000:
+                st.error("🚨 **¡ALERTA DE CHEQUE OBLIGATORIO!** El monto del crédito alcanza/supera los Gs. 20.000.000. Se debe mandar a hacer el cheque correspondiente.")
+
             plazo = st.number_input("Plazo (meses):", min_value=1, max_value=54, value=12, step=1, key="plazo_p1")
             
             codigo_p = st.selectbox(
@@ -2752,6 +2761,10 @@ elif opcion == "🧮 Calculadora de Préstamos":
             monto_deuda_base_total = total_todos_creditos + total_sociales + monto_efectivo_retira
             st.metric("Total Deuda / Base Refinanciación", f"Gs. {formato_guarani(monto_deuda_base_total)}")
 
+        # ALERTA DE CHEQUE DE 20 MILLONES O MÁS EN ESTADO DE CUENTA
+        if monto_deuda_base_total >= 20000000:
+            st.error(f"🚨 **¡ALERTA DE CHEQUE OBLIGATORIO!** El total del caso asciende a **Gs. {formato_guarani(monto_deuda_base_total)}** (supera o iguala los 20.000.000 Gs.). Se debe mandar a confeccionar el cheque correspondiente.")
+
         st.markdown("---")
         st.markdown("#### ⚙️ 3. Condicionamiento del Nuevo Crédito Refinanciado")
 
@@ -2917,7 +2930,7 @@ elif opcion == "📥 Cargar Base Mensual":
             archivo_l = st.file_uploader("Seleccioná la planilla de Liquidez (.xlsx / .xls / .csv)", type=["xlsx", "xls", "csv"], key="u_liquidez")
             
             if archivo_l:
-                if st.button("⚠️️ Procesar e Importar Base de Liquidez", use_container_width=True):
+                if st.button("⚠ Procesar e Importar Base de Liquidez", use_container_width=True):
                     try:
                         ext = archivo_l.name.lower().split('.')[-1]
                         if ext == 'csv':
