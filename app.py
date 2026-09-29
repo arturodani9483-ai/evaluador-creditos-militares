@@ -34,39 +34,39 @@ st.set_page_config(
 )
 
 # ==========================================
-# 🎨 ESTILO VISUAL PERSONALIZADO Y CORRECCIONES DE LEGIBILIDAD
+# 🎨 ESTILO VISUAL PERSONALIZADO (BARRA LATERAL ORIGINAL RESTAURADA)
 # ==========================================
 st.markdown("""
 <style>
     /* Fondo principal de la app */
     .stApp {
         background-color: #f8fafc !important;
-        color: #0f172a !important;
         font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
     }
 
-    /* TODOS LOS TEXTOS GENERALES, LABELS Y ETIQUETAS */
-    .stApp p, .stApp label, .stApp span, .stApp div {
-        color: #1e293b !important;
-    }
-
-    /* ENCABEZADOS Y TÍTULOS (AZUL MARINO CORPORATIVO) */
-    h1, h2, h3, h4, h5, h6, .stApp h1, .stApp h2, .stApp h3 {
+    /* ENCABEZADOS Y TÍTULOS DE LA ZONA CENTRAL */
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
         color: #0a2540 !important;
         font-weight: 800 !important;
         letter-spacing: -0.3px;
     }
 
-    /* BARRA LATERAL (SIDEBAR) ESTILO AZUL MARINO A VERDE ESMERALDA */
+    /* RESTAURACIÓN EXACTA DE LA BARRA LATERAL (SIDEBAR) */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0a2540 0%, #003848 60%, #00a884 100%) !important;
     }
 
-    [data-testid="stSidebar"] * {
+    /* Forzar textos en blanco en la sidebar */
+    [data-testid="stSidebar"] *, 
+    [data-testid="stSidebar"] p, 
+    [data-testid="stSidebar"] label, 
+    [data-testid="stSidebar"] span, 
+    [data-testid="stSidebar"] div,
+    [data-testid="stSidebar"] .stMarkdown {
         color: #ffffff !important;
     }
 
-    /* Radio buttons en sidebar (Navegación) */
+    /* Botones de radio de Navegación de Módulos */
     [data-testid="stSidebar"] .stRadio > div {
         gap: 8px;
     }
@@ -76,16 +76,21 @@ st.markdown("""
         border-radius: 10px !important;
         padding: 10px 14px !important;
         transition: all 0.25s ease-in-out !important;
-        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
         cursor: pointer !important;
     }
 
     [data-testid="stSidebar"] .stRadio label:hover {
-        background: rgba(255, 255, 255, 0.2) !important;
+        background: rgba(255, 255, 255, 0.22) !important;
         transform: translateX(4px);
     }
 
-    /* Ítem seleccionado activo en el menú lateral */
+    [data-testid="stSidebar"] .stRadio label span {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+
+    /* Ítem seleccionado activo en la barra lateral */
     [data-testid="stSidebar"] .stRadio [data-checked="true"] + div {
         background: #00a884 !important;
         color: #ffffff !important;
@@ -94,7 +99,7 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(0, 168, 132, 0.4) !important;
     }
 
-    /* 1. CORRECCIÓN DE TAMAÑO DE FUENTE EN CUADROS / MÉTRICAS (Muestra montos completos) */
+    /* TAMAÑO DE FUENTE EN CUADROS / MÉTRICAS (Muestra montos completos) */
     [data-testid="stMetricValue"] {
         font-size: 1.15rem !important;
         font-weight: 800 !important;
@@ -109,8 +114,11 @@ st.markdown("""
         color: #475569 !important;
     }
 
-    /* CAMPOS DE ENTRADA / INPUTS Y SELECTS */
-    .stTextInput input, .stNumberInput input, .stSelectbox select, div[data-baseweb="select"] {
+    /* CAMPOS DE ENTRADA / INPUTS Y SELECTS EN ZONA CENTRAL */
+    .stMainBlockContainer .stTextInput input, 
+    .stMainBlockContainer .stNumberInput input, 
+    .stMainBlockContainer .stSelectbox select, 
+    .stMainBlockContainer div[data-baseweb="select"] {
         background-color: #ffffff !important;
         color: #0f172a !important;
         border: 1.5px solid #cbd5e1 !important;
@@ -118,12 +126,18 @@ st.markdown("""
         font-weight: 600 !important;
     }
 
-    .stTextInput input:focus, .stNumberInput input:focus {
+    .stMainBlockContainer .stTextInput input:focus, 
+    .stMainBlockContainer .stNumberInput input:focus {
         border-color: #00a884 !important;
         box-shadow: 0 0 0 3px rgba(0, 168, 132, 0.15) !important;
     }
 
-    /* 2. CORRECCIÓN DE CAJAS DE ARCHIVOS (FILE UPLOADER - VISIBILIDAD TOTAL) */
+    .stMainBlockContainer p, .stMainBlockContainer label {
+        color: #1e293b !important;
+        font-weight: 600 !important;
+    }
+
+    /* CAJAS DE ARCHIVOS (FILE UPLOADER - VISIBILIDAD TOTAL) */
     [data-testid="stFileUploader"] {
         background-color: #ffffff !important;
         border: 2px dashed #00a884 !important;
@@ -148,7 +162,7 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* 3. CORRECCIÓN DE EXPANDERS / DESPLEGABLES ("Crédito N° 1 y Conceptos Sociales") */
+    /* EXPANDERS / DESPLEGABLES ("Crédito N° 1 y Conceptos Sociales") */
     div[data-testid="stExpander"] {
         background-color: #ffffff !important;
         border-radius: 14px !important;
@@ -172,7 +186,7 @@ st.markdown("""
     }
 
     /* RADIO BUTTONS EN LA ZONA CENTRAL */
-    div[role="radiogroup"] label span {
+    .stMainBlockContainer div[role="radiogroup"] label span {
         color: #0a2540 !important;
         font-weight: 700 !important;
     }
@@ -190,8 +204,8 @@ st.markdown("""
         font-weight: 600 !important;
     }
 
-    /* BOTONES PRINCIPALES */
-    .stButton > button {
+    /* BOTONES PRINCIPALES EN ZONA CENTRAL */
+    .stMainBlockContainer .stButton > button {
         background: linear-gradient(135deg, #00a884 0%, #008f70 100%) !important;
         color: #ffffff !important;
         font-weight: 700 !important;
@@ -202,12 +216,12 @@ st.markdown("""
         transition: all 0.2s ease-in-out !important;
     }
 
-    .stButton > button:hover {
+    .stMainBlockContainer .stButton > button:hover {
         background: linear-gradient(135deg, #008f70 0%, #00755b 100%) !important;
         transform: translateY(-2px);
     }
 
-    .stButton > button p {
+    .stMainBlockContainer .stButton > button p {
         color: #ffffff !important;
     }
 
