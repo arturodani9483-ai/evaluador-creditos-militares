@@ -488,7 +488,6 @@ def limpiar_monto(val):
         if not s:
             return 0.0
             
-        # Limpieza estricta de separadores de miles
         if '.' in s and ',' not in s:
             s_clean = s.replace('.', '')
         elif ',' in s and '.' in s:
@@ -871,7 +870,7 @@ def guardar_dictamenes(df):
     df.to_csv(DB_DICTAMENES_FILE, index=False)
 
 # ==========================================
-# 📥 DERIVACIONES INTERNAS Y BASE DE DATOS (CORREGIDO PURE ENTERO)
+# 📥 DERIVACIONES INTERNAS Y BASE DE DATOS
 # ==========================================
 def cargar_derivaciones():
     if os.path.exists(DB_DERIVACIONES_FILE):
@@ -893,7 +892,7 @@ def crear_derivacion(remitente, destinatario, cedula, socio_nombre, desc_caso, p
     fecha_ahora = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
     id_new = str(len(df_d) + 1).zfill(5)
     
-    # FORZADO A NÚMERO ENTERO PURO (Evita que el monto total sustituya al efectivo)
+    # FORZADO A NÚMERO ENTERO PURO
     monto_efec_entero = int(round(limpiar_monto(monto_efectivo)))
 
     json_ec = json.dumps(datos_ec_dict) if datos_ec_dict else "{}"
@@ -1492,7 +1491,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
         st.warning("⚠️ No se encontraron resultados coincidentes en las bases de datos.")
 
 # ==========================================
-# 📥 MÓDULO DERIVACIONES INTERNAS (RECONSTRUCCIÓN DE EFECTIVO EXACTO)
+# 📥 MÓDULO DERIVACIONES INTERNAS
 # ==========================================
 elif opcion == "📥 Derivaciones Internas":
     st.subheader("📥 Bandeja de Casos y Derivaciones Internas entre Compañeros")
@@ -1547,7 +1546,6 @@ elif opcion == "📥 Derivaciones Internas":
                             key=f"sel_est_{id_d}"
                         )
 
-                    # RECONSTRUCCIÓN COMPLETA DEL ESTADO DE CUENTA RECIBIDO
                     datos_ec = {}
                     try:
                         datos_ec = json.loads(json_ec_raw) if json_ec_raw and json_ec_raw != 'nan' else {}
@@ -1561,7 +1559,6 @@ elif opcion == "📥 Derivaciones Internas":
                         list_creditos = datos_ec.get('creditos', [])
                         c_soc = datos_ec.get('sociales', {})
                         
-                        # ALERTA DE CHEQUE EN CASO DERIVADO (20 MILLONES O MÁS)
                         tot_deuda_der = limpiar_monto(datos_ec.get('total_deuda', 0))
                         if tot_deuda_der >= 20000000:
                             st.error(f"🚨 **¡ALERTA DE CHEQUE OBLIGATORIO!** El total del caso asciende a **Gs. {formato_guarani(tot_deuda_der)}**. Se debe mandar a confeccionar el cheque correspondiente.")
@@ -1627,8 +1624,6 @@ elif opcion == "📥 Derivaciones Internas":
             df_formatted_d['Visto por Destinatario'] = df_formatted_d.apply(
                 lambda row: f"✅ Visto el {row['FECHA_VISTO']}" if row['VISTO'] == 'SI' else "⏳ Pendiente de Lectura", axis=1
             )
-            
-            # FORMATO ENTERO ESTRICTO SIN DECIMALES EN LA TABLA
             df_formatted_d['Monto Efectivo'] = df_formatted_d['MONTO_EFECTIVO_AUTORIZADO'].apply(lambda x: f"Gs. {formato_guarani(limpiar_monto(x))}")
             
             cols_show = ['ID_DERIVACION', 'FECHA_ENVIO', 'REMITENTE', 'DESTINATARIO', 'SOCIO_NOMBRE', 'CEDULA', 'ESTADO_TRAMITE', 'Visto por Destinatario', 'PERMITE_EFECTIVO', 'Monto Efectivo', 'DESCRIPCION_CASO']
@@ -2013,7 +2008,7 @@ elif opcion == "📋 Dictamen del Girador":
             if es_editor:
                 st.info("✍️ **Modo Edición Habilitado:** Podés agregar o modificar la observación del Girador.")
                 with st.form("form_dictamen"):
-                    cuota_evaluando = st.number_input("Monto de Cuota Solicitada (Gs.):", min_value=0.0, step=50000.0, format="%.0f")
+                    cuota_evaluando = st.number_input("Monto de Cuota Solicitada (Gs.):", min_value=0, step=50000, format="%d")
                     obs_girador = st.text_area("Observaciones / Respuesta del Girador:", value=obs_inicial, placeholder="Ej: Compra de deuda aprobada / Consultar disponibilidad con CF2")
                     
                     btn_guardar_dictamen = st.form_submit_button("💾 Guardar Dictamen")
@@ -2037,7 +2032,7 @@ elif opcion == "📋 Dictamen del Girador":
             else:
                 st.warning("🔒 **Modo Lectura:** Tu usuario tiene acceso para consultar el dictamen pero no para editarlo.")
                 st.text_area("Observación / Dictamen de Giraduría Registrado:", value=obs_inicial, disabled=True, height=120)
-                cuota_evaluando = 0.0
+                cuota_evaluando = 0
 
             st.markdown("---")
             pdf_bytes_g = generar_pdf_constancia("Dictamen de Giraduría", nombre_g, ci_g, unidad_g, presupuestado_g, jubilacion_g, tot_desc_g, liquido_real_g, limite_50_g, cuota_evaluando, "EVALUADO POR GIRADOR", obs_inicial)
@@ -2420,7 +2415,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
             if monto_capital > 0:
                 st.caption(f"💵 **Monto ingresado:** Gs. {formato_guarani(monto_capital)}")
 
-            # ALERTA DE CHEQUE DE 20 MILLONES O MÁS EN EL SIMULADOR
             if monto_capital >= 20000000:
                 st.error("🚨 **¡ALERTA DE CHEQUE OBLIGATORIO!** El monto del crédito alcanza/supera los Gs. 20.000.000. Se debe mandar a hacer el cheque correspondiente.")
 
@@ -2445,30 +2439,30 @@ elif opcion == "🧮 Calculadora de Préstamos":
                 )
             else:
                 modalidad_credito = "🔄 Con Cancelación / Refinanciación"
-                st.info("ℹ️ Este tipo de crédito opera automáticamente como **Refinanciación / Cancelación**.")
+                st.info("ℹ️️ Este tipo de crédito opera automáticamente como **Refinanciación / Cancelación**.")
 
-            tasa_auto = 20.0
+            tasa_auto = 20
             if nombre_p == 'Préstamo Ordinario':
-                tasa_auto = 26.0
+                tasa_auto = 26
             elif nombre_p == 'Premium':
-                tasa_auto = 24.0
+                tasa_auto = 24
             elif nombre_p in ['Préstamo Cumpleaños', 'Consumo Electrodoméstico', 'Consumo Celular', 'Credito Amigo']:
-                tasa_auto = 20.0
+                tasa_auto = 20
             elif nombre_p == 'Crédito Aniversario':
-                if 1 <= plazo <= 12: tasa_auto = 9.0
-                elif 13 <= plazo <= 18: tasa_auto = 12.0
-                elif 19 <= plazo <= 24: tasa_auto = 14.0
-                elif 25 <= plazo <= 36: tasa_auto = 16.0
+                if 1 <= plazo <= 12: tasa_auto = 9
+                elif 13 <= plazo <= 18: tasa_auto = 12
+                elif 19 <= plazo <= 24: tasa_auto = 14
+                elif 25 <= plazo <= 36: tasa_auto = 16
             elif nombre_p == 'Crédito Vehículo':
-                tasa_auto = 18.0 if 0 < plazo <= 48 else 20.0
+                tasa_auto = 18 if 0 < plazo <= 48 else 20
             elif nombre_p == 'Refinanciación Especial':
-                tasa_auto = 18.0
+                tasa_auto = 18
 
-            tasa_interes = st.number_input("Tasa de Interés Anual (%):", value=tasa_auto, step=0.5, key="tasa_p1")
+            tasa_interes = st.number_input("Tasa de Interés Anual (%):", value=int(tasa_auto), step=1, format="%d", key="tasa_p1")
 
         with col_c2:
-            gastos_admin = st.number_input("Gastos Administrativos (%):", value=2.5, step=0.1, key="gastos_p1")
-            fondo_proteccion = st.number_input("Fondo de Protección (%):", value=1.0, step=0.1, key="fondo_p1")
+            gastos_admin = st.number_input("Gastos Administrativos (%):", value=2, step=1, format="%d", key="gastos_p1")
+            fondo_proteccion = st.number_input("Fondo de Protección (%):", value=1, step=1, format="%d", key="fondo_p1")
 
             com_def = tipos_prestamo[codigo_p]['comision']
             if isinstance(com_def, (int, float)):
@@ -2791,7 +2785,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
             monto_deuda_base_total = total_todos_creditos + total_sociales + monto_efectivo_retira
             st.metric("Total Deuda / Base Refinanciación", f"Gs. {formato_guarani(monto_deuda_base_total)}")
 
-        # ALERTA DE CHEQUE DE 20 MILLONES O MÁS EN ESTADO DE CUENTA
         if monto_deuda_base_total >= 20000000:
             st.error(f"🚨 **¡ALERTA DE CHEQUE OBLIGATORIO!** El total del caso asciende a **Gs. {formato_guarani(monto_deuda_base_total)}** (alcanza o supera los Gs. 20.000.000). Se debe mandar a confeccionar el cheque correspondiente.")
 
@@ -2800,11 +2793,11 @@ elif opcion == "🧮 Calculadora de Préstamos":
 
         c_p_ref1, c_p_ref2, c_p_ref3 = st.columns(3)
         with c_p_ref1:
-            tasa_refinanciacion = st.number_input("Tasa de Interés Refinanciación (% Anual):", value=18.0, step=0.5, key="ec_tasa_ref")
+            tasa_refinanciacion = st.number_input("Tasa de Interés Refinanciación (% Anual):", value=18, min_value=0, max_value=100, step=1, format="%d", key="ec_tasa_ref")
         with c_p_ref2:
-            gastos_refinanciacion = st.number_input("Gastos Admin. + Fondo Protección (%):", value=3.5, step=0.1, key="ec_gastos_ref")
+            gastos_refinanciacion = st.number_input("Gastos Admin. + Fondo Protección (%):", value=3, min_value=0, max_value=100, step=1, format="%d", key="ec_gastos_ref")
         with c_p_ref3:
-            comision_fija_ref = st.number_input("Comisión Fija Refinanciación (Gs.):", value=100000.0, step=10000.0, key="ec_com_ref")
+            comision_fija_ref = st.number_input("Comisión Fija Refinanciación (Gs.):", value=100000, min_value=0, step=10000, format="%d", key="ec_com_ref")
 
         monto_capital_refinanciar = monto_deuda_base_total + (monto_deuda_base_total * (gastos_refinanciacion / 100.0)) + comision_fija_ref
 
