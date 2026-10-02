@@ -411,7 +411,6 @@ else:
     opciones_menu = [
         "🔍 Evaluador de Liquidez (FF.AA.)", 
         "📥 Derivaciones Internas",
-        "📱 Giradurías Teléfonos",
         "📊 Gestión y Diagnóstico de Cobranzas",
         "📋 Dictamen del Girador",
         "🛡️ Auditoría y Cruce de Planillas",
@@ -428,11 +427,10 @@ url_whatsapp = "https://wa.me/595983474662?text=Hola%20Arturo,%20tengo%20una%20c
 st.sidebar.markdown(f'[![WhatsApp](https://img.shields.io/badge/WhatsApp-Contactar_Desarrollador-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)]({url_whatsapp})')
 
 DB_LIQUIDEZ_FILE = "base_liquidez_militares.csv"
+DB_HISTORIAL_LIQUIDEZ_FILE = "base_historial_liquidez.csv"
 DB_GIRADURIAS_FILE = "Planilla_Descuentos_Consolidada.xlsx"
 DB_HISTORIAL_GIRADURIAS_FILE = "base_historial_giradurias.csv"
 DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
-DB_TELEFONOS_FILE = "Giraduria con numero de telefono.xlsx"
-DB_HISTORIAL_CONTACTOS_FILE = "base_historial_contactos.csv"
 DB_DERIVACIONES_FILE = "base_derivaciones_internas.csv"
 
 MAPEO_UNIDADES = {
@@ -474,9 +472,6 @@ def limpiar_ci(val):
     except:
         return ""
 
-# ==========================================
-# 🔧 FUNCIÓN LIMPIAR_MONTO ESTRICTA (ENTEROS SIN DECIMALES)
-# ==========================================
 def limpiar_monto(val):
     try:
         if val is None or pd.isna(val):
@@ -522,19 +517,6 @@ def parsear_fecha(d_str):
         except ValueError:
             pass
     return None
-
-def formatear_telefono_paraguay(tel_raw):
-    nums = re.findall(r'\d+', str(tel_raw))
-    if not nums:
-        return "", ""
-    cand = re.sub(r'^0+', '', nums[0])
-    if cand.startswith('9') and len(cand) == 9:
-        num_local = "0" + cand
-        num_wa = "595" + cand
-        return num_local, num_wa
-    if cand.startswith('09') and len(cand) == 10:
-        return cand, "595" + cand[1:]
-    return str(tel_raw).strip(), cand
 
 def estandarizar_columnas_giradurias(df):
     cols_map = {}
@@ -736,7 +718,7 @@ def cargar_liquidez():
             pass
             
     archivos_carpeta = os.listdir('.')
-    archivos_excel = [f for f in archivos_carpeta if f.lower().endswith(('.xlsx', '.xls')) and not f.startswith('~$') and f != DB_GIRADURIAS_FILE and f != DB_TELEFONOS_FILE]
+    archivos_excel = [f for f in archivos_carpeta if f.lower().endswith(('.xlsx', '.xls')) and not f.startswith('~$') and f != DB_GIRADURIAS_FILE]
     
     if archivos_excel:
         try:
@@ -748,9 +730,30 @@ def cargar_liquidez():
 
     return pd.DataFrame()
 
-def guardar_liquidez(df):
+def guardar_liquidez(df, periodo_tag=""):
     df.to_csv(DB_LIQUIDEZ_FILE, index=False)
+    if periodo_tag:
+        df['periodo'] = periodo_tag
+        df_hist = cargar_historial_liquidez()
+        if not df_hist.empty and 'periodo' in df_hist.columns:
+            df_hist = df_hist[df_hist['periodo'] != periodo_tag]
+            df_unificado = pd.concat([df_hist, df], ignore_index=True)
+        else:
+            df_unificado = df
+        df_unificado.to_csv(DB_HISTORIAL_LIQUIDEZ_FILE, index=False)
     st.cache_data.clear()
+
+@st.cache_data(ttl=2592000)
+def cargar_historial_liquidez():
+    if os.path.exists(DB_HISTORIAL_LIQUIDEZ_FILE):
+        try:
+            df_hl = pd.read_csv(DB_HISTORIAL_LIQUIDEZ_FILE, dtype=str)
+            if 'emp_ci' in df_hl.columns:
+                df_hl['emp_ci_clean'] = df_hl['emp_ci'].astype(str).apply(limpiar_ci)
+            return df_hl
+        except Exception:
+            pass
+    return pd.DataFrame()
 
 @st.cache_data(ttl=2592000)
 def cargar_giradurias():
@@ -791,76 +794,6 @@ def guardar_historial_giradurias(df_nuevo, periodo_tag):
     df_unificado.to_csv(DB_HISTORIAL_GIRADURIAS_FILE, index=False)
     st.cache_data.clear()
 
-@st.cache_data(ttl=2592000)
-def cargar_telefonos():
-    if os.path.exists(DB_TELEFONOS_FILE):
-        try:
-            xls = pd.ExcelFile(DB_TELEFONOS_FILE)
-            records = []
-
-            for sheet in xls.sheet_names:
-                df_sheet = pd.read_excel(DB_TELEFONOS_FILE, sheet_name=sheet, header=None, dtype=str)
-                current_unit = str(sheet).strip()
-                
-                for idx, row in df_sheet.iterrows():
-                    col0 = str(row[0]).strip() if pd.notna(row[0]) else ""
-                    col1 = str(row[1]).strip() if pd.notna(row[1]) else ""
-                    col2 = str(row[2]).strip() if pd.notna(row[2]) else ""
-                    col3 = str(row[3]).strip() if pd.notna(row[3]) else ""
-                    col4 = str(row[4]).strip() if pd.notna(row[4]) else ""
-
-                    if 'UNIDAD:' in col0.upper():
-                        current_unit = f"{col0} {col1}".strip()
-                        continue
-
-                    if col2 != "" and not col2.upper().startswith("NOMBRE") and not col2.upper().startswith("APELLIDO"):
-                        nro_soc = col0.split('\n')[0].strip()
-                        ci_clean = limpiar_ci(col3)
-                        loc_tel, wa_tel = formatear_telefono_paraguay(col4)
-                        
-                        records.append({
-                            'nro_socio': nro_soc,
-                            'emp_nomape': col2,
-                            'emp_ci': col3.replace('.0', '').strip(),
-                            'emp_ci_clean': ci_clean,
-                            'telefono': loc_tel,
-                            'telefono_wa': wa_tel,
-                            'unidad': current_unit,
-                            'hoja_origen': sheet
-                        })
-
-            return pd.DataFrame(records)
-        except Exception:
-            pass
-    return pd.DataFrame()
-
-def guardar_telefonos_excel(file_uploader):
-    with open(DB_TELEFONOS_FILE, "wb") as f:
-        f.write(file_uploader.getbuffer())
-    st.cache_data.clear()
-
-def cargar_historial_contactos():
-    if os.path.exists(DB_HISTORIAL_CONTACTOS_FILE):
-        try:
-            return pd.read_csv(DB_HISTORIAL_CONTACTOS_FILE, dtype=str)
-        except:
-            pass
-    return pd.DataFrame(columns=['CEDULA', 'SOCIO', 'USUARIO', 'PLANTILLA_NRO', 'FECHA_HORA', 'MENSAJE_TEXTO'])
-
-def registrar_contacto(cedula, socio, usuario, plantilla_nro, mensaje_texto):
-    df_h = cargar_historial_contactos()
-    fecha_ahora = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
-    nuevo = pd.DataFrame([{
-        'CEDULA': limpiar_ci(cedula),
-        'SOCIO': str(socio).strip(),
-        'USUARIO': usuario.lower().strip(),
-        'PLANTILLA_NRO': str(plantilla_nro),
-        'FECHA_HORA': fecha_ahora,
-        'MENSAJE_TEXTO': mensaje_texto
-    }])
-    df_h = pd.concat([df_h, nuevo], ignore_index=True)
-    df_h.to_csv(DB_HISTORIAL_CONTACTOS_FILE, index=False)
-
 def cargar_dictamenes():
     if os.path.exists(DB_DICTAMENES_FILE):
         return pd.read_csv(DB_DICTAMENES_FILE, dtype=str)
@@ -892,7 +825,6 @@ def crear_derivacion(remitente, destinatario, cedula, socio_nombre, desc_caso, p
     fecha_ahora = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
     id_new = str(len(df_d) + 1).zfill(5)
     
-    # FORZADO A NÚMERO ENTERO PURO
     monto_efec_entero = int(round(limpiar_monto(monto_efectivo)))
 
     json_ec = json.dumps(datos_ec_dict) if datos_ec_dict else "{}"
@@ -1174,9 +1106,9 @@ def generar_pdf_cobrabilidad_unidades(df_metrics):
     return bytes(pdf.output())
 
 df_liquidez = cargar_liquidez()
+df_historial_liquidez = cargar_historial_liquidez()
 df_giradurias = cargar_giradurias()
 df_historial_giradurias = cargar_historial_giradurias()
-df_telefonos = cargar_telefonos()
 df_dictamenes = cargar_dictamenes()
 
 # ==========================================
@@ -1186,6 +1118,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
     st.subheader("🔍 Buscador de Liquidez y Estado de Socio")
     
     df_fuente_giradurias = df_historial_giradurias if not df_historial_giradurias.empty else df_giradurias
+    df_fuente_liquidez = df_historial_liquidez if not df_historial_liquidez.empty else df_liquidez
 
     tipo_busqueda = st.radio(
         "Método de búsqueda:", 
@@ -1199,10 +1132,11 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
         ci_input = st.text_input("Número de Cédula (C.I.):", placeholder="Ej: 5511820").strip()
         ci_input_clean = limpiar_ci(ci_input)
         if ci_input_clean:
-            if not df_liquidez.empty:
-                if 'emp_ci_clean' not in df_liquidez.columns:
-                    df_liquidez['emp_ci_clean'] = df_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
-                matches_l = df_liquidez[df_liquidez['emp_ci_clean'] == ci_input_clean]
+            if not df_fuente_liquidez.empty:
+                if 'emp_ci_clean' not in df_fuente_liquidez.columns and 'emp_ci' in df_fuente_liquidez.columns:
+                    df_fuente_liquidez['emp_ci_clean'] = df_fuente_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
+                if 'emp_ci_clean' in df_fuente_liquidez.columns:
+                    matches_l = df_fuente_liquidez[df_fuente_liquidez['emp_ci_clean'] == ci_input_clean]
             
             if not df_fuente_giradurias.empty:
                 if 'emp_ci_clean' not in df_fuente_giradurias.columns and 'emp_ci' in df_fuente_giradurias.columns:
@@ -1217,17 +1151,18 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                 matches_g = df_fuente_giradurias[df_fuente_giradurias['nro_socio'].astype(str).str.strip() == socio_input.strip()]
                 if not matches_g.empty:
                     ci_socio_encontrada = limpiar_ci(matches_g.iloc[0].get('emp_ci', ''))
-                    if ci_socio_encontrada and not df_liquidez.empty:
-                        if 'emp_ci_clean' not in df_liquidez.columns:
-                            df_liquidez['emp_ci_clean'] = df_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
-                        matches_l = df_liquidez[df_liquidez['emp_ci_clean'] == ci_socio_encontrada]
+                    if ci_socio_encontrada and not df_fuente_liquidez.empty:
+                        if 'emp_ci_clean' not in df_fuente_liquidez.columns and 'emp_ci' in df_fuente_liquidez.columns:
+                            df_fuente_liquidez['emp_ci_clean'] = df_fuente_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
+                        if 'emp_ci_clean' in df_fuente_liquidez.columns:
+                            matches_l = df_fuente_liquidez[df_fuente_liquidez['emp_ci_clean'] == ci_socio_encontrada]
 
     else:
         nombre_input = st.text_input("Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
         if nombre_input:
-            if not df_liquidez.empty:
-                matches_l = df_liquidez[df_liquidez['emp_nomape'].astype(str).str.contains(nombre_input, case=False, na=False)]
-            if not df_fuente_giradurias.empty:
+            if not df_fuente_liquidez.empty and 'emp_nomape' in df_fuente_liquidez.columns:
+                matches_l = df_fuente_liquidez[df_fuente_liquidez['emp_nomape'].astype(str).str.contains(nombre_input, case=False, na=False)]
+            if not df_fuente_giradurias.empty and 'emp_nomape' in df_fuente_giradurias.columns:
                 matches_g = df_fuente_giradurias[df_fuente_giradurias['emp_nomape'].astype(str).str.contains(nombre_input, case=False, na=False)]
 
     figura_en_liquidez = not matches_l.empty
@@ -1339,7 +1274,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
 
         if es_socio:
             st.markdown(f"### 🏛️ Datos de Descuento en Giraduría ({periodo_seleccionado if 'periodo_seleccionado' in locals() else 'Mes Actual'})")
-            col_g1, col_g2, col_g3, col_g4 = st.columns(4)
+            col_g1, col_g2, col_g3, col_g4, col_g5 = st.columns(5)
             col_g1.metric("Giraduría Enviada", unidad_enviada_giraduria if unidad_enviada_giraduria else "Sin Asignar")
             col_g2.metric("Monto Enviado", f"Gs. {formato_guarani(monto_enviado)}")
             col_g3.metric("Monto Descontado/Cobrado", f"Gs. {formato_guarani(monto_cobrado)}")
@@ -1348,6 +1283,9 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                 col_g4.metric("Monto Rechazado / Pendiente", f"Gs. {formato_guarani(monto_rechazado)}", delta=f"-Gs. {formato_guarani(monto_rechazado)}", delta_color="inverse")
             else:
                 col_g4.metric("Monto Rechazado", "Gs. 0", delta="Cobro 100% OK")
+
+            pct_cobro_socio = (monto_cobrado / monto_enviado * 100) if monto_enviado > 0 else 0.0
+            col_g5.metric("% Cobro", f"{round(pct_cobro_socio, 1)} %")
 
             u_gir_upper = unidad_enviada_giraduria.upper()
             is_jubilado = "JUBILAD" in u_gir_upper or "JUBILADOS" in unidad_militar.upper()
@@ -1435,7 +1373,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             if total_deudas_actuales > limite_50:
                 exceso_actual = total_deudas_actuales - limite_50
                 st.warning(
-                    f"⚠️️ **ATENCIÓN: Los descuentos de deudas actuales (Gs. {formato_guarani(total_deudas_actuales)}) "
+                    f"⚠ **ATENCIÓN: Los descuentos de deudas actuales (Gs. {formato_guarani(total_deudas_actuales)}) "
                     f"ya superan el límite del 50% por Gs. {formato_guarani(exceso_actual)}.**\n\n"
                     f"📌 **RECOMENDACIÓN:** Consultar disponibilidad con **CF2** para evaluar margen o beneficios especiales."
                 )
@@ -1630,121 +1568,7 @@ elif opcion == "📥 Derivaciones Internas":
             st.dataframe(df_formatted_d[cols_show], use_container_width=True)
 
 # ==========================================
-# 📱 MÓDULO 3: GIRADURÍAS TELÉFONOS
-# ==========================================
-elif opcion == "📱 Giradurías Teléfonos":
-    st.subheader("📱 Módulo de Gestión de Contacto y Teléfonos de Socios")
-    
-    if df_telefonos.empty:
-        st.warning("⚠️ No se encuentra cargada la base de teléfonos (`Giraduria con numero de telefono.xlsx`). Podés subirla en 'Cargar Base Mensual'.")
-    else:
-        st.info(f"📊 **Base de datos activa:** {len(df_telefonos):,} socios registrados consolidados de TODAS las pestañas del Excel.")
-        
-        busq_tel = st.text_input("🔍 Buscar por Cédula (C.I.), N° de Socio o Nombre/Apellido:", placeholder="Ej: 5955048, 9946 o AQUINO").strip()
-        busq_clean = limpiar_ci(busq_tel)
-
-        match_tel = pd.DataFrame()
-        if busq_tel:
-            if busq_clean and 'emp_ci_clean' in df_telefonos.columns:
-                match_tel = df_telefonos[df_telefonos['emp_ci_clean'] == busq_clean]
-            if match_tel.empty and 'nro_socio' in df_telefonos.columns:
-                match_tel = df_telefonos[df_telefonos['nro_socio'].astype(str).str.strip() == busq_tel]
-            if match_tel.empty and 'emp_nomape' in df_telefonos.columns:
-                match_tel = df_telefonos[df_telefonos['emp_nomape'].astype(str).str.contains(busq_tel, case=False, na=False)]
-
-        if not match_tel.empty:
-            socio_t = match_tel.iloc[0]
-            nombre_t = socio_t.get('emp_nomape', 'S/D')
-            ci_t = socio_t.get('emp_ci_clean', '0')
-            socio_num_t = socio_t.get('nro_socio', 'S/D')
-            tel_local_t = socio_t.get('telefono', 'Sin Teléfono')
-            tel_wa_t = socio_t.get('telefono_wa', '')
-            unid_t = socio_t.get('unidad', 'Giraduría')
-            hoja_t = socio_t.get('hoja_origen', 'Pestaña')
-
-            st.markdown("---")
-            col_t1, col_t2 = st.columns(2)
-            with col_t1:
-                st.markdown(f"### 👤 {nombre_t}")
-                st.write(f"💳 **Cédula N°:** `{ci_t}` | **N° Socio:** `{socio_num_t}`")
-                st.write(f"🏛️ **Unidad / Giraduría:** {unid_t} *(Pestaña: {hoja_t})*")
-                st.write(f"📞 **Teléfono Registrado:** `{tel_local_t}`")
-
-            with col_t2:
-                st.markdown("### 📲 Enviar Mensaje por WhatsApp")
-                
-                if usuario_actual == "martin":
-                    plantilla_nro = 1
-                    msg_text = (
-                        f"Hola {nombre_t}, te saludamos del área de Giradurías de la Cooperativa. "
-                        f"Te informamos que en tu descuento del mes se registró un ajuste al límite disponible. "
-                        f"Te ofrecemos la posibilidad de reestructurar tu saldo, con la opción de retirar un pequeño saldo a favor en efectivo "
-                        f"(sujeto a análisis y margen de liquidez). ¡Consultanos para más detalles!"
-                    )
-                elif usuario_actual == "estela":
-                    plantilla_nro = 1
-                    msg_text = (
-                        f"Hola {nombre_t}, te saludamos del área de Giradurías de la Cooperativa. "
-                        f"Te informamos que en tu descuento del mes se registró un ajuste al límite disponible. "
-                        f"Te ofrecemos la posibilidad de reestructurar tu saldo para regularizar tu cuenta. ¡Consultanos para más detalles!"
-                    )
-                else:
-                    plantilla_sel = st.selectbox("Seleccionar Plantilla a Enviar:", ["Plantilla 1 (Con Opción Efectivo - Martín)", "Plantilla 1 (Estándar - Estela)", "Mensaje Personalizado"])
-                    if "Con Opción Efectivo" in plantilla_sel:
-                        plantilla_nro = 1
-                        msg_text = (
-                            f"Hola {nombre_t}, te saludamos del área de Giradurías. Te informamos que en tu descuento se registró un ajuste. "
-                            f"Podés reestructurar tu saldo con opción a un pequeño monto en efectivo según análisis y liquidez."
-                        )
-                    elif "Estándar" in plantilla_sel:
-                        plantilla_nro = 1
-                        msg_text = (
-                            f"Hola {nombre_t}, te saludamos del área de Giradurías. Te informamos que en tu descuento se registró un ajuste. "
-                            f"Te ofrecemos la posibilidad de reestructurar tu saldo para regularizar tu cuenta."
-                        )
-                    else:
-                        plantilla_nro = 99
-                        msg_text = st.text_area("Escribir mensaje personalizado:", value=f"Hola {nombre_t}, te escribimos del área de Giradurías.")
-
-                st.text_area("Vista previa del mensaje:", value=msg_text, height=120, disabled=True)
-
-                if tel_wa_t:
-                    msg_encoded = urllib.parse.quote(msg_text)
-                    wa_url = f"https://wa.me/{tel_wa_t}?text={msg_encoded}"
-                    
-                    if st.button("📲 Abrir WhatsApp y Registrar Contacto", use_container_width=True):
-                        registrar_contacto(ci_t, socio_num_t, usuario_actual, plantilla_nro, msg_text)
-                        st.success("✅ Contacto registrado correctamente en la bitácora.")
-                        st.markdown(f'[👉 Haz Clic Aquí para Abrir el Chat de WhatsApp Directamente]({wa_url})')
-                else:
-                    st.warning("⚠️ El socio no posee un número de teléfono válido registrado.")
-
-            st.markdown("---")
-            st.subheader("📜 Bitácora e Historial de Contactos Realizados")
-            df_hist_cont = cargar_historial_contactos()
-
-            match_h_c = df_hist_cont[df_hist_cont['CEDULA'] == ci_t] if not df_hist_cont.empty and 'CEDULA' in df_hist_cont.columns else pd.DataFrame()
-
-            if not match_h_c.empty:
-                ult_c = match_h_c.iloc[-1]
-                usr_c = ult_c.get('USUARIO', '').capitalize()
-                fec_c = ult_c.get('FECHA_HORA', '')
-                p_nro = ult_c.get('PLANTILLA_NRO', '')
-
-                st.info(f"🔵 **Última gestión:** Contactado por **{usr_c}** el {fec_c}.")
-
-                if es_admin_base:
-                    st.markdown("#### 🛡️ Vista de Auditoría Administrador (Exclusivo Arthuro)")
-                    st.dataframe(match_h_c[['FECHA_HORA', 'USUARIO', 'PLANTILLA_NRO', 'MENSAJE_TEXTO']], use_container_width=True)
-                else:
-                    my_contacts = match_h_c[match_h_c['USUARIO'] == usuario_actual]
-                    if not my_contacts.empty:
-                        st.caption(f"ℹ️ Has enviado {len(my_contacts)} mensaje(s) a este socio usando la Plantilla N° {p_nro}.")
-            else:
-                st.success("🟢 **Estado:** Sin contacto previo registrado en el sistema.")
-
-# ==========================================
-# 📊 MÓDULO 4: GESTIÓN DE COBRANZAS
+# 📊 MÓDULO 3: GESTIÓN DE COBRANZAS
 # ==========================================
 elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
     st.subheader("📊 Módulo de Diagnóstico de Cobranzas, Estadísticas y Reportes")
@@ -1922,7 +1746,7 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
                 st.bar_chart(data=df_metrics, x='unidad_nombre_oficial', y='% Cobrado')
 
 # ==========================================
-# 📋 MÓDULO 5: DICTAMEN DEL GIRADOR
+# 📋 MÓDULO 4: DICTAMEN DEL GIRADOR
 # ==========================================
 elif opcion == "📋 Dictamen del Girador":
     st.subheader("📋 Módulo de Registro de Dictamen de Giraduría")
@@ -2046,9 +1870,9 @@ elif opcion == "📋 Dictamen del Girador":
             )
 
 # ==========================================
-# 🛡️ MÓDULO 6: AUDITORÍA Y NOTA DE HACIENDA
+# 🛡️ MÓDULO 5: AUDITORÍA Y NOTA DE HACIENDA
 # ==========================================
-elif opcion == "🛡 Auditoría y Cruce de Planillas":
+elif opcion == "🛡️ Auditoría y Cruce de Planillas":
     st.subheader("🛡️ Sistema de Auditoría y Cruce de Planillas (Hacienda)")
     
     if not es_auditor_hacienda:
@@ -2320,7 +2144,7 @@ elif opcion == "🛡 Auditoría y Cruce de Planillas":
             st.write(f"📊 **Totales calculados para la Nota:** Monto Gs. `{formato_guarani(m_tot)}` | Beneficiarios: `{c_ben}`")
 
 # ==========================================
-# 🧮 MÓDULO 7: CALCULADORA FINANCIERA DE PRÉSTAMOS Y ESTADO DE CUENTA
+# 🧮 MÓDULO 6: CALCULADORA FINANCIERA DE PRÉSTAMOS Y ESTADO DE CUENTA
 # ==========================================
 elif opcion == "🧮 Calculadora de Préstamos":
     st.subheader("🧮 Módulo de Operaciones Financieras, Préstamos y Estado de Cuenta")
@@ -2439,7 +2263,7 @@ elif opcion == "🧮 Calculadora de Préstamos":
                 )
             else:
                 modalidad_credito = "🔄 Con Cancelación / Refinanciación"
-                st.info("ℹ️️ Este tipo de crédito opera automáticamente como **Refinanciación / Cancelación**.")
+                st.info("ℹ Este tipo de crédito opera automáticamente como **Refinanciación / Cancelación**.")
 
             tasa_auto = 20
             if nombre_p == 'Préstamo Ordinario':
@@ -2923,7 +2747,7 @@ elif opcion == "🧮 Calculadora de Préstamos":
                     st.rerun()
 
 # ==========================================
-# 📥 MÓDULO 8: CARGAR BASE MENSUAL
+# 📥 MÓDULO 7: CARGAR BASE MENSUAL
 # ==========================================
 elif opcion == "📥 Cargar Base Mensual":
     st.subheader("📥 Administración y Carga de Bases Mensuales")
@@ -2933,17 +2757,24 @@ elif opcion == "📥 Cargar Base Mensual":
     else:
         st.success("🔑 **Permisos de Administrador Verificados:** Podés subir o actualizar las bases de datos permanentes.")
         
-        tab_b1, tab_b2, tab_b3, tab_b4 = st.tabs([
+        tab_b1, tab_b2, tab_b3 = st.tabs([
             "🪖 Base de Liquidez (FF.AA.)", 
             "🏛️ Base Enviado / Cobrado (Giradurías)", 
-            "📱 Base Giradurías Teléfonos",
             "🔑 Credenciales de Usuarios"
         ])
 
         with tab_b1:
             st.markdown("#### 1. Planilla de Liquidez Militar (FF.AA.)")
-            st.caption("Esta base reemplaza el archivo `base_liquidez_militares.csv` permanentemente.")
+            st.caption("Esta base actualiza la información de Liquidez y acumula el historial mensual para consultas.")
             
+            col_l_tag1, col_l_tag2 = st.columns(2)
+            with col_l_tag1:
+                mes_l_tag = st.selectbox("Mes de Liquidez:", ["Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio"], key="mes_liq_sel")
+            with col_l_tag2:
+                anio_l_tag = st.selectbox("Año de Liquidez:", ["2026", "2025", "2027"], key="anio_liq_sel")
+
+            periodo_liq_etiqueta = f"{mes_l_tag} {anio_l_tag}"
+
             if not df_liquidez.empty:
                 st.info(f"📊 **Estado actual:** {len(df_liquidez):,} registros cargados.")
             else:
@@ -2952,7 +2783,7 @@ elif opcion == "📥 Cargar Base Mensual":
             archivo_l = st.file_uploader("Seleccioná la planilla de Liquidez (.xlsx / .xls / .csv)", type=["xlsx", "xls", "csv"], key="u_liquidez")
             
             if archivo_l:
-                if st.button("⚠ Procesar e Importar Base de Liquidez", use_container_width=True):
+                if st.button(f"⚠️ Procesar e Importar Liquidez para {periodo_liq_etiqueta}", use_container_width=True):
                     try:
                         ext = archivo_l.name.lower().split('.')[-1]
                         if ext == 'csv':
@@ -2965,8 +2796,8 @@ elif opcion == "📥 Cargar Base Mensual":
                         if df_normalizado.empty:
                             st.warning("No se encontraron datos procesables en el archivo.")
                         else:
-                            guardar_liquidez(df_normalizado)
-                            st.success(f"✅ ¡Base de liquidez importada y guardada permanentemente! Total militares: {len(df_normalizado):,}")
+                            guardar_liquidez(df_normalizado, periodo_tag=periodo_liq_etiqueta)
+                            st.success(f"✅ ¡Base de liquidez importada para {periodo_liq_etiqueta}! Total militares: {len(df_normalizado):,}")
                             st.rerun()
                     except Exception as e:
                         st.error(f"Error al procesar la planilla: {e}")
@@ -3006,20 +2837,7 @@ elif opcion == "📥 Cargar Base Mensual":
                         st.error(f"Error al procesar la planilla de giradurías: {e}")
 
         with tab_b3:
-            st.markdown("#### 3. Base Giradurías Teléfonos")
-            st.caption("Subí la planilla `Giraduria con numero de telefono.xlsx` para actualizar la guía de contactos de socios.")
-            archivo_t = st.file_uploader("📥 Cargar Base de Teléfonos (.xlsx)", type=["xlsx", "xls"], key="u_tel")
-            if archivo_t:
-                if st.button("⚠️ Guardar y Actualizar Base de Teléfonos", use_container_width=True):
-                    try:
-                        guardar_telefonos_excel(archivo_t)
-                        st.success("✅ ¡Base de teléfonos cargada y lista para su uso!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error al guardar la base de teléfonos: {e}")
-
-        with tab_b4:
-            st.markdown("#### 4. Consulta de Credenciales de Usuarios (Exclusivo Admin)")
+            st.markdown("#### 3. Consulta de Credenciales de Usuarios (Exclusivo Admin)")
             st.caption("Listado de usuarios registrados en el sistema y sus contraseñas asignadas para respuesta rápida por soporte/WhatsApp.")
             
             data_credenciales = []
