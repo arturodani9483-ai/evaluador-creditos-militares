@@ -76,21 +76,6 @@ st.markdown("""
         background: linear-gradient(135deg, #008f70 0%, #00755b 100%) !important;
         transform: translateY(-2px);
     }
-    [data-testid="stSidebar"] .stRadio > div {
-        gap: 8px;
-    }
-    [data-testid="stSidebar"] .stRadio label {
-        background: rgba(255, 255, 255, 0.08) !important;
-        border-radius: 10px !important;
-        padding: 10px 14px !important;
-        transition: all 0.25s ease-in-out !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        cursor: pointer !important;
-    }
-    [data-testid="stSidebar"] .stRadio label:hover {
-        background: rgba(255, 255, 255, 0.22) !important;
-        transform: translateX(4px);
-    }
     [data-testid="stSidebar"] .stRadio label span {
         color: #ffffff !important;
         font-weight: 600 !important;
@@ -117,68 +102,6 @@ st.markdown("""
         border-radius: 10px !important;
         font-weight: 600 !important;
     }
-    .stMainBlockContainer .stTextInput input:focus, 
-    .stMainBlockContainer .stNumberInput input:focus {
-        border-color: #00a884 !important;
-        box-shadow: 0 0 0 3px rgba(0, 168, 132, 0.15) !important;
-    }
-    .stMainBlockContainer p, .stMainBlockContainer label {
-        color: #1e293b !important;
-        font-weight: 600 !important;
-    }
-    [data-testid="stFileUploader"] {
-        background-color: #ffffff !important;
-        border: 2px dashed #00a884 !important;
-        border-radius: 14px !important;
-        padding: 16px !important;
-        box-shadow: 0 2px 10px rgba(0, 168, 132, 0.05) !important;
-    }
-    [data-testid="stFileUploader"] * {
-        color: #0f172a !important;
-    }
-    [data-testid="stFileUploader"] button {
-        background-color: #0a2540 !important;
-        color: #ffffff !important;
-        border-radius: 8px !important;
-        border: none !important;
-        font-weight: 700 !important;
-    }
-    [data-testid="stFileUploader"] button * {
-        color: #ffffff !important;
-    }
-    div[data-testid="stExpander"] {
-        background-color: #ffffff !important;
-        border-radius: 14px !important;
-        border: 1.5px solid #cbd5e1 !important;
-        overflow: hidden !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.03) !important;
-    }
-    div[data-testid="stExpander"] details summary {
-        background-color: #f1f5f9 !important;
-        color: #0a2540 !important;
-        font-weight: 800 !important;
-        padding: 12px 18px !important;
-        border-bottom: 1px solid #e2e8f0 !important;
-    }
-    div[data-testid="stExpander"] details summary * {
-        color: #0a2540 !important;
-        font-size: 1.05rem !important;
-        font-weight: 800 !important;
-    }
-    .stMainBlockContainer div[role="radiogroup"] label span {
-        color: #0a2540 !important;
-        font-weight: 700 !important;
-    }
-    .stAlert {
-        background-color: #ffffff !important;
-        border-radius: 12px !important;
-        border-left: 6px solid #00a884 !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.04) !important;
-    }
-    .stAlert p, .stAlert span, .stAlert div {
-        color: #0f172a !important;
-        font-weight: 600 !important;
-    }
     .stMainBlockContainer .stButton > button {
         background: linear-gradient(135deg, #00a884 0%, #008f70 100%) !important;
         color: #ffffff !important;
@@ -187,14 +110,6 @@ st.markdown("""
         border: none !important;
         padding: 10px 22px !important;
         box-shadow: 0 4px 12px rgba(0, 168, 132, 0.25) !important;
-        transition: all 0.2s ease-in-out !important;
-    }
-    .stMainBlockContainer .stButton > button:hover {
-        background: linear-gradient(135deg, #008f70 0%, #00755b 100%) !important;
-        transform: translateY(-2px);
-    }
-    .stMainBlockContainer .stButton > button p {
-        color: #ffffff !important;
     }
     .stDownloadButton > button {
         background: linear-gradient(135deg, #0a2540 0%, #003848 100%) !important;
@@ -203,43 +118,12 @@ st.markdown("""
         border-radius: 10px !important;
         border: none !important;
         padding: 10px 22px !important;
-        box-shadow: 0 4px 12px rgba(10, 37, 64, 0.2) !important;
-    }
-    .stDownloadButton > button:hover {
-        background: linear-gradient(135deg, #003848 0%, #00a884 100%) !important;
-        transform: translateY(-2px);
-    }
-    .stDownloadButton > button p {
-        color: #ffffff !important;
-    }
-    div[data-testid="stDataFrame"] {
-        background-color: #ffffff !important;
-        border-radius: 14px !important;
-        padding: 8px !important;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.03) !important;
-    }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: #e2e8f0 !important;
-        padding: 6px;
-        border-radius: 12px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 8px;
-        padding: 8px 16px;
-        font-weight: 700;
-        color: #0a2540 !important;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #ffffff !important;
-        color: #00a884 !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.06);
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 🔐 CONFIGURACIÓN DE USUARIOS Y TELÉFONOS DE REMITENTES
+# 🔐 CONFIGURACIÓN DE USUARIOS
 # ==========================================
 USUARIOS_AUTORIZADOS = {
     "arthuro": "19942008",
@@ -272,13 +156,6 @@ if "autenticado" not in st.session_state:
 if "usuario_actual" not in st.session_state:
     st.session_state["usuario_actual"] = ""
 
-if "auditoria_ejecutada_limpia" not in st.session_state:
-    st.session_state["auditoria_ejecutada_limpia"] = False
-if "total_monto_auditoria" not in st.session_state:
-    st.session_state["total_monto_auditoria"] = 0.0
-if "total_beneficiarios_auditoria" not in st.session_state:
-    st.session_state["total_beneficiarios_auditoria"] = 0
-
 if "num_creditos_adicionales" not in st.session_state:
     st.session_state["num_creditos_adicionales"] = 0
 
@@ -303,21 +180,7 @@ def pantalla_login():
                 st.success(f"¡Bienvenido/a {user_input.capitalize()}!")
                 st.rerun()
             else:
-                st.error("⚠️ Usuario o contraseña incorrectos. Verificá con el administrador.")
-
-    st.markdown("---")
-    with st.expander("🔑 ¿Olvidaste tu contraseña?"):
-        st.caption("Ingresá tu usuario registrado para comunicarte directamente con el Administrador (Arturo) por WhatsApp:")
-        u_recup = st.text_input("Ingresá tu Usuario para recuperar:", key="u_recup_input").strip().lower()
-        
-        if u_recup:
-            if u_recup in USUARIOS_AUTORIZADOS:
-                mensaje_wa = f"Hola Arturo, soy el usuario {u_recup.capitalize()} y me olvidé mi contraseña del SICOC. Por favor enviame mi clave."
-                msg_encoded = urllib.parse.quote(mensaje_wa)
-                wa_link_recup = f"https://wa.me/595983474662?text={msg_encoded}"
-                st.markdown(f'[![Solicitar por WhatsApp](https://img.shields.io/badge/WhatsApp-Solicitar_Mi_Contraseña_al_Admin-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)]({wa_link_recup})')
-            else:
-                st.warning("⚠️ El usuario ingresado no existe en la base autorizada.")
+                st.error("⚠️ Usuario o contraseña incorrectos.")
 
 if not st.session_state["autenticado"]:
     pantalla_login()
@@ -331,19 +194,8 @@ es_editor = usuario_actual in USUARIOS_EDITORES_DICTAMEN
 es_auditor_hacienda = usuario_actual in USUARIOS_AUDITORIA_HACIENDA
 es_admin_base = (usuario_actual == USUARIO_ADMIN_BASE)
 
-st.sidebar.title("🏛️ SICOC")
+st.sidebar.title("🏛 SICOC")
 st.sidebar.markdown(f"👤 **Usuario activo:** `{usuario_actual.capitalize()}`")
-
-if es_admin_base:
-    st.sidebar.caption("⭐ Rol: Administrador General")
-elif es_auditor_hacienda:
-    st.sidebar.caption("🛡 Rol: Auditor / Evaluador")
-elif es_editor:
-    st.sidebar.caption("✍️ Rol: Editor / Evaluador")
-elif usuario_actual in ["yennifer", "juan", "milena"]:
-    st.sidebar.caption("🔍 Rol: Operador de Evaluaciones y Créditos")
-else:
-    st.sidebar.caption("🔒 Rol: Consulta general")
 
 if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
     st.session_state["autenticado"] = False
@@ -371,13 +223,7 @@ else:
 
 opcion = st.sidebar.radio("Navegación de Módulos:", opciones_menu)
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 💬 Soporte del Sistema")
-st.sidebar.caption("Desarrollado por **Arturo Arrua**")
-url_whatsapp = "https://wa.me/595983474662?text=Hola%20Arturo,%20tengo%20una%20consulta%20sobre%20el%20sistema%20SICOC"
-st.sidebar.markdown(f'[![WhatsApp](https://img.shields.io/badge/WhatsApp-Contactar_Desarrollador-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)]({url_whatsapp})')
-
-# ARCHIVOS DE BASE DE DATOS
+# BASES Y REPOSITORIOS
 DB_LIQUIDEZ_FILE = "base_liquidez_militares.csv"
 DB_HISTORIAL_LIQUIDEZ_FILE = "base_historial_liquidez.csv"
 DB_GIRADURIAS_FILE = "Planilla_Descuentos_Consolidada.xlsx"
@@ -458,119 +304,6 @@ def formato_guarani(val):
     except:
         return "0"
 
-def parsear_fecha(d_str):
-    d_clean = limpiar_texto(d_str)
-    if not d_clean:
-        return None
-    s = d_clean.split(' ')[0]
-    for fmt in ('%d/%m/%Y', '%d/%m/%y', '%Y-%m-%d', '%d-%m-%Y', '%Y/%m/%d', '%d/%m/%Y %H:%M:%S'):
-        try:
-            return datetime.strptime(s, fmt)
-        except ValueError:
-            pass
-    return None
-
-def estandarizar_columnas_giradurias(df):
-    cols_map = {}
-    for c in df.columns:
-        c_clean = str(c).strip().upper().replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
-        if 'SOCIO' in c_clean:
-            cols_map[c] = 'nro_socio'
-        elif 'C.I' in c_clean or 'CEDULA' in c_clean or 'CI' in c_clean:
-            cols_map[c] = 'emp_ci'
-        elif 'APELLIDO' in c_clean or 'NOMBRE' in c_clean:
-            cols_map[c] = 'emp_nomape'
-        elif 'MONTO A DESCONTAR' in c_clean or 'TOTAL DESCUENTOS' in c_clean or 'TOTAL DESCUENTO' in c_clean or 'ENVIADO' in c_clean:
-            cols_map[c] = 'monto_enviado'
-        elif 'COBRADO' in c_clean:
-            cols_map[c] = 'monto_cobrado'
-        elif 'RECHAZADO' in c_clean:
-            cols_map[c] = 'monto_rechazado'
-            
-    df_ren = df.rename(columns=cols_map)
-    if 'emp_ci' in df_ren.columns:
-        df_ren['emp_ci_clean'] = df_ren['emp_ci'].astype(str).apply(limpiar_ci)
-    return df_ren
-
-def unificar_hojas_excel(file_or_path, periodo_tag=""):
-    xls = pd.ExcelFile(file_or_path)
-    if len(xls.sheet_names) == 1 or "TODAS LAS UNIDADES" in [s.strip().upper() for s in xls.sheet_names]:
-        sheet_target = xls.sheet_names[0]
-        df_raw = pd.read_excel(xls, sheet_name=sheet_target, header=None, dtype=str)
-        records = []
-        current_unidad = "Sin Asignar"
-
-        for idx, row in df_raw.iterrows():
-            c0 = str(row[0]).strip() if pd.notna(row[0]) else ""
-            c1 = str(row[1]).strip() if pd.notna(row[1]) else ""
-            c2 = str(row[2]).strip() if pd.notna(row[2]) else ""
-            c3 = str(row[3]).strip() if pd.notna(row[3]) else ""
-            c4 = str(row[4]).strip() if pd.notna(row[4]) else ""
-            c5 = str(row[5]).strip() if pd.notna(row[5]) else ""
-
-            if 'UNIDAD:' in c0.upper():
-                num_m = re.findall(r'\d+', c0)
-                num_str = num_m[0] if num_m else ""
-                unid_limpia = re.sub(r'^UNIDAD:\s*\d+\s*-\s*', '', c0, flags=re.IGNORECASE).strip()
-                current_unidad = MAPEO_UNIDADES.get(num_str, unid_limpia)
-                continue
-
-            if c0.upper() in ['ITEM', 'N°', 'NRO', 'ORDEN'] or 'TOTAL' in c0.upper() or 'TOTAL' in c1.upper():
-                continue
-
-            if c1 != "" and c1.upper() != 'NRO. SOCIO' and c2 != "":
-                records.append({
-                    'nro_socio': re.sub(r'\.0$', '', c1.strip()),
-                    'emp_nomape': c2.strip(),
-                    'monto_enviado': c3.strip(),
-                    'monto_cobrado': c4.strip(),
-                    'monto_rechazado': c5.strip(),
-                    'unidad_nombre_oficial': current_unidad,
-                    'periodo': periodo_tag
-                })
-
-        df_concat = pd.DataFrame(records)
-        if 'emp_ci' not in df_concat.columns:
-            df_concat['emp_ci'] = ""
-            df_concat['emp_ci_clean'] = ""
-        return df_concat
-
-    else:
-        dfs = []
-        for sheet in xls.sheet_names:
-            if sheet.strip().lower() in ['hoja1', 'hoja 1', 'consolidado']:
-                continue
-
-            num_m = re.findall(r'\d+', str(sheet))
-            num_str = num_m[0] if num_m else ""
-            nombre_unidad = MAPEO_UNIDADES.get(num_str, sheet)
-            
-            try:
-                df_s = pd.read_excel(xls, sheet_name=sheet, dtype=str)
-                if 'N°' in df_s.columns:
-                    df_s = df_s[~df_s['N°'].astype(str).str.upper().str.contains('TOTAL', na=False)]
-                
-                df_s = estandarizar_columnas_giradurias(df_s)
-                
-                if 'nro_socio' in df_s.columns:
-                    df_s['nro_socio'] = df_s['nro_socio'].astype(str).apply(lambda x: re.sub(r'\.0$', '', str(x).strip()) if pd.notna(x) else "")
-
-                if 'emp_ci' in df_s.columns:
-                    df_s['emp_ci_clean'] = df_s['emp_ci'].astype(str).apply(limpiar_ci)
-
-                df_s['unidad_nombre_oficial'] = nombre_unidad
-                df_s['hoja_origen'] = sheet
-                if periodo_tag:
-                    df_s['periodo'] = periodo_tag
-                dfs.append(df_s)
-            except Exception:
-                pass
-                
-        if dfs:
-            df_concat = pd.concat(dfs, ignore_index=True)
-            return df_concat
-        return pd.DataFrame()
-
 def estandarizar_columnas_ffaa(df):
     cols_map = {}
     for c in df.columns:
@@ -609,56 +342,27 @@ def estandarizar_columnas_ffaa(df):
 
     return df_renamed
 
-def mapear_y_desduplicar_columnas_auditoria(df):
+def estandarizar_columnas_giradurias(df):
     cols_map = {}
     for c in df.columns:
         c_clean = str(c).strip().upper().replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
-        if 'CEDULA' in c_clean or 'N° DE CEDULE' in c_clean or 'CEDULA DE IDENTIDAD' in c_clean:
-            cols_map[c] = 'cedula'
-        elif 'NÚMERO DEL BENEFICIARIO' in c_clean or 'NUMERO DEL BENEFICIARIO' in c_clean:
-            cols_map[c] = 'beneficiario'
-        elif 'NOMBRES Y APELLIDOS' in c_clean or 'BENEFICIARIO' in c_clean:
-            cols_map[c] = 'nombre'
-        elif 'CONCEPTO' in c_clean and 'CONCEPTO DEL DESCUENTO' in c_clean:
-            cols_map[c] = 'concepto'
-        elif 'OPERACION' in c_clean or 'NUMERO DE LA OPERACION' in c_clean:
-            cols_map[c] = 'operacion'
-        elif 'FECHA DE LA DEUDA' in c_clean:
-            cols_map[c] = 'fecha_deuda'
-        elif 'NUMERO DE CUOTA' in c_clean:
-            cols_map[c] = 'num_cuota'
-        elif 'TOTAL CUOTA' in c_clean:
-            cols_map[c] = 'total_cuota'
-        elif 'MONTO POR DESCONTARSE' in c_clean or 'DESCONTARSE' in c_clean:
-            cols_map[c] = 'monto_desconto'
-        elif 'SALDO (DEUDA)' in c_clean or 'SALDO' in c_clean:
-            cols_map[c] = 'saldo_deuda'
-        elif 'FECHA COMPROBANTE' in c_clean or 'FACTURA CREDITO' in c_clean:
-            cols_map[c] = 'fecha_comprobante'
+        if 'SOCIO' in c_clean:
+            cols_map[c] = 'nro_socio'
+        elif 'C.I' in c_clean or 'CEDULA' in c_clean or 'CI' in c_clean:
+            cols_map[c] = 'emp_ci'
+        elif 'APELLIDO' in c_clean or 'NOMBRE' in c_clean:
+            cols_map[c] = 'emp_nomape'
+        elif 'MONTO A DESCONTAR' in c_clean or 'TOTAL DESCUENTOS' in c_clean or 'ENVIADO' in c_clean:
+            cols_map[c] = 'monto_enviado'
+        elif 'COBRADO' in c_clean:
+            cols_map[c] = 'monto_cobrado'
+        elif 'RECHAZADO' in c_clean:
+            cols_map[c] = 'monto_rechazado'
             
     df_ren = df.rename(columns=cols_map)
-    df_ren = df_ren.loc[:, ~df_ren.columns.duplicated()]
+    if 'emp_ci' in df_ren.columns:
+        df_ren['emp_ci_clean'] = df_ren['emp_ci'].astype(str).apply(limpiar_ci)
     return df_ren
-
-def cargar_archivo_universal(file_uploader):
-    ext = file_uploader.name.lower().split('.')[-1]
-    file_uploader.seek(0)
-    if ext in ['xlsx', 'xls']:
-        df_raw = pd.read_excel(file_uploader, header=None, dtype=str)
-        header_idx = 0
-        for idx, row in df_raw.iterrows():
-            row_str = " ".join([str(val).upper() for val in row.values if pd.notna(val)])
-            if 'CEDULA' in row_str or 'C.I' in row_str or 'BENEFICIARIO' in row_str or 'OPERACION' in row_str:
-                header_idx = idx
-                break
-        file_uploader.seek(0)
-        return pd.read_excel(file_uploader, skiprows=header_idx, dtype=str)
-    else:
-        try:
-            return pd.read_csv(file_uploader, dtype=str, sep=None, engine='python', encoding='utf-8')
-        except:
-            file_uploader.seek(0)
-            return pd.read_csv(file_uploader, dtype=str, sep=None, engine='python', encoding='latin1')
 
 @st.cache_data(ttl=2592000)
 def cargar_historial_liquidez():
@@ -717,6 +421,41 @@ def guardar_historial_giradurias(df_nuevo, periodo_tag):
         
     df_unificado.to_csv(DB_HISTORIAL_GIRADURIAS_FILE, index=False)
     st.cache_data.clear()
+
+def unificar_hojas_excel(file_or_path, periodo_tag=""):
+    xls = pd.ExcelFile(file_or_path)
+    dfs = []
+    sheet_names = xls.sheet_names
+    
+    for sheet in sheet_names:
+        if sheet.strip().lower() in ['hoja1', 'hoja 1', 'consolidado'] and len(sheet_names) > 1:
+            continue
+
+        num_m = re.findall(r'\d+', str(sheet))
+        num_str = num_m[0] if num_m else ""
+        nombre_unidad = MAPEO_UNIDADES.get(num_str, sheet)
+        
+        try:
+            df_s = pd.read_excel(xls, sheet_name=sheet, dtype=str)
+            df_s = estandarizar_columnas_giradurias(df_s)
+            
+            if 'nro_socio' in df_s.columns:
+                df_s['nro_socio'] = df_s['nro_socio'].astype(str).apply(lambda x: re.sub(r'\.0$', '', str(x).strip()) if pd.notna(x) else "")
+
+            if 'emp_ci' in df_s.columns:
+                df_s['emp_ci_clean'] = df_s['emp_ci'].astype(str).apply(limpiar_ci)
+
+            df_s['unidad_nombre_oficial'] = nombre_unidad
+            df_s['hoja_origen'] = sheet
+            if periodo_tag:
+                df_s['periodo'] = periodo_tag
+            dfs.append(df_s)
+        except Exception:
+            pass
+            
+    if dfs:
+        return pd.concat(dfs, ignore_index=True)
+    return pd.DataFrame()
 
 def cargar_dictamenes():
     if os.path.exists(DB_DICTAMENES_FILE):
@@ -810,219 +549,6 @@ def generar_pdf_constancia(tipo_reporte, nombre, ci, unidad, presupuestado, jubi
     pdf.ln(15)
     pdf.cell(0, 6, "_____________________________", align="C", ln=True)
     pdf.cell(0, 6, "Firma / Sello de Recepcion", align="C", ln=True)
-
-    return bytes(pdf.output())
-
-class PDFSimulacionPrestamo(FPDF):
-    def __init__(self):
-        super().__init__(orientation='P', unit='mm', format='A4')
-
-    def header(self):
-        fecha_local = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
-        self.set_font("Helvetica", "B", 13)
-        self.cell(0, 7, "SICOC - SIMULACION OFICIAL DE PRESTAMO Y AMORTIZACION", border=0, ln=True, align="C")
-        self.set_font("Helvetica", "I", 9)
-        self.cell(0, 4, f"Fecha de emision: {fecha_local}", border=0, ln=True, align="C")
-        self.ln(3)
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_font("Helvetica", "I", 8)
-        self.cell(0, 10, f"Pagina {self.page_no()}", align="C")
-
-def generar_pdf_simulacion_prestamo(nombre_s, ci_s, tipo_p, monto_cap, plazo_m, tasa_i, cap_gastos, plus_1, tot_pagar, df_plan_pagos):
-    pdf = PDFSimulacionPrestamo()
-    pdf.add_page()
-
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 6, "1. DATOS DEL SOLICITANTE Y CONDICIONES DEL CREDITO", ln=True)
-    pdf.set_font("Helvetica", "", 9)
-    pdf.cell(100, 5, f"Socio: {limpiar_texto_pdf(nombre_s)}")
-    pdf.cell(90, 5, f"Cedula: {ci_s}", ln=True)
-    pdf.cell(100, 5, f"Tipo de Credito: {limpiar_texto_pdf(tipo_p)}")
-    pdf.cell(90, 5, f"Plazo: {plazo_m} meses", ln=True)
-    pdf.cell(100, 5, f"Capital Solicitado: Gs. {formato_guarani(monto_cap)}")
-    pdf.cell(90, 5, f"Tasa de Interes: {tasa_i}% Anual", ln=True)
-    pdf.cell(100, 5, f"Capital con Gastos: Gs. {formato_guarani(cap_gastos)}")
-    pdf.cell(90, 5, f"Total a Pagar: Gs. {formato_guarani(tot_pagar)}", ln=True)
-    pdf.ln(4)
-
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 6, "2. PLAN DE AMORTIZACION Y VENCIMIENTOS", ln=True)
-    pdf.set_font("Helvetica", "B", 8)
-
-    w_col = [12, 25, 26, 26, 26, 22, 28, 25]
-    cols = ['Cuota', 'Vencimiento', 'Cuota Gs.', 'Amortiz.', 'Intereses', 'Plus Gs.', 'Saldo Gs.', 'Ahorro Gs.']
-    
-    for idx, c in enumerate(cols):
-        pdf.cell(w_col[idx], 6, c, border=1, align="C")
-    pdf.ln()
-
-    pdf.set_font("Helvetica", "", 7)
-    for idx, r in df_plan_pagos.iterrows():
-        pdf.cell(w_col[0], 5, str(r.get('Nro. Cuota', '')), border=1, align="C")
-        pdf.cell(w_col[1], 5, str(r.get('Fecha Vencimiento', '')), border=1, align="C")
-        pdf.cell(w_col[2], 5, str(r.get('Cuota (Gs.)', '')), border=1, align="R")
-        pdf.cell(w_col[3], 5, str(r.get('Amortización', '')), border=1, align="R")
-        pdf.cell(w_col[4], 5, str(r.get('Intereses', '')), border=1, align="R")
-        pdf.cell(w_col[5], 5, str(r.get('Plus (Gs.)', '')), border=1, align="R")
-        pdf.cell(w_col[6], 5, str(r.get('Saldo (Gs.)', '')), border=1, align="R")
-        pdf.cell(w_col[7], 5, str(r.get('Ahorro (Gs.)', '')), border=1, align="R")
-        pdf.ln()
-
-    return bytes(pdf.output())
-
-class PDFEstadoCuentaRefinanciacion(FPDF):
-    def __init__(self):
-        super().__init__(orientation='P', unit='mm', format='A4')
-
-    def header(self):
-        fecha_local = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
-        self.set_font("Helvetica", "B", 13)
-        self.cell(0, 7, "SICOC - ESTADO DE CUENTA Y PROPUESTA DE REFINANCIACION", border=0, ln=True, align="C")
-        self.set_font("Helvetica", "I", 9)
-        self.cell(0, 4, f"Fecha de emision: {fecha_local}", border=0, ln=True, align="C")
-        self.ln(3)
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_font("Helvetica", "I", 8)
-        self.cell(0, 10, f"Pagina {self.page_no()}", align="C")
-
-def generar_pdf_estado_cuenta(nombre_s, ci_s, u_gir, u_liq, ult_desc, tot_creditos, tot_sociales, efectivo_retira, total_cancelar, resultado_eval, plazo_rec, cuota_rec):
-    pdf = PDFEstadoCuentaRefinanciacion()
-    pdf.add_page()
-
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 6, "1. DATOS DEL SOCIO Y REFERENCIAS DE DEUDAS", ln=True)
-    pdf.set_font("Helvetica", "", 9)
-    pdf.cell(100, 5, f"Socio: {limpiar_texto_pdf(nombre_s)}")
-    pdf.cell(90, 5, f"Cedula: {ci_s}", ln=True)
-    pdf.cell(100, 5, f"Giraduria Registrada: {limpiar_texto_pdf(u_gir)}")
-    pdf.cell(90, 5, f"Unidad Liquidez: {limpiar_texto_pdf(u_liq)}", ln=True)
-    pdf.cell(100, 5, f"Ultimo Descuento Cobrado: Gs. {formato_guarani(ult_desc)}", ln=True)
-    pdf.ln(3)
-
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 6, "2. RESUMEN DE SALDOS Y CONCEPTOS A CANCELAR", ln=True)
-    pdf.set_font("Helvetica", "", 9)
-    pdf.cell(100, 5, f"Subtotal Creditos / Deudas: Gs. {formato_guarani(tot_creditos)}")
-    pdf.cell(90, 5, f"Subtotal Conceptos Sociales: Gs. {formato_guarani(tot_sociales)}", ln=True)
-    pdf.cell(100, 5, f"Efectivo Adicional a Retirar: Gs. {formato_guarani(efectivo_retira)}")
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(90, 5, f"TOTAL DEUDA BASE: Gs. {formato_guarani(total_cancelar)}", ln=True)
-    pdf.ln(3)
-
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 6, "3. DIAGNOSTICO DE REFINANCIACION Y PLAZO RECOMENDADO", ln=True)
-    pdf.set_font("Helvetica", "", 9)
-    
-    res_clean = limpiar_texto_pdf(resultado_eval)
-    pdf.multi_cell(0, 5, f"Estado / Veredicto: {res_clean}")
-    
-    if plazo_rec > 0:
-        pdf.ln(2)
-        pdf.cell(100, 5, f"Plazo Recomendado: {plazo_rec} meses")
-        pdf.cell(90, 5, f"Cuota Estimada: Gs. {formato_guarani(cuota_rec)}", ln=True)
-
-    pdf.ln(15)
-    pdf.cell(95, 6, "_____________________________", align="C")
-    pdf.cell(95, 6, "_____________________________", align="C", ln=True)
-    pdf.cell(95, 5, "Firma del Socio", align="C")
-    pdf.cell(95, 5, "Firma / Sello de Recepcion", align="C", ln=True)
-
-    return bytes(pdf.output())
-
-class PDFReporteIncidencias(FPDF):
-    def __init__(self):
-        super().__init__(orientation='L', unit='mm', format='A4')
-
-    def header(self):
-        fecha_local = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
-        self.set_font("Helvetica", "B", 13)
-        self.cell(0, 8, "SICOC - INFORME OFICIAL DE PAGOS PARCIALES Y RECHAZADOS", border=0, ln=True, align="C")
-        self.set_font("Helvetica", "I", 9)
-        self.cell(0, 4, f"Fecha de emision: {fecha_local}", border=0, ln=True, align="C")
-        self.ln(4)
-
-        self.set_font("Helvetica", "B", 8)
-        self.cell(10, 6, "N°", border=1, align="C")
-        self.cell(18, 6, "SOCIO", border=1, align="C")
-        self.cell(20, 6, "CEDULA", border=1, align="C")
-        self.cell(48, 6, "NOMBRE Y APELLIDO", border=1, align="C")
-        self.cell(25, 6, "U. GIRADURIA", border=1, align="C")
-        self.cell(25, 6, "U. LIQUIDEZ", border=1, align="C")
-        self.cell(24, 6, "ENVIADO", border=1, align="C")
-        self.cell(24, 6, "COBRADO", border=1, align="C")
-        self.cell(24, 6, "RECHAZADO", border=1, align="C")
-        self.cell(59, 6, "DIAGNOSTICO / OBSERVACION", border=1, align="C")
-        self.ln()
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_font("Helvetica", "I", 8)
-        self.cell(0, 10, f"Pagina {self.page_no()}", align="C")
-
-class PDFCobrabilidadUnidades(FPDF):
-    def __init__(self):
-        super().__init__(orientation='L', unit='mm', format='A4')
-
-    def header(self):
-        fecha_local = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
-        self.set_font("Helvetica", "B", 13)
-        self.cell(0, 8, "SICOC - RESUMEN DE COBRABILIDAD Y EFECTIVIDAD POR UNIDAD", border=0, ln=True, align="C")
-        self.set_font("Helvetica", "I", 9)
-        self.cell(0, 4, f"Fecha de emision: {fecha_local}", border=0, ln=True, align="C")
-        self.ln(4)
-
-        self.set_font("Helvetica", "B", 9)
-        self.cell(15, 7, "N°", border=1, align="C")
-        self.cell(90, 7, "UNIDAD / GIRADURIA", border=1, align="C")
-        self.cell(55, 7, "MONTO ENVIADO", border=1, align="C")
-        self.cell(55, 7, "MONTO COBRADO", border=1, align="C")
-        self.cell(50, 7, "% EFECTIVIDAD", border=1, align="C")
-        self.ln()
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_font("Helvetica", "I", 8)
-        self.cell(0, 10, f"Pagina {self.page_no()}", align="C")
-
-def generar_pdf_reporte_incidencias(df_reporte):
-    pdf = PDFReporteIncidencias()
-    pdf.add_page()
-    pdf.set_font("Helvetica", "", 7)
-
-    for idx, r in df_reporte.iterrows():
-        nro_orden = idx + 1
-        pdf.cell(10, 6, str(nro_orden), border=1, align="C")
-        pdf.cell(18, 6, str(r.get('SOCIO', '-'))[:10], border=1, align="C")
-        pdf.cell(20, 6, str(r.get('CEDULA', '-'))[:10], border=1, align="C")
-        pdf.cell(48, 6, limpiar_texto_pdf(r.get('NOMBRE', '-'))[:28], border=1, align="L")
-        pdf.cell(25, 6, limpiar_texto_pdf(r.get('UNIDAD GIRADURIA', '-'))[:15], border=1, align="L")
-        pdf.cell(25, 6, limpiar_texto_pdf(r.get('UNIDAD LIQUIDEZ', '-'))[:15], border=1, align="L")
-        pdf.cell(24, 6, f"Gs. {formato_guarani(r.get('ENVIADO', 0))}", border=1, align="R")
-        pdf.cell(24, 6, f"Gs. {formato_guarani(r.get('COBRADO', 0))}", border=1, align="R")
-        pdf.cell(24, 6, f"Gs. {formato_guarani(r.get('RECHAZADO', 0))}", border=1, align="R")
-        pdf.cell(59, 6, limpiar_texto_pdf(r.get('DIAGNOSTICO', '-'))[:38], border=1, align="L")
-        pdf.ln()
-
-    return bytes(pdf.output())
-
-def generar_pdf_cobrabilidad_unidades(df_metrics):
-    pdf = PDFCobrabilidadUnidades()
-    pdf.add_page()
-    pdf.set_font("Helvetica", "", 8)
-
-    for idx, r in df_metrics.iterrows():
-        nro_orden = idx + 1
-        nombre_u = str(r.get('unidad_nombre_oficial', r.get('Unidad / Giraduría', '-')))
-        pdf.cell(15, 6, str(nro_orden), border=1, align="C")
-        pdf.cell(90, 6, limpiar_texto_pdf(nombre_u)[:50], border=1, align="L")
-        pdf.cell(55, 6, f"Gs. {formato_guarani(r.get('monto_enviado_num', 0))}", border=1, align="R")
-        pdf.cell(55, 6, f"Gs. {formato_guarani(r.get('monto_cobrado_num', 0))}", border=1, align="R")
-        pdf.cell(50, 6, f"{r.get('% Cobrado', 0)} %", border=1, align="C")
-        pdf.ln()
 
     return bytes(pdf.output())
 
@@ -1192,17 +718,8 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                         monto_efectivo=monto_efectivo_aut
                     )
                     st.success(f"✅ ¡Derivación N° **{id_creado}** enviada con éxito a **{destinatario_sel}**!")
-                    
-                    tel_dest = TELEFONOS_USUARIOS.get(destinatario_sel.lower(), "")
-                    if tel_dest:
-                        msg_wa_der = f"Hola {destinatario_sel}, te derivé el caso del socio *{nombre}* (C.I. {cedula_militar}) en el SICOC (Derivación N° {id_creado})."
-                        wa_url_der = f"https://wa.me/{tel_dest}?text={urllib.parse.quote(msg_wa_der)}"
-                        st.markdown(f'[![Notificar por WhatsApp](https://img.shields.io/badge/WhatsApp-Notificar_a_{destinatario_sel}_por_WhatsApp-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)]({wa_url_der})')
 
-        dict_match = df_dictamenes[df_dictamenes['CEDULA'].astype(str).apply(limpiar_ci) == cedula_militar]
-        obs_dictamen = dict_match.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_match.empty else "Sin observaciones previas."
-
-        pdf_bytes = generar_pdf_constancia("Evaluación de Liquidez", nombre, cedula_militar, unidad_militar, presupuestado, jubilacion, total_descuentos, liquido_real, limite_50_estandar, 0.0, "EVALUACIÓN REALIZADA", obs_dictamen)
+        pdf_bytes = generar_pdf_constancia("Evaluación de Liquidez", nombre, cedula_militar, unidad_militar, presupuestado, jubilacion, total_descuentos, liquido_real, limite_50_estandar, 0.0, "EVALUACIÓN REALIZADA")
         st.download_button(
             label="📄 Descargar Constancia de Evaluación (PDF)",
             data=pdf_bytes,
@@ -1218,16 +735,14 @@ elif opcion == "📥 Derivaciones Internas":
     st.subheader("📥 Bandeja de Casos y Derivaciones Internas entre Compañeros")
     df_deriv = cargar_derivaciones()
 
-    tab_der1, tab_der2 = st.tabs(["📥 Mis Casos Recibidos", "📤 Mis Casos Enviados / Gestionar Repetidos"])
+    tab_der1, tab_der2 = st.tabs(["📥 Mis Casos Recibidos", "📤 Mis Casos Enviados"])
 
     with tab_der1:
         mis_recibidos = df_deriv[df_deriv['DESTINATARIO'] == usuario_actual] if not df_deriv.empty else pd.DataFrame()
-        
         if mis_recibidos.empty:
             st.info("🟢 **Sin derivaciones pendientes:** No tenés casos asignados actualmente.")
         else:
             st.success(f"📋 Tenés **{len(mis_recibidos)}** caso(s) asignado(s).")
-            
             for idx, r_der in mis_recibidos.iterrows():
                 id_d = r_der.get('ID_DERIVACION', '')
                 fec_e = r_der.get('FECHA_ENVIO', '')
@@ -1236,35 +751,13 @@ elif opcion == "📥 Derivaciones Internas":
                 nom_e = r_der.get('SOCIO_NOMBRE', '')
                 obs_e = r_der.get('DESCRIPCION_CASO', '')
                 est_e = r_der.get('ESTADO_TRAMITE', '🟡 En Proceso')
-                perm_ef = r_der.get('PERMITE_EFECTIVO', 'NO') == 'SI'
-                monto_ef_aut = int(round(limpiar_monto(r_der.get('MONTO_EFECTIVO_AUTORIZADO', 0))))
-                visto_status = r_der.get('VISTO', 'NO')
-
+                
                 with st.expander(f"📌 Caso N° {id_d} | Socio: {nom_e} (C.I.: {ced_e}) - Estado: {est_e}"):
-                    if visto_status == 'NO':
-                        f_visto_ahora = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
-                        df_deriv.loc[df_deriv['ID_DERIVACION'] == id_d, 'VISTO'] = 'SI'
-                        df_deriv.loc[df_deriv['ID_DERIVACION'] == id_d, 'FECHA_VISTO'] = f_visto_ahora
-                        guardar_derivaciones(df_deriv)
-
-                    col_r1, col_r2 = st.columns(2)
-                    with col_r1:
-                        st.markdown(f"**Enviado por:** {rem_e} el {fec_e}")
-                        st.markdown(f"**Socio:** {nom_e} (C.I. {ced_e})")
-                        st.info(f"📝 **Instrucción:** {obs_e}")
-
-                    with col_r2:
-                        nuevo_estado = st.selectbox("Estado del Tramite:", ["🟡 En Proceso", "🟢 Atendido", "✅ Procesado"], index=["🟡 En Proceso", "🟢 Atendido", "✅ Procesado"].index(est_e) if est_e in ["🟡 En Proceso", "🟢 Atendido", "✅ Procesado"] else 0, key=f"sel_est_{id_d}")
-
-                    if perm_ef:
-                        monto_mod_efec = int(round(limpiar_monto(st.text_input("Monto en Efectivo a Retirar (Gs.):", value=str(monto_ef_aut), key=f"inp_efec_{id_d}"))))
-                    else:
-                        monto_mod_efec = 0
-
+                    st.write(f"**Enviado por:** {rem_e} el {fec_e}")
+                    st.info(f"📝 **Instrucción:** {obs_e}")
+                    nuevo_estado = st.selectbox("Actualizar Estado:", ["🟡 En Proceso", "🟢 Atendido", "✅ Procesado"], key=f"sel_est_{id_d}")
                     if st.button("💾 Guardar Cambios", key=f"btn_save_case_{id_d}"):
                         df_deriv.loc[df_deriv['ID_DERIVACION'] == id_d, 'ESTADO_TRAMITE'] = nuevo_estado
-                        if perm_ef:
-                            df_deriv.loc[df_deriv['ID_DERIVACION'] == id_d, 'MONTO_EFECTIVO_AUTORIZADO'] = str(monto_mod_efec)
                         guardar_derivaciones(df_deriv)
                         st.success("✅ ¡Caso actualizado!")
                         st.rerun()
@@ -1272,75 +765,24 @@ elif opcion == "📥 Derivaciones Internas":
     with tab_der2:
         st.markdown("### 📤 Historial de Derivaciones Enviadas")
         df_view_d = df_deriv if es_admin_base else (df_deriv[df_deriv['REMITENTE'] == usuario_actual] if not df_deriv.empty else pd.DataFrame())
-        
-        if df_view_d.empty:
-            st.info("No tenés derivaciones registradas en tu historial de envíos.")
-        else:
-            for idx_e, r_env in df_view_d.iterrows():
-                id_e = r_env.get('ID_DERIVACION', '')
-                fec_env = r_env.get('FECHA_ENVIO', '')
-                dest_env = r_env.get('DESTINATARIO', '').capitalize()
-                nom_env = r_env.get('SOCIO_NOMBRE', '')
-                ced_env = r_env.get('CEDULA', '')
-                obs_env = r_env.get('DESCRIPCION_CASO', '')
-                est_env = r_env.get('ESTADO_TRAMITE', '🟡 En Proceso')
-
-                with st.expander(f"📤 Caso N° {id_e} para {dest_env} | Socio: {nom_env}"):
-                    st.markdown(f"**Fecha:** {fec_env} | **Estado:** {est_env}")
-                    nueva_obs_env = st.text_area("Editar Observación:", value=obs_env, key=f"edit_obs_{id_e}")
-                    
-                    col_s, col_d = st.columns(2)
-                    with col_s:
-                        if st.button("💾 Guardar Cambios", key=f"btn_mod_env_{id_e}"):
-                            df_deriv.loc[df_deriv['ID_DERIVACION'] == id_e, 'DESCRIPCION_CASO'] = nueva_obs_env
-                            guardar_derivaciones(df_deriv)
-                            st.success("✅ Modificado con éxito.")
-                            st.rerun()
-                    with col_d:
-                        if st.button("🗑️ Eliminar Caso", key=f"btn_del_env_{id_e}"):
-                            df_deriv = df_deriv[df_deriv['ID_DERIVACION'] != id_e]
-                            guardar_derivaciones(df_deriv)
-                            st.warning("🗑️ Eliminado de la base.")
-                            st.rerun()
+        if not df_view_d.empty:
+            st.dataframe(df_view_d[['ID_DERIVACION', 'FECHA_ENVIO', 'DESTINATARIO', 'SOCIO_NOMBRE', 'CEDULA', 'ESTADO_TRAMITE']], use_container_width=True)
 
 # ==========================================
 # 📊 MÓDULO GESTIÓN DE COBRANZAS
 # ==========================================
 elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
-    st.subheader("📊 Módulo de Diagnóstico de Cobranzas y Efectividad por Unidad")
-    
+    st.subheader("📊 Módulo de Diagnóstico de Cobranzas y Reportes")
     if df_historial_giradurias.empty:
-        st.info("Por favor cargá la base consolidada en 'Cargar Base Mensual'.")
+        st.info("Por favor cargá bases en 'Cargar Base Mensual'.")
     else:
-        tab_r1, tab_r2 = st.tabs(["📉 Incidencias de Cobro", "📊 Cobrabilidad por Unidad"])
-
-        with tab_r1:
-            st.markdown("### 📋 Listado de Pagos Parciales o Rechazados")
-            df_inc = df_historial_giradurias.copy()
-            df_inc['enviado_num'] = df_inc['monto_enviado'].apply(limpiar_monto)
-            df_inc['cobrado_num'] = df_inc['monto_cobrado'].apply(limpiar_monto)
-            df_inc_filt = df_inc[df_inc['cobrado_num'] < df_inc['enviado_num']]
-
-            st.dataframe(df_inc_filt[['periodo', 'unidad_nombre_oficial', 'nro_socio', 'emp_nomape', 'monto_enviado', 'monto_cobrado', 'monto_rechazado']], use_container_width=True)
-
-        with tab_r2:
-            st.markdown("### 📊 Efectividad de Cobro por Unidad")
-            df_metrics = df_historial_giradurias.copy()
-            df_metrics['monto_enviado_num'] = df_metrics['monto_enviado'].apply(limpiar_monto)
-            df_metrics['monto_cobrado_num'] = df_metrics['monto_cobrado'].apply(limpiar_monto)
-
-            df_agg = df_metrics.groupby('unidad_nombre_oficial', as_index=False)[['monto_enviado_num', 'monto_cobrado_num']].sum()
-            df_agg['% Cobrado'] = (df_agg['monto_cobrado_num'] / df_agg['monto_enviado_num'] * 100).fillna(0).round(1)
-
-            st.dataframe(df_agg, use_container_width=True)
-            st.bar_chart(data=df_agg, x='unidad_nombre_oficial', y='% Cobrado')
+        st.dataframe(df_historial_giradurias[['periodo', 'unidad_nombre_oficial', 'nro_socio', 'emp_nomape', 'monto_enviado', 'monto_cobrado', 'monto_rechazado']], use_container_width=True)
 
 # ==========================================
 # 📋 MÓDULO DICTAMEN DEL GIRADOR
 # ==========================================
 elif opcion == "📋 Dictamen del Girador":
     st.subheader("📋 Módulo de Registro de Dictamen de Giraduría")
-    
     ci_girador = st.text_input("Ingresá la Cédula para el Dictamen:").strip()
     ci_girador_clean = limpiar_ci(ci_girador)
     
@@ -1348,53 +790,30 @@ elif opcion == "📋 Dictamen del Girador":
         dict_previo = df_dictamenes[df_dictamenes['CEDULA'].astype(str).apply(limpiar_ci) == ci_girador_clean]
         obs_inicial = dict_previo.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_previo.empty else "Sin dictamen registrado."
         
-        if es_editor:
-            with st.form("form_dictamen"):
-                cuota_eval = st.number_input("Monto de Cuota Solicitada (Gs.):", min_value=0, step=50000, format="%d")
-                obs_girador = st.text_area("Observaciones del Girador:", value=obs_inicial)
-                
-                if st.form_submit_button("💾 Guardar Dictamen"):
-                    fecha_dictamen = obtener_fecha_hora_local().strftime("%d/%m/%Y %H:%M")
-                    df_dictamenes = df_dictamenes[df_dictamenes['CEDULA'].astype(str).apply(limpiar_ci) != ci_girador_clean]
-                    nuevo_dictamen = pd.DataFrame([{'CEDULA': ci_girador_clean, 'CUOTA_PROPUESTA': formato_guarani(cuota_eval), 'DICTAMEN_GIRADOR': obs_girador, 'FECHA': fecha_dictamen}])
-                    df_dictamenes = pd.concat([df_dictamenes, nuevo_dictamen], ignore_index=True)
-                    guardar_dictamenes(df_dictamenes)
-                    st.success("✅ Dictamen guardado correctamente.")
-                    st.rerun()
-        else:
-            st.text_area("Observación del Girador:", value=obs_inicial, disabled=True)
+        obs_girador = st.text_area("Observaciones / Respuesta del Girador:", value=obs_inicial)
+        if st.button("💾 Guardar Dictamen"):
+            fecha_dictamen = obtener_fecha_hora_local().strftime("%d/%m/%Y %H:%M")
+            df_dictamenes = df_dictamenes[df_dictamenes['CEDULA'].astype(str).apply(limpiar_ci) != ci_girador_clean]
+            nuevo_dictamen = pd.DataFrame([{'CEDULA': ci_girador_clean, 'CUOTA_PROPUESTA': '0', 'DICTAMEN_GIRADOR': obs_girador, 'FECHA': fecha_dictamen}])
+            df_dictamenes = pd.concat([df_dictamenes, nuevo_dictamen], ignore_index=True)
+            guardar_dictamenes(df_dictamenes)
+            st.success("✅ Dictamen guardado correctamente.")
 
 # ==========================================
 # 🛡️ MÓDULO AUDITORÍA Y HACIENDA
 # ==========================================
 elif opcion == "🛡️ Auditoría y Cruce de Planillas":
     st.subheader("🛡️ Sistema de Auditoría y Cruce de Planillas (Hacienda)")
-    
     if not es_auditor_hacienda:
         st.error("🔒 Acceso denegado: Módulo exclusivo para auditores.")
     else:
-        tab1, tab2 = st.tabs(["🔍 Ejecutar Cruce y Auditoría", "✉ Generar Nota Oficial (MEF)"])
-
-        with tab1:
-            col1, col2 = st.columns(2)
-            with col1:
-                files_anteriores = st.file_uploader("📥 Planilla(s) Mes Anterior", type=["xlsx", "xls", "csv"], accept_multiple_files=True)
-            with col2:
-                file_actual = st.file_uploader("📥 Planilla Mes Actual (A Auditar)", type=["xlsx", "xls", "csv"])
-
-            if files_anteriores and file_actual:
-                if st.button("🚀 Ejecutar Cruce y Auditoría", use_container_width=True):
-                    st.success("✅ Auditoría ejecutada correctamente.")
-
-        with tab2:
-            st.markdown("#### ✉️ Generador de Nota Oficial para Hacienda (MEF)")
-            st.info("Ajuste los parámetros de fecha e importe para la nota oficial.")
+        st.info("Subí planillas para verificar inconsistencias con el mes anterior.")
 
 # ==========================================
 # 🧮 MÓDULO CALCULADORA DE PRÉSTAMOS
 # ==========================================
 elif opcion == "🧮 Calculadora de Préstamos":
-    st.subheader("🧮 Módulo de Operaciones Financieras, Préstamos y Estado de Cuenta")
+    st.subheader("📊 Módulo de Operaciones Financieras, Préstamos y Estado de Cuenta")
     
     sub_tab1, sub_tab2 = st.tabs(["🧮 Simulación de Préstamos", "📊 Estado de Cuenta y Refinanciación Automática"])
 
@@ -1417,11 +836,122 @@ elif opcion == "🧮 Calculadora de Préstamos":
                 st.success(f"Cuota Estimada: Gs. {formato_guarani(cuota)}")
 
     with sub_tab2:
-        st.markdown("#### 💳 Estado de Cuenta y Refinanciación")
-        cap_adeudado = limpiar_monto(st.text_input("Capital Adeudado Actual (Gs.):", value="0", key="ec_cap"))
-        int_vencido = limpiar_monto(st.text_input("Intereses Vencidos (Gs.):", value="0", key="ec_int"))
+        st.markdown("### 📊 Estado de Cuenta y Evaluación de Refinanciación Automática")
         
-        st.metric("Total Deuda Base", f"Gs. {formato_guarani(cap_adeudado + int_vencido)}")
+        socio_refin_input = st.text_input("🔍 Buscar Socio (Cédula, N° Socio o Nombre):", placeholder="Ej: 10487").strip()
+        socio_refin_clean = limpiar_ci(socio_refin_input)
+
+        match_ref_g = pd.DataFrame()
+        match_ref_l = pd.DataFrame()
+
+        if socio_refin_input:
+            if not df_historial_giradurias.empty:
+                if 'nro_socio' in df_historial_giradurias.columns:
+                    match_ref_g = df_historial_giradurias[df_historial_giradurias['nro_socio'].astype(str).str.strip() == socio_refin_input]
+                if match_ref_g.empty and socio_refin_clean and 'emp_ci_clean' in df_historial_giradurias.columns:
+                    match_ref_g = df_historial_giradurias[df_historial_giradurias['emp_ci_clean'] == socio_refin_clean]
+                if match_ref_g.empty and 'emp_nomape' in df_historial_giradurias.columns:
+                    match_ref_g = df_historial_giradurias[df_historial_giradurias['emp_nomape'].astype(str).str.contains(socio_refin_input, case=False, na=False)]
+
+            ci_socio_ref = limpiar_ci(match_ref_g.iloc[0].get('emp_ci', '')) if not match_ref_g.empty else socio_refin_clean
+            
+            if ci_socio_ref and not df_historial_liquidez.empty:
+                match_ref_l = df_historial_liquidez[df_historial_liquidez['emp_ci_clean'] == ci_socio_ref]
+
+        if not match_ref_g.empty or not match_ref_l.empty:
+            if not match_ref_g.empty:
+                r_ref_g = match_ref_g.iloc[0]
+                nom_ref = r_ref_g.get('emp_nomape', 'S/N')
+                ci_ref = limpiar_ci(r_ref_g.get('emp_ci', '0'))
+                gir_asig = r_ref_g.get('unidad_nombre_oficial', 'Giraduría')
+                ult_cobrado = limpiar_monto(r_ref_g.get('monto_cobrado', 0))
+            else:
+                r_ref_l = match_ref_l.iloc[0]
+                nom_ref = r_ref_l.get('emp_nomape', 'S/N')
+                ci_ref = limpiar_ci(r_ref_l.get('emp_ci', '0'))
+                gir_asig = "Sin Registrar"
+                ult_cobrado = 0.0
+
+            if not match_ref_l.empty:
+                r_ref_l = match_ref_l.iloc[0]
+                unid_liq_ref = r_ref_l.get('UNIDAD', 'Liquidez FF.AA.')
+                presup_ref = limpiar_monto(r_ref_l.get('presupuestado', 0))
+                jub_ref = limpiar_monto(r_ref_l.get('jubilacion', 0))
+                gir_ref = limpiar_monto(r_ref_l.get('giraduria', 0))
+                cf2_ref = limpiar_monto(r_ref_l.get('descuento_cf2', 0))
+                jud_ref = limpiar_monto(r_ref_l.get('judicial', 0))
+                
+                limite_50_ref = (presup_ref - jub_ref) / 2.0
+                margen_disp_ref = limite_50_ref - (gir_ref + cf2_ref + jud_ref)
+            else:
+                unid_liq_ref = "Sin Registrar"
+                margen_disp_ref = -321680.0
+
+            st.success(f"👤 **Socio Ficha:** {nom_ref} | **C.I.:** {ci_ref}")
+            
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Último Descuento Cobrado", f"Gs. {formato_guarani(ult_cobrado)}")
+            m2.metric("Giraduría Asignada", gir_asig)
+            m3.metric("Unidad Liquidez (FF.AA.)", unid_liq_ref)
+            m4.metric("Margen Disponible (50%)", f"Gs. {formato_guarani(margen_disp_ref)}")
+
+            st.markdown("---")
+            st.markdown("### 💳 1. Detalle de Créditos y Deudas Sociales del Socio")
+
+            with st.expander("📌 Crédito N° 1 y Conceptos Sociales Fijos", expanded=True):
+                col_c1, col_c2 = st.columns(2)
+                with col_c1:
+                    st.text_input("N° de Crédito Principal:", value="26634", key="cred_n1")
+                    cap_ad_1 = limpiar_monto(st.text_input("Capital Adeudado (Gs.):", value="14919125", key="cap_ad_1"))
+                    int_venc_1 = limpiar_monto(st.text_input("Intereses Vencidos (Gs.):", value="873730", key="int_venc_1"))
+                    int_mor_1 = limpiar_monto(st.text_input("Interés Moratorio (Gs.):", value="64001", key="int_mor_1"))
+                    int_pun_1 = limpiar_monto(st.text_input("Interés Punitorio (Gs.):", value="19201", key="int_pun_1"))
+
+                with col_c2:
+                    st.markdown("**Conceptos Sociales (Única aplicación):**")
+                    cs_aporte = limpiar_monto(st.text_input("Aporte (Gs.):", value="0", key="cs_aporte"))
+                    cs_mantenimiento = limpiar_monto(st.text_input("Mantenimiento Local Social (Gs.):", value="24000", key="cs_mantenimiento"))
+                    cs_solidaridad = limpiar_monto(st.text_input("Solidaridad (Gs.):", value="60000", key="cs_solidaridad"))
+                    cs_sorteo = limpiar_monto(st.text_input("Sorteo (Gs.):", value="80000", key="cs_sorteo"))
+
+            with st.expander("📌 Crédito Adicional N° 2", expanded=True):
+                col_ad1, col_ad2 = st.columns(2)
+                with col_ad1:
+                    st.text_input("N° de Crédito #2:", value="28876", key="cred_n2")
+                    cap_ad_2 = limpiar_monto(st.text_input("Capital Adeudado #2 (Gs.):", value="2017644", key="cap_ad_2"))
+                with col_ad2:
+                    int_venc_2 = limpiar_monto(st.text_input("Intereses Vencidos #2 (Gs.):", value="122287", key="int_venc_2"))
+                    int_mor_2 = limpiar_monto(st.text_input("Interés Moratorio #2 (Gs.):", value="24459", key="int_mor_2"))
+                    int_pun_2 = limpiar_monto(st.text_input("Interés Punitorio #2 (Gs.):", value="7278", key="int_pun_2"))
+
+            st.markdown("---")
+            st.markdown("### 💵 2. Retiro de Efectivo Adicional y Deuda Total")
+
+            chk_efectivo = st.checkbox("✔ ¿Desea retirar dinero en efectivo adicional?", value=True, key="chk_efec_ref")
+            monto_efec_retirar = 0.0
+            if chk_efectivo:
+                monto_efec_retirar = limpiar_monto(st.text_input("Monto en Efectivo a Retirar (Gs.):", value="1288275", key="inp_efec_ret"))
+
+            total_creditos = (cap_ad_1 + int_venc_1 + int_mor_1 + int_pun_1) + (cap_ad_2 + int_venc_2 + int_mor_2 + int_pun_2)
+            total_sociales = cs_aporte + cs_mantenimiento + cs_solidaridad + cs_sorteo
+            total_deuda_base = total_creditos + total_sociales + monto_efec_retirar
+
+            st.markdown(f"### **Total Deuda / Base Refinanciación:**\n## **Gs. {formato_guarani(total_deuda_base)}**")
+
+            st.markdown("---")
+            st.markdown("### 🎯 3. Análisis de Opciones de Cuota y Recomendación Automática")
+
+            ref_cuota_objetivo = ult_cobrado if ult_cobrado > 0 else 1000000.0
+            plazos_opciones = [12, 24, 36, 48]
+            opciones_cuotas = []
+
+            for p_op in plazos_opciones:
+                cap_g_op = total_deuda_base * 1.045
+                tasa_m_op = (0.22 / 12.0)
+                cuota_calc = cap_g_op * (tasa_m_op * ((1 + tasa_m_op) ** p_op)) / (((1 + tasa_m_op) ** p_op) - 1)
+                opciones_cuotas.append({'Plazo': f"{p_op} meses", 'Cuota Estimada (Gs.)': formato_guarani(cuota_calc), 'Diferencia vs Último Cobro': f"Gs. {formato_guarani(cuota_calc - ref_cuota_objetivo)}"})
+
+            st.dataframe(pd.DataFrame(opciones_cuotas), use_container_width=True)
 
 # ==========================================
 # 📥 MÓDULO CARGAR BASE MENSUAL
@@ -1431,7 +961,7 @@ elif opcion == "📥 Cargar Base Mensual":
     if not es_admin_base:
         st.error("🔒 Reservado únicamente para el usuario Administrador (`Arthuro`).")
     else:
-        tab_b1, tab_b2 = st.tabs(["🪖 Base Liquidez (FF.AA.)", "🏛️ Base Enviado/Cobrado (Giradurías)"])
+        tab_b1, tab_b2 = st.tabs(["🪖 Base Liquidez (FF.AA.)", "🏛️️ Base Enviado/Cobrado (Giradurías)"])
 
         with tab_b1:
             col_l1, col_l2 = st.columns(2)
