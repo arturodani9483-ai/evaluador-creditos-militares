@@ -373,7 +373,7 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==========================================
-# ⚙️ MENÚ LATERAL, SOPORTE Y NAVEGACIÓN
+# ⚙️️ MENÚ LATERAL, SOPORTE Y NAVEGACIÓN
 # ==========================================
 usuario_actual = st.session_state['usuario_actual'].lower()
 es_editor = usuario_actual in USUARIOS_EDITORES_DICTAMEN
@@ -659,9 +659,9 @@ def mapear_y_desduplicar_columnas_auditoria(df):
     cols_map = {}
     for c in df.columns:
         c_clean = str(c).strip().upper().replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
-        if 'CEDULA' in c_clean or 'N° DE CEDULE' in c_clean or 'CEDULA DE IDENTIDAD' in c_clean:
+        if 'CEDULA' in c_clean or 'N° DE CEDULE' in c_clean or 'CEDULA DE IDENTIDAD' in c_clean or c_clean == 'CI':
             cols_map[c] = 'cedula'
-        elif 'NÚMERO DEL BENEFICIARIO' in c_clean or 'NUMERO DEL BENEFICIARIO' in c_clean:
+        elif 'NÚMERO DEL BENEFICIARIO' in c_clean or 'NUMERO DEL BENEFICIARIO' in c_clean or 'BENEFICIARIO_NRO' in c_clean or 'CODIGO BENEFICIARIO' in c_clean:
             cols_map[c] = 'beneficiario'
         elif 'NOMBRES Y APELLIDOS' in c_clean or 'BENEFICIARIO' in c_clean:
             cols_map[c] = 'nombre'
@@ -675,7 +675,7 @@ def mapear_y_desduplicar_columnas_auditoria(df):
             cols_map[c] = 'num_cuota'
         elif 'TOTAL CUOTA' in c_clean:
             cols_map[c] = 'total_cuota'
-        elif 'MONTO POR DESCONTARSE' in c_clean or 'DESCONTARSE' in c_clean:
+        elif 'MONTO POR DESCONTARSE' in c_clean or 'DESCONTARSE' in c_clean or 'MONTO' in c_clean:
             cols_map[c] = 'monto_desconto'
         elif 'SALDO (DEUDA)' in c_clean or 'SALDO' in c_clean:
             cols_map[c] = 'saldo_deuda'
@@ -705,6 +705,42 @@ def cargar_archivo_universal(file_uploader):
         except:
             file_uploader.seek(0)
             return pd.read_csv(file_uploader, dtype=str, sep=None, engine='python', encoding='latin1')
+
+def generar_contenido_txt_hacienda(df_input):
+    """
+    Genera el formato TXT oficial de ancho fijo exacto para Hacienda/MEF:
+    Columna 1: Beneficiario (14 caracteres, alineado a la izquierda)
+    Columna 2: Cédula (15 caracteres, alineado a la derecha)
+    Columna 3: Monto Descuento (10 caracteres, alineado a la derecha)
+    """
+    df_work = mapear_y_desduplicar_columnas_auditoria(df_input)
+    
+    if 'monto_desconto' in df_work.columns:
+        df_work['monto_num'] = df_work['monto_desconto'].apply(limpiar_monto)
+    else:
+        df_work['monto_num'] = 0.0
+
+    if 'beneficiario' not in df_work.columns:
+        df_work['beneficiario'] = df_work.get('cedula', '')
+
+    if 'cedula' not in df_work.columns and 'emp_ci' in df_work.columns:
+        df_work['cedula'] = df_work['emp_ci']
+
+    df_agg = df_work.groupby(['beneficiario', 'cedula'], as_index=False)['monto_num'].sum()
+    
+    txt_lines = []
+    for _, row_a in df_agg.iterrows():
+        b_str = str(row_a['beneficiario']).strip() if pd.notna(row_a['beneficiario']) else ""
+        c_str = str(row_a['cedula']).strip() if pd.notna(row_a['cedula']) else ""
+        c_str_clean = limpiar_ci(c_str) if c_str else ""
+        m_val = int(round(row_a['monto_num']))
+        m_str = str(m_val)
+        
+        # Formato exacto coincidente al 100% con la muestra oficial de Hacienda
+        linea_fmt = f"{b_str:<14}{c_str_clean:>15}{m_str:>10}"
+        txt_lines.append(linea_fmt)
+        
+    return "\n".join(txt_lines)
 
 @st.cache_data(ttl=2592000)
 def cargar_liquidez():
@@ -1144,7 +1180,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                 if 'emp_ci_clean' in df_fuente_giradurias.columns:
                     matches_g = df_fuente_giradurias[df_fuente_giradurias['emp_ci_clean'] == ci_input_clean]
 
-    elif tipo_busqueda == "🏷️ Por Número de Socio":
+    elif tipo_busqueda == "🏷️️ Por Número de Socio":
         socio_input = st.text_input("Número de Socio:", placeholder="Ej: 9946").strip()
         if socio_input:
             if not df_fuente_giradurias.empty and 'nro_socio' in df_fuente_giradurias.columns:
@@ -1327,7 +1363,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                 if monto_cobrado < 100000:
                     st.error(
                         f"🔴 **REFINANCIACIÓN NO FACTIBLE (Monto Cobrado < Gs. 100.000):**\n"
-                        f"El socio registró un pago parcial de tan solo **Gs. {formato_guarani(monto_cobrado)}**, lo cual es inferior al mínimo operativo requerido (Gs. 100.000).\n"
+                        f"El socio realizó un pago parcial de tan solo **Gs. {formato_guarani(monto_cobrado)}**, lo cual es inferior al mínimo operativo requerido (Gs. 100.000).\n"
                         f"📌 **Acción Requerida:** No se recomienda estructurar refinanciación. **En caso de contar con cuotas atrasadas, proceder a la notificación formal de pago.**"
                     )
                 elif is_jubilado:
@@ -1878,7 +1914,11 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
     if not es_auditor_hacienda:
         st.error("🔒 **Acceso denegado:** Este módulo es exclusivo para los usuarios autorizados (`Arthuro` y `Martín`).")
     else:
-        tab1, tab2 = st.tabs(["🔍 Ejecutar Cruce y Auditoría", "✉ Generar Nota Oficial (MEF)"])
+        tab1, tab2, tab3 = st.tabs([
+            "🔍 Ejecutar Cruce y Auditoría", 
+            "📄 Generar TXT Oficial Hacienda", 
+            "✉ Generar Nota Oficial (MEF)"
+        ])
 
         with tab1:
             st.markdown("Subí las planillas en formato **Excel (.xlsx / .xls)** o **CSV (.csv)**.")
@@ -1888,12 +1928,14 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
                 files_anteriores = st.file_uploader(
                     "📥 Planilla(s) Mes Anterior (Referencia)", 
                     type=["xlsx", "xls", "csv"], 
-                    accept_multiple_files=True
+                    accept_multiple_files=True,
+                    key="upl_audit_ref"
                 )
             with col2:
                 file_actual = st.file_uploader(
                     "📥 Planilla Mes Actual (A Auditar)", 
-                    type=["xlsx", "xls", "csv"]
+                    type=["xlsx", "xls", "csv"],
+                    key="upl_audit_curr"
                 )
 
             if files_anteriores and file_actual:
@@ -2047,15 +2089,7 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
                                     st.session_state['total_monto_auditoria'] = float(df_agg['monto_total'].sum())
                                     st.session_state['total_beneficiarios_auditoria'] = int(len(df_agg))
 
-                                    txt_lines = []
-                                    for _, row_a in df_agg.iterrows():
-                                        b_str = str(row_a['beneficiario']).strip()
-                                        c_str = str(row_a['cedula']).strip()
-                                        m_str = str(int(round(row_a['monto_total']))).strip()
-                                        linea_fmt = f"{b_str:<14}{c_str:<10}{m_str:>7}"
-                                        txt_lines.append(linea_fmt)
-                                    
-                                    txt_content = "\n".join(txt_lines)
+                                    txt_content = generar_contenido_txt_hacienda(df_curr)
 
                                     st.markdown("#### 📄 Descarga de Archivos Oficiales:")
                                     st.download_button(
@@ -2107,7 +2141,40 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
                     except Exception as e:
                         st.error(f"Error al procesar las planillas: {e}")
 
+        # SUB-MÓDULO DEDICADO A GENERAR EL TXT CON EL ESPACIADO EXACTO DE HACIENDA
         with tab2:
+            st.markdown("### 📄 Sub-Módulo: Generación Directa de Archivo TXT (Espaciado Hacienda/MEF)")
+            st.caption("Cargá una planilla en formato Excel (.xlsx / .xls) o CSV (.csv) para convertirla de forma directa al formato .TXT de ancho fijo exigido por Hacienda.")
+
+            file_direct_txt = st.file_uploader(
+                "📥 Cargar Planilla de Descuentos (Excel / CSV):", 
+                type=["xlsx", "xls", "csv"],
+                key="upl_direct_txt"
+            )
+
+            if file_direct_txt:
+                try:
+                    df_direct_raw = cargar_archivo_universal(file_direct_txt)
+                    txt_direct_out = generar_contenido_txt_hacienda(df_direct_raw)
+
+                    st.markdown("---")
+                    st.success("✅ ¡Archivo TXT de ancho fijo generado exitosamente!")
+                    
+                    st.markdown("##### 👁 Vista Previa del TXT Generado (Primeras 15 líneas):")
+                    preview_lines = txt_direct_out.split('\n')[:15]
+                    st.code("\n".join(preview_lines), language="text")
+
+                    st.download_button(
+                        label="📥 Descargar Archivo .TXT Oficial Formateado",
+                        data=txt_direct_out.encode('latin1'),
+                        file_name="COD_96_COOP_24_DE_OCTUBRE.TXT",
+                        mime="text/plain",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"Error al procesar el archivo para TXT: {e}")
+
+        with tab3:
             st.subheader("✉️ Generador de Nota Oficial para Hacienda (MEF)")
             
             if not st.session_state.get('auditoria_ejecutada_limpia', False):
@@ -2169,31 +2236,38 @@ elif opcion == "🧮 Calculadora de Préstamos":
         margen_libre_liquidez = 0.0
 
         if socio_input:
-            if not df_giradurias.empty:
+            df_g_ref = df_historial_giradurias if not df_historial_giradurias.empty else df_giradurias
+            df_l_ref = df_historial_liquidez if not df_historial_liquidez.empty else df_liquidez
+
+            if not df_g_ref.empty:
                 match_g = pd.DataFrame()
-                if 'emp_ci_clean' in df_giradurias.columns:
-                    match_g = df_giradurias[df_giradurias['emp_ci_clean'] == socio_input_clean]
-                if match_g.empty and 'nro_socio' in df_giradurias.columns:
-                    match_g = df_giradurias[df_giradurias['nro_socio'].astype(str).str.strip() == socio_input.strip()]
+                if socio_input_clean and 'emp_ci_clean' in df_g_ref.columns:
+                    match_g = df_g_ref[df_g_ref['emp_ci_clean'] == socio_input_clean]
+                if match_g.empty and 'nro_socio' in df_g_ref.columns:
+                    val_search = socio_input.lstrip('0')
+                    match_g = df_g_ref[df_g_ref['nro_socio'].astype(str).str.strip().str.lstrip('0') == val_search]
                 
                 if not match_g.empty:
                     r_g = match_g.iloc[0]
                     socio_encontrado = True
                     nombre_socio = limpiar_texto(r_g.get('emp_nomape', 'S/D'))
                     ci_socio = limpiar_ci(r_g.get('emp_ci', '0'))
-                    ultimo_descuento_cobrado = limpiar_monto(r_g.get('monto_cobrado', 0))
+                    
+                    for _, r_m in match_g.iterrows():
+                        ultimo_descuento_cobrado += limpiar_monto(r_m.get('monto_cobrado', 0))
+                        
                     unidad_giraduria_socio = limpiar_texto(r_g.get('unidad_nombre_oficial', 'Sin Asignar'))
 
-            if not df_liquidez.empty and (ci_socio != "S/D" or socio_input_clean):
-                search_ci = ci_socio if ci_socio != "S/D" else socio_input_clean
-                col_l = 'emp_ci_clean' if 'emp_ci_clean' in df_liquidez.columns else 'emp_ci'
-                match_l = df_liquidez[df_liquidez[col_l].astype(str).apply(limpiar_ci) == search_ci]
+            search_ci_target = ci_socio if ci_socio not in ["S/D", "0", ""] else socio_input_clean
+            if not df_l_ref.empty and search_ci_target:
+                col_l = 'emp_ci_clean' if 'emp_ci_clean' in df_l_ref.columns else 'emp_ci'
+                match_l = df_l_ref[df_l_ref[col_l].astype(str).apply(limpiar_ci) == search_ci_target]
                 
                 if not match_l.empty:
                     r_l = match_l.iloc[0]
                     if not socio_encontrado:
                         nombre_socio = limpiar_texto(r_l.get('emp_nomape', 'S/D'))
-                        ci_socio = search_ci
+                        ci_socio = search_ci_target
                         socio_encontrado = True
                     unidad_liquidez_socio = limpiar_texto(r_l.get('UNIDAD', 'Sin Liquidez'))
                     
@@ -2206,9 +2280,9 @@ elif opcion == "🧮 Calculadora de Préstamos":
             st.success(f"👤 **Socio:** {nombre_socio} | **C.I.:** {ci_socio}")
             c_s1, c_s2, c_s3, c_s4 = st.columns(4)
             c_s1.metric("Último Descuento Cobrado", f"Gs. {formato_guarani(ultimo_descuento_cobrado)}")
-            c_s2.metric("Giraduría Registrada", unidad_giraduria_socio)
+            c_s2.metric("Giraduría Registrada (Enviado)", unidad_giraduria_socio)
             c_s3.metric("Unidad Oficial (Liquidez)", unidad_liquidez_socio)
-            c_s4.metric("Margen Libre (50%)", f"Gs. {formato_guarani(margen_libre_liquidez)}")
+            c_s4.metric("Margen Libre (50%)", f"Gs. {formato_guarani(margen_libre_liquidez if margen_libre_liquidez > 0 else 0)}")
         else:
             if socio_input:
                 st.warning("⚠️ No se encontraron registros coincidentes para ese Número de Socio o Cédula.")
@@ -2463,65 +2537,81 @@ elif opcion == "🧮 Calculadora de Préstamos":
     with sub_tab2:
         st.markdown("### 📊 Estado de Cuenta y Evaluación de Refinanciación Automática")
         
-        soc_search_ec = st.text_input("🔍 Buscar Socio (Cédula, N° Socio o Nombre):", placeholder="Ej: 5511820 o 9946", key="ec_socio_search").strip()
+        soc_search_ec = st.text_input("🔍 Buscar Socio (Cédula, N° Socio o Nombre):", placeholder="Ej: 5511820 o 2525", key="ec_socio_search").strip()
         soc_search_clean = limpiar_ci(soc_search_ec)
 
         socio_ec_found = False
         nom_ec = "Cliente General / No registrado"
         ci_ec = "S/D"
         ult_desc_ec = 0.0
-        u_gir_ec = "Sin Giraduría"
+        u_gir_ec = "Sin Asignar"
         u_liq_ec = "Sin Liquidez"
         margen_ec = 0.0
 
         if soc_search_ec:
-            if not df_giradurias.empty:
-                m_g_ec = pd.DataFrame()
-                if 'emp_ci_clean' in df_giradurias.columns:
-                    m_g_ec = df_giradurias[df_giradurias['emp_ci_clean'] == soc_search_clean]
-                if m_g_ec.empty and 'nro_socio' in df_giradurias.columns:
-                    m_g_ec = df_giradurias[df_giradurias['nro_socio'].astype(str).str.strip() == soc_search_ec.strip()]
-                if m_g_ec.empty and 'emp_nomape' in df_giradurias.columns:
-                    m_g_ec = df_giradurias[df_giradurias['emp_nomape'].astype(str).str.contains(soc_search_ec, case=False, na=False)]
+            df_g_ref = df_historial_giradurias if not df_historial_giradurias.empty else df_giradurias
+            df_l_ref = df_historial_liquidez if not df_historial_liquidez.empty else df_liquidez
+
+            m_g_ec = pd.DataFrame()
+            if not df_g_ref.empty:
+                if soc_search_clean and 'emp_ci_clean' in df_g_ref.columns:
+                    m_g_ec = df_g_ref[df_g_ref['emp_ci_clean'] == soc_search_clean]
+                elif soc_search_clean and 'emp_ci' in df_g_ref.columns:
+                    m_g_ec = df_g_ref[df_g_ref['emp_ci'].astype(str).apply(limpiar_ci) == soc_search_clean]
+
+                if m_g_ec.empty and 'nro_socio' in df_g_ref.columns:
+                    val_search = soc_search_ec.lstrip('0')
+                    m_g_ec = df_g_ref[
+                        df_g_ref['nro_socio'].astype(str).str.strip().str.lstrip('0') == val_search
+                    ]
+
+                if m_g_ec.empty and 'emp_nomape' in df_g_ref.columns:
+                    m_g_ec = df_g_ref[df_g_ref['emp_nomape'].astype(str).str.contains(soc_search_ec, case=False, na=False)]
 
                 if not m_g_ec.empty:
                     r_g_ec = m_g_ec.iloc[0]
                     socio_ec_found = True
                     nom_ec = limpiar_texto(r_g_ec.get('emp_nomape', 'S/D'))
                     ci_ec = limpiar_ci(r_g_ec.get('emp_ci', '0'))
-                    ult_desc_ec = limpiar_monto(r_g_ec.get('monto_cobrado', 0))
+                    
+                    for _, r_m in m_g_ec.iterrows():
+                        ult_desc_ec += limpiar_monto(r_m.get('monto_cobrado', 0))
+                    
                     u_gir_ec = limpiar_texto(r_g_ec.get('unidad_nombre_oficial', 'Sin Asignar'))
 
-            if not df_liquidez.empty and (ci_ec != "S/D" or soc_search_clean):
-                s_ci_ec = ci_ec if ci_ec != "S/D" else soc_search_clean
-                col_l_ec = 'emp_ci_clean' if 'emp_ci_clean' in df_liquidez.columns else 'emp_ci'
-                m_l_ec = df_liquidez[df_liquidez[col_l_ec].astype(str).apply(limpiar_ci) == s_ci_ec]
+            search_ci_target = ci_ec if ci_ec not in ["S/D", "0", ""] else soc_search_clean
+            if not df_l_ref.empty and search_ci_target:
+                col_l_ec = 'emp_ci_clean' if 'emp_ci_clean' in df_l_ref.columns else 'emp_ci'
+                m_l_ec = df_l_ref[df_l_ref[col_l_ec].astype(str).apply(limpiar_ci) == search_ci_target]
                 
                 if not m_l_ec.empty:
                     r_l_ec = m_l_ec.iloc[0]
                     if not socio_ec_found:
                         nom_ec = limpiar_texto(r_l_ec.get('emp_nomape', 'S/D'))
-                        ci_ec = s_ci_ec
+                        ci_ec = search_ci_target
                         socio_ec_found = True
+                    
                     u_liq_ec = limpiar_texto(r_l_ec.get('UNIDAD', 'Sin Liquidez'))
                     
                     presup_e = limpiar_monto(r_l_ec.get('presupuestado', 0))
                     jub_e = limpiar_monto(r_l_ec.get('jubilacion', 0))
                     tot_d_e = jub_e + limpiar_monto(r_l_ec.get('giraduria', 0)) + limpiar_monto(r_l_ec.get('descuento_cf2', 0)) + limpiar_monto(r_l_ec.get('judicial', 0))
-                    margen_ec = ((presup_e - jub_e) / 2.0) - (tot_d_e - jub_e)
+                    base_imp = presup_e - jub_e
+                    lim_50 = base_imp / 2.0
+                    margen_ec = lim_50 - (tot_d_e - jub_e)
 
         if socio_ec_found:
             st.success(f"👤 **Socio Ficha:** {nom_ec} | **C.I.:** {ci_ec}")
             c_e1, c_e2, c_e3, c_e4 = st.columns(4)
             c_e1.metric("Último Descuento Cobrado", f"Gs. {formato_guarani(ult_desc_ec)}")
-            c_e2.metric("Giraduría Asignada", u_gir_ec)
+            c_e2.metric("Giraduría Asignada (Enviado)", u_gir_ec)
             c_e3.metric("Unidad Liquidez (FF.AA.)", u_liq_ec)
-            c_e4.metric("Margen Disponible (50%)", f"Gs. {formato_guarani(margen_ec)}")
+            c_e4.metric("Margen Disponible (50%)", f"Gs. {formato_guarani(margen_ec if margen_ec > 0 else 0)}")
         else:
             if soc_search_ec:
-                st.warning("⚠️ No se encontraron registros coincidentes para la búsqueda.")
+                st.warning("⚠️ No se encontraron registros coincidentes en las bases.")
             else:
-                st.info("💡 Buscá a un socio para sincronizar su último descuento y límites de liquidez.")
+                st.info("💡 Buscá a un socio por Cédula o N° de Socio para sincronizar su Giraduría de envío, Unidad de Liquidez y Margen.")
 
         st.markdown("---")
         st.markdown("#### 💳 1. Detalle de Créditos y Deudas Sociales del Socio")
