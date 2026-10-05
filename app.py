@@ -373,7 +373,7 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==========================================
-# ⚙️️ MENÚ LATERAL, SOPORTE Y NAVEGACIÓN
+# ⚙ MENÚ LATERAL, SOPORTE Y NAVEGACIÓN
 # ==========================================
 usuario_actual = st.session_state['usuario_actual'].lower()
 es_editor = usuario_actual in USUARIOS_EDITORES_DICTAMEN
@@ -1180,7 +1180,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                 if 'emp_ci_clean' in df_fuente_giradurias.columns:
                     matches_g = df_fuente_giradurias[df_fuente_giradurias['emp_ci_clean'] == ci_input_clean]
 
-    elif tipo_busqueda == "🏷️️ Por Número de Socio":
+    elif tipo_busqueda == "🏷 Por Número de Socio":
         socio_input = st.text_input("Número de Socio:", placeholder="Ej: 9946").strip()
         if socio_input:
             if not df_fuente_giradurias.empty and 'nro_socio' in df_fuente_giradurias.columns:
@@ -1345,7 +1345,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                     )
                 elif unidad_enviada_giraduria and unidad_militar.upper() not in unidad_enviada_giraduria.upper():
                     st.markdown(
-                        f"⚠️ **DIAGNÓSTICO DE INCONSISTENCIA EN GIRADURÍA:**\n"
+                        f"⚠️️ **DIAGNÓSTICO DE INCONSISTENCIA EN GIRADURÍA:**\n"
                         f"El socio no registró ningún descuento debido a que la planilla fue enviada a la **{unidad_enviada_giraduria}**, "
                         f"mientras que en la base oficial de Liquidez de las FF.AA. figura asignado a la unidad **{unidad_militar}**.\n"
                         f"📌 **Acción Requerida:** Reasignar el legajo y enviar la solicitud a la giraduría correspondiente ({unidad_militar})."
@@ -2298,7 +2298,7 @@ elif opcion == "🧮 Calculadora de Préstamos":
             '71': {'nombre': 'Refinanciación Especial', 'comision': 100000},
             '21': {'nombre': 'Consumo Celular', 'comision': '5%'},
             '8': {'nombre': 'Premium', 'comision': 0},
-            '65': {'nombre': 'Crédito Aniversario', 'comision': 0}, 
+            '65': {'nombre': 'Crédito Aniversario / Promo Aniversario', 'comision': 0}, 
             '18': {'nombre': 'Credito Amigo', 'comision': 0},
             '78': {'nombre': 'Crédito Vehículo', 'comision': '2%'}, 
             '33': {'nombre': 'Prestamo Jubilados', 'comision': 0}
@@ -2339,6 +2339,7 @@ elif opcion == "🧮 Calculadora de Préstamos":
                 modalidad_credito = "🔄 Con Cancelación / Refinanciación"
                 st.info("ℹ Este tipo de crédito opera automáticamente como **Refinanciación / Cancelación**.")
 
+            # Cálculo de tasa automática de acuerdo al tipo y reglas solicitadas
             tasa_auto = 20
             if nombre_p == 'Préstamo Ordinario':
                 tasa_auto = 26
@@ -2346,11 +2347,18 @@ elif opcion == "🧮 Calculadora de Préstamos":
                 tasa_auto = 24
             elif nombre_p in ['Préstamo Cumpleaños', 'Consumo Electrodoméstico', 'Consumo Celular', 'Credito Amigo']:
                 tasa_auto = 20
-            elif nombre_p == 'Crédito Aniversario':
-                if 1 <= plazo <= 12: tasa_auto = 9
-                elif 13 <= plazo <= 18: tasa_auto = 12
-                elif 19 <= plazo <= 24: tasa_auto = 14
-                elif 25 <= plazo <= 36: tasa_auto = 16
+            elif 'ANIVERSARIO' in nombre_p.upper():
+                # Reglas Promo Aniversario:
+                if plazo <= 12:
+                    tasa_auto = 9
+                elif plazo <= 18:
+                    tasa_auto = 12
+                elif plazo <= 24:
+                    tasa_auto = 14
+                elif plazo <= 36:
+                    tasa_auto = 16
+                else:
+                    tasa_auto = 18
             elif nombre_p == 'Crédito Vehículo':
                 tasa_auto = 18 if 0 < plazo <= 48 else 20
             elif nombre_p == 'Refinanciación Especial':
