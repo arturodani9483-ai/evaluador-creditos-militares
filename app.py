@@ -1148,7 +1148,7 @@ df_historial_giradurias = cargar_historial_giradurias()
 df_dictamenes = cargar_dictamenes()
 
 # ==========================================
-# 🪖 MÓDULO 1: EVALUADOR DE LIQUIDEZ
+# 🪖 MÓDULO 1: EVALUADOR DE LIQUIDEZ (CORREGIDO Y AJUSTADO)
 # ==========================================
 if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
     st.subheader("🔍 Buscador de Liquidez y Estado de Socio")
@@ -1165,7 +1165,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
     matches_g = pd.DataFrame()
     
     if tipo_busqueda == "💳 Por Número de Cédula":
-        ci_input = st.text_input("Número de Cédula (C.I.):", placeholder="Ej: 5511820").strip()
+        ci_input = st.text_input("Número de Cédula (C.I.):", placeholder="Ej: 5511820", key="busq_ci_input").strip()
         ci_input_clean = limpiar_ci(ci_input)
         if ci_input_clean:
             if not df_fuente_liquidez.empty:
@@ -1180,11 +1180,14 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                 if 'emp_ci_clean' in df_fuente_giradurias.columns:
                     matches_g = df_fuente_giradurias[df_fuente_giradurias['emp_ci_clean'] == ci_input_clean]
 
-    elif tipo_busqueda == "🏷 Por Número de Socio":
-        socio_input = st.text_input("Número de Socio:", placeholder="Ej: 9946").strip()
+    elif tipo_busqueda == "🏷️ Por Número de Socio":
+        socio_input = st.text_input("Número de Socio:", placeholder="Ej: 2525", key="busq_socio_input").strip()
         if socio_input:
+            socio_val_clean = re.sub(r'\.0$', '', socio_input.lstrip('0'))
             if not df_fuente_giradurias.empty and 'nro_socio' in df_fuente_giradurias.columns:
-                matches_g = df_fuente_giradurias[df_fuente_giradurias['nro_socio'].astype(str).str.strip() == socio_input.strip()]
+                matches_g = df_fuente_giradurias[
+                    df_fuente_giradurias['nro_socio'].astype(str).apply(lambda x: re.sub(r'\.0$', '', str(x).strip().lstrip('0'))) == socio_val_clean
+                ]
                 if not matches_g.empty:
                     ci_socio_encontrada = limpiar_ci(matches_g.iloc[0].get('emp_ci', ''))
                     if ci_socio_encontrada and not df_fuente_liquidez.empty:
@@ -1194,7 +1197,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                             matches_l = df_fuente_liquidez[df_fuente_liquidez['emp_ci_clean'] == ci_socio_encontrada]
 
     else:
-        nombre_input = st.text_input("Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
+        nombre_input = st.text_input("Nombre o Apellido:", placeholder="Ej: Sanabria", key="busq_nombre_input").strip()
         if nombre_input:
             if not df_fuente_liquidez.empty and 'emp_nomape' in df_fuente_liquidez.columns:
                 matches_l = df_fuente_liquidez[df_fuente_liquidez['emp_nomape'].astype(str).str.contains(nombre_input, case=False, na=False)]
@@ -1275,8 +1278,8 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                 match_g = df_gir_periodo[df_gir_periodo['emp_ci_clean'] == cedula_militar]
             
             if match_g.empty and 'nro_socio' in df_gir_periodo.columns and figura_en_giradurias:
-                n_soc_ref = str(matches_g.iloc[0].get('nro_socio', '')).strip()
-                match_g = df_gir_periodo[df_gir_periodo['nro_socio'].astype(str).str.strip() == n_soc_ref]
+                n_soc_ref = re.sub(r'\.0$', '', str(matches_g.iloc[0].get('nro_socio', '')).strip().lstrip('0'))
+                match_g = df_gir_periodo[df_gir_periodo['nro_socio'].astype(str).apply(lambda x: re.sub(r'\.0$', '', str(x).strip().lstrip('0'))) == n_soc_ref]
 
             if not match_g.empty:
                 es_socio = True
@@ -1345,7 +1348,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                     )
                 elif unidad_enviada_giraduria and unidad_militar.upper() not in unidad_enviada_giraduria.upper():
                     st.markdown(
-                        f"⚠️️ **DIAGNÓSTICO DE INCONSISTENCIA EN GIRADURÍA:**\n"
+                        f"⚠ **DIAGNÓSTICO DE INCONSISTENCIA EN GIRADURÍA:**\n"
                         f"El socio no registró ningún descuento debido a que la planilla fue enviada a la **{unidad_enviada_giraduria}**, "
                         f"mientras que en la base oficial de Liquidez de las FF.AA. figura asignado a la unidad **{unidad_militar}**.\n"
                         f"📌 **Acción Requerida:** Reasignar el legajo y enviar la solicitud a la giraduría correspondiente ({unidad_militar})."
@@ -1811,7 +1814,10 @@ elif opcion == "📋 Dictamen del Girador":
             if socio_g:
                 ci_socio_g = ""
                 if not df_giradurias.empty and 'nro_socio' in df_giradurias.columns:
-                    match_sg = df_giradurias[df_giradurias['nro_socio'].astype(str).str.strip() == socio_g.strip()]
+                    val_search_g = re.sub(r'\.0$', '', socio_g.lstrip('0'))
+                    match_sg = df_giradurias[
+                        df_giradurias['nro_socio'].astype(str).apply(lambda x: re.sub(r'\.0$', '', str(x).strip().lstrip('0'))) == val_search_g
+                    ]
                     if not match_sg.empty:
                         ci_socio_g = limpiar_ci(match_sg.iloc[0].get('emp_ci', ''))
                         matches_g = match_sg
@@ -2141,7 +2147,6 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
                     except Exception as e:
                         st.error(f"Error al procesar las planillas: {e}")
 
-        # SUB-MÓDULO DEDICADO A GENERAR EL TXT CON EL ESPACIADO EXACTO DE HACIENDA
         with tab2:
             st.markdown("### 📄 Sub-Módulo: Generación Directa de Archivo TXT (Espaciado Hacienda/MEF)")
             st.caption("Cargá una planilla en formato Excel (.xlsx / .xls) o CSV (.csv) para convertirla de forma directa al formato .TXT de ancho fijo exigido por Hacienda.")
@@ -2244,8 +2249,10 @@ elif opcion == "🧮 Calculadora de Préstamos":
                 if socio_input_clean and 'emp_ci_clean' in df_g_ref.columns:
                     match_g = df_g_ref[df_g_ref['emp_ci_clean'] == socio_input_clean]
                 if match_g.empty and 'nro_socio' in df_g_ref.columns:
-                    val_search = socio_input.lstrip('0')
-                    match_g = df_g_ref[df_g_ref['nro_socio'].astype(str).str.strip().str.lstrip('0') == val_search]
+                    val_search = re.sub(r'\.0$', '', socio_input.lstrip('0'))
+                    match_g = df_g_ref[
+                        df_g_ref['nro_socio'].astype(str).apply(lambda x: re.sub(r'\.0$', '', str(x).strip().lstrip('0'))) == val_search
+                    ]
                 
                 if not match_g.empty:
                     r_g = match_g.iloc[0]
@@ -2339,7 +2346,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
                 modalidad_credito = "🔄 Con Cancelación / Refinanciación"
                 st.info("ℹ Este tipo de crédito opera automáticamente como **Refinanciación / Cancelación**.")
 
-            # Cálculo de tasa automática de acuerdo al tipo y reglas solicitadas
             tasa_auto = 20
             if nombre_p == 'Préstamo Ordinario':
                 tasa_auto = 26
@@ -2348,7 +2354,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
             elif nombre_p in ['Préstamo Cumpleaños', 'Consumo Electrodoméstico', 'Consumo Celular', 'Credito Amigo']:
                 tasa_auto = 20
             elif 'ANIVERSARIO' in nombre_p.upper():
-                # Reglas Promo Aniversario:
                 if plazo <= 12:
                     tasa_auto = 9
                 elif plazo <= 18:
@@ -2568,9 +2573,9 @@ elif opcion == "🧮 Calculadora de Préstamos":
                     m_g_ec = df_g_ref[df_g_ref['emp_ci'].astype(str).apply(limpiar_ci) == soc_search_clean]
 
                 if m_g_ec.empty and 'nro_socio' in df_g_ref.columns:
-                    val_search = soc_search_ec.lstrip('0')
+                    val_search = re.sub(r'\.0$', '', soc_search_ec.lstrip('0'))
                     m_g_ec = df_g_ref[
-                        df_g_ref['nro_socio'].astype(str).str.strip().str.lstrip('0') == val_search
+                        df_g_ref['nro_socio'].astype(str).apply(lambda x: re.sub(r'\.0$', '', str(x).strip().lstrip('0'))) == val_search
                     ]
 
                 if m_g_ec.empty and 'emp_nomape' in df_g_ref.columns:
@@ -2624,7 +2629,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
         st.markdown("---")
         st.markdown("#### 💳 1. Detalle de Créditos y Deudas Sociales del Socio")
 
-        # PRIMER CRÉDITO PRINCIPAL
         with st.expander("📌 Crédito N° 1 y Conceptos Sociales Fijos", expanded=True):
             col_cr1_a, col_cr1_b = st.columns(2)
             with col_cr1_a:
