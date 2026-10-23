@@ -28,6 +28,20 @@ def obtener_ultimo_dia_mes_siguiente(fecha_base):
     max_d = calendar.monthrange(next_y, next_m)[1]
     return datetime(next_y, next_m, max_d).date()
 
+def obtener_mes_anio_anterior():
+    fecha_actual = obtener_fecha_hora_local().date()
+    primer_dia_mes_actual = fecha_actual.replace(day=1)
+    ultimo_dia_mes_anterior = primer_dia_mes_actual - timedelta(days=1)
+    
+    meses_es = [
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ]
+    
+    nombre_mes = meses_es[ultimo_dia_mes_anterior.month - 1]
+    anio_str = str(ultimo_dia_mes_anterior.year)
+    return nombre_mes, anio_str
+
 st.set_page_config(
     page_title="SICOC - Sistema Integrado de Control Operativo y Crediticio", 
     layout="wide", 
@@ -331,6 +345,9 @@ if "total_beneficiarios_auditoria" not in st.session_state:
 if "num_creditos_adicionales" not in st.session_state:
     st.session_state["num_creditos_adicionales"] = 0
 
+if "num_meses_bonificacion" not in st.session_state:
+    st.session_state["num_meses_bonificacion"] = 1
+
 def pantalla_login():
     st.markdown("# 🏛️ SICOC")
     st.markdown("### Sistema Integrado de Control Operativo y Crediticio")
@@ -414,6 +431,7 @@ else:
         "📊 Gestión y Diagnóstico de Cobranzas",
         "📋 Dictamen del Girador",
         "🛡️ Auditoría y Cruce de Planillas",
+        "💵 Bonificación a Giradores",
         "🧮 Calculadora de Préstamos",
         "📥 Cargar Base Mensual"
     ]
@@ -434,16 +452,16 @@ DB_DICTAMENES_FILE = "dictamenes_giraduria.csv"
 DB_DERIVACIONES_FILE = "base_derivaciones_internas.csv"
 
 MAPEO_UNIDADES = {
-    "1": "1RA DC", "2": "2da DC", "3": "3ra Dc", "4": "Epoe", "5": "I CE",
-    "6": "Cimee", "7": "TEE", "8": "Ejercito", "9": "Edefisfa", "10": "Jubilados",
-    "12": "Eceme", "13": "Academil", "14": "FFMM", "15": "CFN5", "17": "Diserinte",
-    "18": "Dimabel", "20": "C. Logistico", "22": "Comisoe", "23": "CFN2", "24": "II CE",
-    "25": "III CE", "26": "4ta DI", "27": "5ta DI", "28": "6ta DI", "29": "2da DI",
-    "30": "3ra DI", "31": "Ingenieria", "32": "1ra DI",
-    "35": "Comcome Oficiales", "36": "Comcome Sub Oficiales", "37": "Suprema corte", "39": "Comcome Empleados",
-    "42": "Regimiento", "46": "Digetren", "50": "Esc. Caballeria",
-    "54": "IAEE", "62": "EIME", "70": "Batallon", "73": "CECOPAZ", "82": "Armada",
-    "83": "Aerea", "86": "Policia"
+    "1": "1° DC", "2": "2° DC", "3": "3° DC", "4": "EPOE", "5": "I CE",
+    "6": "CIMEE", "7": "TEE", "8": "EJERCITO", "9": "EDEFISFA", "10": "Jubilados",
+    "12": "ECEME", "13": "ACADEMIL", "14": "FFMM", "15": "CFN5", "17": "DISERINTE",
+    "18": "DIMABEL", "20": "COMANDO LOGISTICO", "22": "COMISOE", "23": "CF2", "24": "II CE",
+    "25": "III CE", "26": "4° DI", "27": "5° DI", "28": "6° DI", "29": "2° DI",
+    "30": "3° DI", "31": "INGENIERIA", "32": "1° DI",
+    "35": "COMCOME", "36": "COMCOME", "37": "Suprema corte", "39": "COMCOME",
+    "42": "REGIMIENTO", "46": "DIGETREN", "50": "ESC. CABALLERIA",
+    "54": "IAEE", "62": "EIME", "70": "BATALLON CONJUNTO", "73": "CECOPAZ", "82": "Armada",
+    "83": "AEREA", "86": "POLICIA", "87": "ESC. INFANTERIA"
 }
 
 def limpiar_texto(val):
@@ -501,8 +519,8 @@ def limpiar_monto(val):
 
 def formato_guarani(val):
     try:
-        m = limpiar_monto(val)
-        return f"{int(round(m)):,}".replace(',', '.')
+        m = int(round(limpiar_monto(val)))
+        return f"{m:,}".replace(',', '.')
     except:
         return "0"
 
@@ -568,7 +586,6 @@ def unificar_hojas_excel(file_or_path, periodo_tag=""):
             if c0.upper() in ['ITEM', 'N°', 'NRO', 'ORDEN'] or 'TOTAL' in c0.upper() or 'TOTAL' in c1.upper():
                 continue
 
-            # Mapeo dinámico fila a fila para resolver columnas calculadas por fórmula
             if c1 != "" and c1.upper() not in ['NRO. SOCIO', 'N° SOCIO', 'SOCIO'] and (c2 != "" or c3 != ""):
                 records.append({
                     'nro_socio': re.sub(r'\.0$', '', c1.strip()),
@@ -1098,6 +1115,23 @@ class PDFCobrabilidadUnidades(FPDF):
         self.set_font("Helvetica", "I", 8)
         self.cell(0, 10, f"Pagina {self.page_no()}", align="C")
 
+class PDFBonificacionGiradores(FPDF):
+    def __init__(self):
+        super().__init__(orientation='P', unit='mm', format='A4')
+
+    def header(self):
+        fecha_local = obtener_fecha_hora_local().strftime('%d/%m/%Y %H:%M')
+        self.set_font("Helvetica", "B", 13)
+        self.cell(0, 8, "SICOC - LIQUIDACION OFICIAL DE BONIFICACION A GIRADORES", border=0, ln=True, align="C")
+        self.set_font("Helvetica", "I", 9)
+        self.cell(0, 4, f"Fecha de emision: {fecha_local}", border=0, ln=True, align="C")
+        self.ln(4)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Helvetica", "I", 8)
+        self.cell(0, 10, f"Pagina {self.page_no()}", align="C")
+
 def generar_pdf_reporte_incidencias(df_reporte):
     pdf = PDFReporteIncidencias()
     pdf.add_page()
@@ -1133,6 +1167,48 @@ def generar_pdf_cobrabilidad_unidades(df_metrics):
         pdf.cell(55, 6, f"Gs. {formato_guarani(r.get('monto_cobrado_num', 0))}", border=1, align="R")
         pdf.cell(50, 6, f"{r.get('% Cobrado', 0)} %", border=1, align="C")
         pdf.ln()
+
+    return bytes(pdf.output())
+
+def generar_pdf_bonificacion_giradores(unidad_nombre, df_resumen, total_bonif_acum):
+    pdf = PDFBonificacionGiradores()
+    pdf.add_page()
+
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, f"UNIDAD / GIRADURIA: {limpiar_texto_pdf(unidad_nombre)}", ln=True)
+    pdf.ln(2)
+
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.cell(25, 6, "Periodo", border=1, align="C")
+    pdf.cell(32, 6, "Monto Enviado", border=1, align="C")
+    pdf.cell(32, 6, "Monto Cobrado", border=1, align="C")
+    pdf.cell(22, 6, "% Efect.", border=1, align="C")
+    pdf.cell(25, 6, "Bonif. Girador", border=1, align="C")
+    pdf.cell(25, 6, "Bonif. Emplead.", border=1, align="C")
+    pdf.cell(30, 6, "Total Bonif. Gs.", border=1, align="C")
+    pdf.ln()
+
+    pdf.set_font("Helvetica", "", 8)
+    for idx, r in df_resumen.iterrows():
+        pdf.cell(25, 6, str(r.get('Período', '-')), border=1, align="C")
+        pdf.cell(32, 6, f"Gs. {formato_guarani(r.get('Monto Enviado', 0))}", border=1, align="R")
+        pdf.cell(32, 6, f"Gs. {formato_guarani(r.get('Monto Cobrado', 0))}", border=1, align="R")
+        pdf.cell(22, 6, f"{r.get('% Efectividad', 0)} %", border=1, align="C")
+        pdf.cell(25, 6, f"Gs. {formato_guarani(r.get('Bonif. Girador (Gs.)', 0))}", border=1, align="R")
+        pdf.cell(25, 6, f"Gs. {formato_guarani(r.get('Bonif. Empleado (Gs.)', 0))}", border=1, align="R")
+        pdf.cell(30, 6, f"Gs. {formato_guarani(r.get('Bonificación Total (Gs.)', 0))}", border=1, align="R")
+        pdf.ln()
+
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 6, f"TOTAL BONIFICACIÓN ACUMULADA: Gs. {formato_guarani(total_bonif_acum)}", ln=True, align="R")
+
+    pdf.ln(20)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(95, 6, "_____________________________", align="C")
+    pdf.cell(95, 6, "_____________________________", align="C", ln=True)
+    pdf.cell(95, 5, "Firma del Girador / Responsable", align="C")
+    pdf.cell(95, 5, "Firma / Aprobación Tesorería", align="C", ln=True)
 
     return bytes(pdf.output())
 
@@ -1340,7 +1416,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
                     )
                 elif unidad_enviada_giraduria and unidad_militar.upper() not in unidad_enviada_giraduria.upper():
                     st.markdown(
-                        f"⚠ **DIAGNÓSTICO DE INCONSISTENCIA EN GIRADURÍA:**\n"
+                        f"⚠️ **DIAGNÓSTICO DE INCONSISTENCIA EN GIRADURÍA:**\n"
                         f"El socio no registró ningún descuento debido a que la planilla fue enviada a la **{unidad_enviada_giraduria}**, "
                         f"mientras que en la base oficial de Liquidez de las FF.AA. figura asignado a la unidad **{unidad_militar}**.\n"
                         f"📌 **Acción Requerida:** Reasignar el legajo y enviar la solicitud a la giraduría correspondiente ({unidad_militar})."
@@ -1404,7 +1480,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
             if total_deudas_actuales > limite_50:
                 exceso_actual = total_deudas_actuales - limite_50
                 st.warning(
-                    f"⚠ **ATENCIÓN: Los descuentos de deudas actuales (Gs. {formato_guarani(total_deudas_actuales)}) "
+                    f"⚠️ **ATENCIÓN: Los descuentos de deudas actuales (Gs. {formato_guarani(total_deudas_actuales)}) "
                     f"ya superan el límite del 50% por Gs. {formato_guarani(exceso_actual)}.**\n\n"
                     f"📌 **RECOMENDACIÓN:** Consultar disponibilidad con **CF2** para evaluar margen o beneficios especiales."
                 )
@@ -1656,7 +1732,6 @@ elif opcion == "📊 Gestión y Diagnóstico de Cobranzas":
             is_jubilado_u = "JUBILAD" in u_gir_clean or "JUBILADOS" in unidad_liq.upper()
             is_cf2_u = "CF2" in u_gir_clean or "CFN2" in u_gir_clean
 
-            # CONDICIÓN CLAVE: DETECCIÓN DE PAGOS PARCIALES O NULOS
             if cobrado < enviado or m_rech > 0:
                 if cobrado == 0:
                     if unidad_liq not in ["FFPP / Jubilado", "Jubilado", "Armada", "Fuerza Aérea", "Policía Nacional"] and unidad_giraduria.upper() not in unidad_liq.upper():
@@ -2137,7 +2212,6 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
                     except Exception as e:
                         st.error(f"Error al procesar las planillas: {e}")
 
-        # SUB-MÓDULO DEDICADO A GENERAR EL TXT CON EL ESPACIADO EXACTO DE HACIENDA
         with tab2:
             st.markdown("### 📄 Sub-Módulo: Generación Directa de Archivo TXT (Espaciado Hacienda/MEF)")
             st.caption("Cargá una planilla en formato Excel (.xlsx / .xls) o CSV (.csv) para convertirla de forma directa al formato .TXT de ancho fijo exigido por Hacienda.")
@@ -2207,6 +2281,175 @@ elif opcion == "🛡️ Auditoría y Cruce de Planillas":
             st.write(f"📊 **Totales calculados para la Nota:** Monto Gs. `{formato_guarani(m_tot)}` | Beneficiarios: `{c_ben}`")
 
 # ==========================================
+# 💵 MÓDULO 8: BONIFICACIÓN A GIRADORES
+# ==========================================
+elif opcion == "💵 Bonificación a Giradores":
+    st.subheader("💵 Módulo de Liquidación y Bonificación a Giradores")
+    st.caption("Cálculo automático de comisiones y bonificaciones por efectividad de cobro en giradurías (Valores enteros en Guaraníes).")
+
+    unidades_ordenadas = [
+        "1° DC", "2° DC", "3° DC", "EPOE", "CIMEE", "I CE", "EJERCITO", "ECEME", "EDEFISFA", "ACADEMIL", 
+        "DISERINTE", "DIMABEL", "COMANDO LOGISTICO", "COMISOE", "II CE", "III CE", "4° DI", "5° DI", "6° DI", 
+        "2° DI", "3° DI", "DIGETREN", "ESC. CABALLERIA", "BATALLON CONJUNTO", "CECOPAZ", "ESC. INFANTERIA", 
+        "POLICIA", "AEREA", "EIME", "FFMM", "TEE", "CF2", "INGENIERIA", "1° DI", "COMCOME", "REGIMIENTO"
+    ]
+    unidades_ordenadas = sorted(list(set(unidades_ordenadas)))
+
+    meses_lista = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+    anios_lista = ["2026", "2025", "2027"]
+
+    mes_def, anio_def = obtener_mes_anio_anterior()
+
+    col_bon_u, col_bon_btn1, col_bon_btn2 = st.columns([3, 1.5, 1.5])
+
+    with col_bon_u:
+        unidad_bonif_sel = st.selectbox("🏛️ Seleccionar Unidad / Giraduría:", unidades_ordenadas, key="bonif_unidad_sel")
+
+    with col_bon_btn1:
+        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+        if st.button("➕ Agregar Mes", use_container_width=True, key="btn_add_mes_bonif"):
+            st.session_state["num_meses_bonificacion"] += 1
+            st.rerun()
+
+    with col_bon_btn2:
+        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+        if st.session_state["num_meses_bonificacion"] > 1:
+            if st.button("🗑️ Quitar Mes", use_container_width=True, key="btn_rem_mes_bonif"):
+                st.session_state["num_meses_bonificacion"] -= 1
+                st.rerun()
+
+    st.markdown("---")
+    st.markdown("### 📊 Períodos y Cuadros de Cobranza Registrados")
+
+    resumen_periodos = []
+    total_bonificacion_acumulada = 0.0
+
+    for i in range(st.session_state["num_meses_bonificacion"]):
+        idx_mes = i + 1
+        st.markdown(f"#### 🗓️ Período #{idx_mes}")
+
+        c_p1, c_p2, c_p3, c_p4, c_p5 = st.columns(5)
+
+        with c_p1:
+            idx_mes_def = meses_lista.index(mes_def) if mes_def in meses_lista else 0
+            mes_sel = st.selectbox(f"Mes #{idx_mes}:", meses_lista, index=idx_mes_def, key=f"bon_mes_{idx_mes}")
+
+        with c_p2:
+            idx_anio_def = anios_lista.index(anio_def) if anio_def in anios_lista else 0
+            anio_sel = st.selectbox(f"Año #{idx_mes}:", anios_lista, index=idx_anio_def, key=f"bon_anio_{idx_mes}")
+
+        with c_p3:
+            inp_env = st.text_input(f"Monto Enviado #{idx_mes} (Gs.):", value="0", key=f"bon_env_{idx_mes}")
+            m_enviado = int(round(limpiar_monto(inp_env)))
+
+        with c_p4:
+            inp_cob = st.text_input(f"Monto Cobrado #{idx_mes} (Gs.):", value="0", key=f"bon_cob_{idx_mes}")
+            m_cobrado = int(round(limpiar_monto(inp_cob)))
+
+        pct_efectividad = (m_cobrado / m_enviado * 100.0) if m_enviado > 0 else 0.0
+
+        with c_p5:
+            st.text_input(f"% Efectividad #{idx_mes}:", value=f"{round(pct_efectividad, 1)} %", disabled=True, key=f"bon_pct_{idx_mes}")
+
+        pct_girador = 0.0
+        pct_empleado = 0.0
+        u_upper = unidad_bonif_sel.upper()
+
+        if "FFMM" in u_upper:
+            pct_girador = 1.0
+            pct_empleado = 1.5
+        elif "TEE" in u_upper:
+            pct_girador = 2.0 if pct_efectividad >= 95.0 else 1.5
+            pct_empleado = 0.0
+        elif "CF2" in u_upper or "CFN2" in u_upper:
+            pct_girador = 2.0
+            pct_empleado = 1.5
+        elif "INGENIERIA" in u_upper or "INGENIERÍA" in u_upper:
+            pct_girador = 1.0
+            pct_empleado = 1.5
+        elif "1° DI" in u_upper or "1RA DI" in u_upper or "1DI" in u_upper:
+            if pct_efectividad >= 91.0:
+                pct_girador = 2.5
+            elif pct_efectividad >= 80.0:
+                pct_girador = 2.0
+            elif pct_efectividad >= 70.0:
+                pct_girador = 1.0
+            else:
+                pct_girador = 0.0
+            pct_empleado = 0.0
+        elif "COMCOME" in u_upper:
+            pct_girador = 1.0
+            pct_empleado = 1.5
+        elif "REGIMIENTO" in u_upper:
+            pct_girador = 1.0
+            pct_empleado = 1.0
+        else:
+            pct_girador = 1.0
+            pct_empleado = 0.0
+
+        monto_bonif_girador = int(round(m_cobrado * (pct_girador / 100.0)))
+        monto_bonif_empleado = int(round(m_cobrado * (pct_empleado / 100.0)))
+        monto_bonificacion_total_mes = monto_bonif_girador + monto_bonif_empleado
+
+        total_bonificacion_acumulada += monto_bonificacion_total_mes
+
+        resumen_periodos.append({
+            "Período": f"{mes_sel} {anio_sel}",
+            "Monto Enviado": m_enviado,
+            "Monto Cobrado": m_cobrado,
+            "% Efectividad": round(pct_efectividad, 1),
+            "% Girador": pct_girador,
+            "Bonif. Girador (Gs.)": monto_bonif_girador,
+            "% Empleado": pct_empleado,
+            "Bonif. Empleado (Gs.)": monto_bonif_empleado,
+            "Bonificación Total (Gs.)": monto_bonificacion_total_mes
+        })
+
+    df_bonif_resumen = pd.DataFrame(resumen_periodos)
+
+    st.markdown("---")
+    st.markdown("### 📋 Resumen Consolidado de Bonificación por Período")
+
+    df_view_b = df_bonif_resumen.copy()
+    df_view_b['Monto Enviado (Gs.)'] = df_view_b['Monto Enviado'].apply(formato_guarani)
+    df_view_b['Monto Cobrado (Gs.)'] = df_view_b['Monto Cobrado'].apply(formato_guarani)
+    df_view_b['% Efectividad'] = df_view_b['% Efectividad'].astype(str) + " %"
+    df_view_b['Girador Gs.'] = df_view_b['Bonif. Girador (Gs.)'].apply(formato_guarani) + " (" + df_view_b['% Girador'].astype(str) + "%)"
+    df_view_b['Empleado Gs.'] = df_view_b['Bonif. Empleado (Gs.)'].apply(formato_guarani) + " (" + df_view_b['% Empleado'].astype(str) + "%)"
+    df_view_b['Total Bonificación Gs.'] = df_view_b['Bonificación Total (Gs.)'].apply(formato_guarani)
+
+    cols_b_show = ['Período', 'Monto Enviado (Gs.)', 'Monto Cobrado (Gs.)', '% Efectividad', 'Girador Gs.', 'Empleado Gs.', 'Total Bonificación Gs.']
+    st.dataframe(df_view_b[cols_b_show], use_container_width=True)
+
+    st.markdown(f"### 💰 **Total Acumulado de Bonificación a Pagar:** `Gs. {formato_guarani(total_bonificacion_acumulada)}`")
+
+    col_bon_d1, col_bon_d2 = st.columns(2)
+
+    with col_bon_d1:
+        out_bon = io.BytesIO()
+        with pd.ExcelWriter(out_bon, engine='openpyxl') as writer:
+            df_view_b[cols_b_show].to_excel(writer, sheet_name='Bonificacion_Giradores', index=False)
+
+        st.download_button(
+            label="📥 Descargar Desglose de Bonificación (.XLSX)",
+            data=out_bon.getvalue(),
+            file_name=f"Liquidacion_Bonificacion_{unidad_bonif_sel.replace(' ', '_')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+
+    with col_bon_d2:
+        pdf_bon_bytes = generar_pdf_bonificacion_giradores(unidad_bonif_sel, df_bonif_resumen, total_bonificacion_acumulada)
+
+        st.download_button(
+            label="📄 Descargar Planilla de Liquidación (.PDF)",
+            data=pdf_bon_bytes,
+            file_name=f"Liquidacion_Bonificacion_{unidad_bonif_sel.replace(' ', '_')}.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+
+# ==========================================
 # 🧮 MÓDULO 6: CALCULADORA FINANCIERA DE PRÉSTAMOS Y ESTADO DE CUENTA
 # ==========================================
 elif opcion == "🧮 Calculadora de Préstamos":
@@ -2214,9 +2457,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
     
     sub_tab1, sub_tab2 = st.tabs(["🧮 Simulación de Préstamos", "📊 Estado de Cuenta y Refinanciación Automática"])
 
-    # -------------------------------------------------------------
-    # PESTAÑA 1: SIMULADOR DE PRÉSTAMOS ESTÁNDAR
-    # -------------------------------------------------------------
     with sub_tab1:
         st.markdown("### 👤 Datos y Cruce del Socio Solicitante")
         
@@ -2423,7 +2663,7 @@ elif opcion == "🧮 Calculadora de Préstamos":
                 else:
                     unidad_destino = unidad_liquidez_socio if unidad_liquidez_socio not in ["Sin Liquidez", ""] else "CF2"
                     st.error(
-                        f"⚠ **ANALIZAR / CONSULTAR CON UNIDAD: {unidad_destino}**\n\n"
+                        f"⚠️ **ANALIZAR / CONSULTAR CON UNIDAD: {unidad_destino}**\n\n"
                         f"La cuota calculada (**Gs. {formato_guarani(cuota)}**) supera tanto el último descuento (**Gs. {formato_guarani(ultimo_descuento_cobrado)}**) "
                         f"como el margen libre de liquidez (**Gs. {formato_guarani(margen_libre_liquidez)}**)."
                     )
@@ -2533,9 +2773,6 @@ elif opcion == "🧮 Calculadora de Préstamos":
                         use_container_width=True
                     )
 
-    # -------------------------------------------------------------
-    # PESTAÑA 2: ESTADO DE CUENTA Y REFINANCIACIÓN AUTOMÁTICA
-    # -------------------------------------------------------------
     with sub_tab2:
         st.markdown("### 📊 Estado de Cuenta y Evaluación de Refinanciación Automática")
         
@@ -2908,7 +3145,7 @@ elif opcion == "📥 Cargar Base Mensual":
             if not df_giradurias.empty:
                 st.info(f"📊 **Estado actual:** {len(df_giradurias):,} registros en base actual.")
             else:
-                st.warning("⚠ Sin datos de giradurías cargados actualmente.")
+                st.warning("⚠️ Sin datos de giradurías cargados actualmente.")
 
             archivo_g = st.file_uploader("📥 Cargar Base Enviado / Cobrado Giradurías (.xlsx / .xls)", type=["xlsx", "xls"], key="u_giradurias")
             
