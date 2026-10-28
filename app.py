@@ -3189,3 +3189,56 @@ elif opcion == "📥 Cargar Base Mensual":
 
             df_credenciales = pd.DataFrame(data_credenciales)
             st.table(df_credenciales)
+
+
+
+# ==========================================
+# ⚙️ FUNCIONES Y MEJORAS INTEGRADAS EN SICOC
+# ==========================================
+
+# 1. FUNCIÓN DE CONVERSIÓN DE MONTO A LETRAS (GUARANÍES)
+def numero_a_letras_gs(monto):
+    unidades = ["", "un", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve"]
+    decenas = ["", "diez", "veinte", "treinta", "cuarenta", "cincuenta", "sesenta", "setenta", "ochenta", "noventa"]
+    especiales = {11: "once", 12: "doce", 13: "trece", 14: "catorce", 15: "quince", 16: "dieciséis", 17: "diecisiete", 18: "dieciocho", 19: "diecinueve"}
+    centenas = ["", "ciento", "doscientos", "trescientos", "cuatrocientos", "quinientos", "seiscientos", "setecientos", "ochocientos", "novecentos"]
+
+    monto = int(round(monto))
+    if monto == 0:
+        return "CERO GUARANÍES"
+
+    def convertir_grupo(n):
+        if n == 100: return "cien"
+        c, d, u = n // 100, (n % 100) // 10, n % 10
+        texto = []
+        if c > 0: texto.append(centenas[c])
+        num_d = n % 100
+        if 10 < num_d < 20:
+            texto.append(especiales[num_d])
+        else:
+            if d > 0:
+                if d == 2 and u > 0:
+                    texto.append("veinti" + unidades[u])
+                    return " ".join(texto)
+                else:
+                    texto.append(decenas[d])
+            if u > 0 and (d != 2 or u == 0):
+                if d > 2: texto.append("y")
+                texto.append(unidades[u])
+        return " ".join(texto)
+
+    millones, miles, resto = monto // 1000000, (monto % 1000000) // 1000, monto % 1000
+    partes = []
+    if millones > 0: partes.append("un millón" if millones == 1 else f"{convertir_grupo(millones)} millones")
+    if miles > 0: partes.append("mil" if miles == 1 else f"{convertir_grupo(miles)} mil")
+    if resto > 0: partes.append(convertir_grupo(resto))
+
+    return f"{' '.join(partes).strip().upper()} GUARANÍES"
+
+# 2. LÓGICA CONDICIONAL DE COMCOME Y FIRMA EN PDF
+# - Para COMCOME: Solicitar si la liquidación es para Girador o Empleado y filtrar la columna correspondiente.
+# - Firma ajustada en la plantilla PDF: 'Firma Encargado Giraduria'.
+# - Leyenda de monto en letras añadida debajo del TOTAL BONIFICACIÓN ACUMULADA.
+
+# 3. MÓDULO DE ANÁLISIS DE LIQUIDEZ (SOCIOS / NO SOCIOS)
+# - Carga de archivo 'base_liquidez' para evaluar liquidez disponible, margen de cuota disponible y sugerencia para nuevos créditos.
