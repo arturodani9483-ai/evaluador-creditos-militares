@@ -1220,7 +1220,416 @@ df_dictamenes = cargar_dictamenes()
 
 # ==========================================
 # 🪖 MÓDULO 1: EVALUADOR DE LIQUIDEZ
-# ==========================================
+if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
+    st.subheader("🔍 Evaluador de Liquidez y Búsqueda de Potenciales Clientes")
+
+    df_fuente_giradurias = df_historial_giradurias if not df_historial_giradurias.empty else df_giradurias
+    df_fuente_liquidez = df_historial_liquidez if not df_historial_liquidez.empty else df_liquidez
+
+    pestaña_eval, pestaña_potenciales = st.tabs(["🔍 Búsqueda Individual de Socio / Militar", "🎯 Explorador de Potenciales Clientes (Socios y No Socios)"])
+
+    with pestaña_eval:
+        tipo_busqueda = st.radio(
+            "Método de búsqueda:", 
+            ["💳 Por Número de Cédula", "🏷️ Por Número de Socio", "👤 Por Nombre / Apellido"], 
+            horizontal=True,
+            key="radio_tipo_busqueda_liq"
+        )
+        matches_l = pd.DataFrame()
+        matches_g = pd.DataFrame()
+
+        if tipo_busqueda == "💳 Por Número de Cédula":
+            ci_input = st.text_input("Número de Cédula (C.I.):", placeholder="Ej: 5511820").strip()
+            ci_input_clean = limpiar_ci(ci_input)
+            if ci_input_clean:
+                if not df_fuente_liquidez.empty:
+                    if 'emp_ci_clean' not in df_fuente_liquidez.columns and 'emp_ci' in df_fuente_liquidez.columns:
+                        df_fuente_liquidez['emp_ci_clean'] = df_fuente_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
+                    if 'emp_ci_clean' in df_fuente_liquidez.columns:
+                        matches_l = df_fuente_liquidez[df_fuente_liquidez['emp_ci_clean'] == ci_input_clean]
+
+                if not df_fuente_giradurias.empty:
+                    if 'emp_ci_clean' not in df_fuente_giradurias.columns and 'emp_ci' in df_fuente_giradurias.columns:
+                        df_fuente_giradurias['emp_ci_clean'] = df_fuente_giradurias['emp_ci'].astype(str).apply(limpiar_ci)
+                    if 'emp_ci_clean' in df_fuente_giradurias.columns:
+                        matches_g = df_fuente_giradurias[df_fuente_giradurias['emp_ci_clean'] == ci_input_clean]
+
+        elif tipo_busqueda == "🏷️ Por Número de Socio":
+            socio_input = st.text_input("Número de Socio:", placeholder="Ej: 9946").strip()
+            if socio_input:
+                if not df_fuente_giradurias.empty and 'nro_socio' in df_fuente_giradurias.columns:
+                    matches_g = df_fuente_giradurias[df_fuente_giradurias['nro_socio'].astype(str).str.strip() == socio_input.strip()]
+                    if not matches_g.empty:
+                        ci_socio_encontrada = limpiar_ci(matches_g.iloc[0].get('emp_ci', ''))
+                        if ci_socio_encontrada and not df_fuente_liquidez.empty:
+                            if 'emp_ci_clean' not in df_fuente_liquidez.columns and 'emp_ci' in df_fuente_liquidez.columns:
+                                df_fuente_liquidez['emp_ci_clean'] = df_fuente_liquidez['emp_ci'].astype(str).apply(limpiar_ci)
+                            if 'emp_ci_clean' in df_fuente_liquidez.columns:
+                                matches_l = df_fuente_liquidez[df_fuente_liquidez['emp_ci_clean'] == ci_socio_encontrada]
+
+        else:
+            nombre_input = st.text_input("Nombre o Apellido:", placeholder="Ej: Sanabria").strip()
+            if nombre_input:
+                if not df_fuente_liquidez.empty and 'emp_nomape' in df_fuente_liquidez.columns:
+                    matches_l = df_fuente_liquidez[df_fuente_liquidez['emp_nomape'].astype(str).str.contains(nombre_input, case=False, na=False)]
+                if not df_fuente_giradurias.empty and 'emp_nomape' in df_fuente_giradurias.columns:
+                    matches_g = df_fuente_giradurias[df_fuente_giradurias['emp_nomape'].astype(str).str.contains(nombre_input, case=False, na=False)]
+
+        figura_en_liquidez = not matches_l.empty
+        figura_en_giradurias = not matches_g.empty
+
+        if figura_en_liquidez or figura_en_giradurias:
+            if figura_en_liquidez:
+                row_l = matches_l.iloc[0]
+                nombre = row_l.get('emp_nomape', 'S/N')
+                cedula_militar = limpiar_ci(row_l.get('emp_ci', '0'))
+                unidad_militar = row_l.get('UNIDAD', 'Liquidez FF.AA.')
+                categoria = row_l.get('cat_codigo', '-')
+
+                presupuestado = limpiar_monto(row_l.get('presupuestado', 0))
+                jubilacion = limpiar_monto(row_l.get('jubilacion', 0))
+                giraduria = limpiar_monto(row_l.get('giraduria', 0))
+                desc_cf2 = limpiar_monto(row_l.get('descuento_cf2', 0))
+                judicial = limpiar_monto(row_l.get('judicial', 0))
+
+                total_descuentos = jubilacion + giraduria + desc_cf2 + judicial
+                liquido_real = presupuestado - total_descuentos if total_descuentos > 0 else limpiar_monto(row_l.get('liquido', 0))
+                base_imponible = presupuestado - jubilacion
+                limite_50 = base_imponible / 2.0
+                total_deudas_actuales = giraduria + desc_cf2 + judicial
+                margen_deuda_restante = limite_50 - total_deudas_actuales
+            else:
+                row_g_first = matches_g.iloc[0]
+                nombre = row_g_first.get('emp_nomape', 'S/N')
+                cedula_militar = limpiar_ci(row_g_first.get('emp_ci', '0'))
+                u_g_ofic = row_g_first.get('unidad_nombre_oficial', 'Giradurías')
+                unidad_militar = f"No figura en Liquidez (GIRADURÍA: {u_g_ofic})"
+                categoria = "S/D"
+
+                presupuestado = 0.0
+                jubilacion = 0.0
+                giraduria = 0.0
+                desc_cf2 = 0.0
+                judicial = 0.0
+                total_descuentos = 0.0
+                liquido_real = 0.0
+                limite_50 = 0.0
+                margen_deuda_restante = 0.0
+
+            es_socio = False
+            nro_socio = "No socio"
+            monto_enviado = 0.0
+            monto_cobrado = 0.0
+            monto_rechazado = 0.0
+            unidad_enviada_giraduria = ""
+
+            if not df_fuente_giradurias.empty:
+                periodos_disponibles = []
+                if 'periodo' in df_fuente_giradurias.columns:
+                    periodos_disponibles = sorted([p for p in df_fuente_giradurias['periodo'].dropna().unique() if str(p).strip() != ""], reverse=True)
+
+                if not periodos_disponibles:
+                    periodos_disponibles = ["Mes Actual Cargado"]
+
+                st.markdown("---")
+                col_sel_p, _ = st.columns([2, 2])
+                with col_sel_p:
+                    periodo_seleccionado = st.selectbox(
+                        "🗓️ Seleccionar Período / Mes a Consultar (Existente en Base):",
+                        options=periodos_disponibles
+                    )
+
+                if 'periodo' in df_fuente_giradurias.columns and periodo_seleccionado != "Mes Actual Cargado":
+                    df_gir_periodo = df_fuente_giradurias[df_fuente_giradurias['periodo'] == periodo_seleccionado]
+                else:
+                    df_gir_periodo = df_fuente_giradurias
+
+                match_g = pd.DataFrame()
+                if 'emp_ci_clean' in df_gir_periodo.columns and cedula_militar:
+                    match_g = df_gir_periodo[df_gir_periodo['emp_ci_clean'] == cedula_militar]
+
+                if match_g.empty and 'nro_socio' in df_gir_periodo.columns and figura_en_giradurias:
+                    n_soc_ref = str(matches_g.iloc[0].get('nro_socio', '')).strip()
+                    match_g = df_gir_periodo[df_gir_periodo['nro_socio'].astype(str).str.strip() == n_soc_ref]
+
+                if not match_g.empty:
+                    es_socio = True
+                    row_socio = match_g.iloc[0]
+                    nro_socio_val = limpiar_texto(row_socio.get('nro_socio', ''))
+                    nro_socio = nro_socio_val if nro_socio_val else "Socio Registrado"
+
+                    for _, r_g in match_g.iterrows():
+                        monto_enviado += limpiar_monto(r_g.get('monto_enviado', 0))
+                        monto_cobrado += limpiar_monto(r_g.get('monto_cobrado', 0))
+                        monto_rechazado += limpiar_monto(r_g.get('monto_rechazado', 0))
+
+                    if monto_rechazado == 0 and monto_enviado > monto_cobrado:
+                        monto_rechazado = monto_enviado - monto_cobrado
+
+                    unidad_enviada_giraduria = limpiar_texto(row_socio.get('unidad_nombre_oficial', ''))
+
+            col_info1, col_info2, col_info3 = st.columns(3)
+            with col_info1:
+                st.success(f"👤 **Socio / Militar:** {nombre}\n\n**C.I.:** {cedula_militar} | **Cat:** {categoria}")
+            with col_info2:
+                if es_socio:
+                    st.info(f"💳 **Estado de Socio:** SOCIO ACTIVO\n\n**N° Socio:** `{nro_socio}`")
+                else:
+                    st.warning("💳 **Estado de Socio:** `No socio (Potencial Cliente)`")
+            with col_info3:
+                if figura_en_liquidez:
+                    st.info(f"🏛 **Unidad en Liquidez:** {unidad_militar}")
+                else:
+                    st.warning(f"🏛️ **Unidad en Liquidez:** No figura en Liquidez (Socio en {unidad_enviada_giraduria if unidad_enviada_giraduria else 'Giradurías Externas'})")
+
+            if es_socio:
+                st.markdown(f"### 🏛️ Datos de Descuento en Giraduría ({periodo_seleccionado if 'periodo_seleccionado' in locals() else 'Mes Actual'})")
+                col_g1, col_g2, col_g3, col_g4, col_g5 = st.columns(5)
+                col_g1.metric("Giraduría Enviada", unidad_enviada_giraduria if unidad_enviada_giraduria else "Sin Asignar")
+                col_g2.metric("Monto Enviado", f"Gs. {formato_guarani(monto_enviado)}")
+                col_g3.metric("Monto Descontado/Cobrado", f"Gs. {formato_guarani(monto_cobrado)}")
+
+                if monto_rechazado > 0:
+                    col_g4.metric("Monto Rechazado / Pendiente", f"Gs. {formato_guarani(monto_rechazado)}", delta=f"-Gs. {formato_guarani(monto_rechazado)}", delta_color="inverse")
+                else:
+                    col_g4.metric("Monto Rechazado", "Gs. 0", delta="Cobro 100% OK")
+
+                pct_cobro_socio = (monto_cobrado / monto_enviado * 100) if monto_enviado > 0 else 0.0
+                col_g5.metric("% Cobro", f"{round(pct_cobro_socio, 1)} %")
+
+                u_gir_upper = unidad_enviada_giraduria.upper()
+                is_jubilado = "JUBILAD" in u_gir_upper or "JUBILADOS" in unidad_militar.upper()
+                is_cf2 = "CF2" in u_gir_upper or "CFN2" in u_gir_upper
+
+                if not figura_en_liquidez:
+                    st.info(
+                        f"💡 **INFORMACIÓN DE SOCIO EXTERNO A LIQUIDEZ FF.AA.:**\n"
+                        f"El socio pertenece a la giraduría **{unidad_enviada_giraduria}**. Por este motivo no figura en la planilla de salarios de Liquidez de las FF.AA., "
+                        f"pero sí se procesan sus descuentos de cobro normalmente a través de su giraduría respectiva."
+                    )
+
+                elif monto_enviado > 0 and monto_cobrado == 0:
+                    st.error("🚨 **ALERTA DE DESCUENTO RECHAZADO (Gs. 0 COBRADO)**")
+                    if is_cf2:
+                        unidad_ref = unidad_militar if unidad_militar else "su unidad de origen"
+                        st.markdown(
+                            f"⚠️ **DIAGNÓSTICO ESPECÍFICO UNIDAD CF2:**\n"
+                            f"El descuento enviado a CF2 fue rechazado (Gs. 0 cobrado).\n"
+                            f"📌 **Acción Requerida:** REFINANCIACIÓN NO FACTIBLE (Gs. 0 cobrado). Consultar con unidad **{unidad_ref}** o **proceder a notificación formal en caso de mora**."
+                        )
+                    elif unidad_enviada_giraduria and unidad_militar.upper() not in unidad_enviada_giraduria.upper():
+                        st.markdown(
+                            f"⚠️ **DIAGNÓSTICO DE INCONSISTENCIA EN GIRADURÍA:**\n"
+                            f"El socio no registró ningún descuento debido a que la planilla fue enviada a la **{unidad_enviada_giraduria}**, "
+                            f"mientras que en la base oficial de Liquidez de las FF.AA. figura asignado a la unidad **{unidad_militar}**.\n"
+                            f"📌 **Acción Requerida:** Reasignar el legajo y enviar la solicitud a la giraduría correspondiente ({unidad_militar})."
+                        )
+                    else:
+                        st.markdown(
+                            f"⚠️ **DIAGNÓSTICO DE CAPACIDAD DE PAGO Y MOROSIDAD:**\n"
+                            f"REFINANCIACIÓN NO FACTIBLE (Monto cobrado insuficiente).\n"
+                            f"📌 **Acción Requerida:** En caso de registrar atraso en cuotas, **proceder a la emisión de Notificación Formal de Requerimiento de Pago**."
+                        )
+
+                elif 0 < monto_cobrado < monto_enviado:
+                    st.warning("⚠️ **ALERTA DE PAGO PARCIAL DETECTADO**")
+
+                    if monto_cobrado < 100000:
+                        st.error(
+                            f"🔴 **REFINANCIACIÓN NO FACTIBLE (Monto Cobrado < Gs. 100.000):**\n"
+                            f"El socio realizó un pago parcial de tan solo **Gs. {formato_guarani(monto_cobrado)}**, lo cual es inferior al mínimo operativo requerido (Gs. 100.000).\n"
+                            f"📌 **Acción Requerida:** No se recomienda estructurar refinanciación. **En caso de contar con cuotas atrasadas, proceder a la notificación formal de pago.**"
+                        )
+                    elif is_jubilado:
+                        st.info(
+                            f"💡 **DIAGNÓSTICO ESPECÍFICO UNIDAD JUBILADOS:**\n"
+                            f"El socio jubilado registró un pago parcial de Gs. {formato_guarani(monto_cobrado)}.\n"
+                            f"📌 **Acción Requerida:** Actualizar planilla de autorización o evaluar refinanciación (Último descuento: Gs. {formato_guarani(monto_cobrado)})."
+                        )
+                    elif is_cf2:
+                        st.success(
+                            f"💡 **DIAGNÓSTICO ESPECÍFICO UNIDAD CF2:**\n"
+                            f"Unidad Central de Descuentos (CF2) con pago parcial acumulado.\n"
+                            f"✅ **Refinanciación Factible - Tope de cuota recomendada: Gs. {formato_guarani(monto_cobrado)} cobrados.**"
+                        )
+                    elif margen_deuda_restante > 0:
+                        st.success(
+                            f"💡 **ANÁLISIS DE REFINANCIACIÓN FACTIBLE:**\n"
+                            f"El socio realizó un pago parcial. Cuenta con un margen libre de liquidez de **Gs. {formato_guarani(margen_deuda_restante)}**.\n"
+                            f"✅ **Es factible reestructurar o refinanciar el saldo pendiente de Gs. {formato_guarani(monto_rechazado)}.**"
+                        )
+                    else:
+                        st.info(
+                            f"💡 **ANÁLISIS DE RESTRUCTURACIÓN RECOMENDADO:**\n"
+                            f"El socio realizó un pago parcial pero no dispone de margen libre en el límite del 50%.\n"
+                            f"📌 **Se sugiere evaluar reestructurar/refinanciar fijando la cuota límite en los Gs. {formato_guarani(monto_cobrado)} descontados actualmente.**"
+                        )
+
+            if figura_en_liquidez:
+                st.markdown("### 📊 Desglose de Haberes y Descuentos (FF.AA.)")
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Presupuestado", f"Gs. {formato_guarani(presupuestado)}")
+                c2.metric("Jubilación", f"Gs. {formato_guarani(jubilacion)}")
+                c3.metric("Giraduría", f"Gs. {formato_guarani(giraduria)}")
+                c4.metric("Descuento CF2", f"Gs. {formato_guarani(desc_cf2)}")
+
+                c5, c6, c7, c8 = st.columns(4)
+                c5.metric("Judicial", f"Gs. {formato_guarani(judicial)}")
+                c6.metric("Total Descuentos", f"Gs. {formato_guarani(total_descuentos)}")
+                c7.metric("Líquido Real", f"Gs. {formato_guarani(liquido_real)}")
+                c8.metric("Límite Cuota (50%)", f"Gs. {formato_guarani(limite_50)}")
+
+                st.markdown("---")
+                if total_deudas_actuales > limite_50:
+                    exceso_actual = total_deudas_actuales - limite_50
+                    st.warning(
+                        f"⚠️ **ATENCIÓN: Los descuentos de deudas actuales (Gs. {formato_guarani(total_deudas_actuales)}) "
+                        f"ya superan el límite del 50% por Gs. {formato_guarani(exceso_actual)}.**\n\n"
+                        f"📌 **RECOMENDACIÓN:** Consultar disponibilidad con **CF2** para evaluar margen o beneficios especiales."
+                    )
+                else:
+                    st.info(f"💡 **Margen disponible para nuevos descuentos:** Gs. {formato_guarani(margen_deuda_restante)}")
+
+            st.markdown("---")
+            st.subheader("📤 Derivar Caso / Ficha a un Compañero")
+
+            with st.expander("📤 Enviar este Estado / Ficha Internamente a un Compañero", expanded=False):
+                usuarios_destino = [u.capitalize() for u in USUARIOS_AUTORIZADOS.keys() if u != usuario_actual]
+                col_d1, col_d2 = st.columns(2)
+                with col_d1:
+                    destinatario_sel = st.selectbox("Seleccionar Compañero Destino:", usuarios_destino, key="der_dest_liq")
+                    obs_derivacion = st.text_area("Observación / Indicación para el compañero:", placeholder="Ej: Revisar refinanciación / Para cobrar en giraduría", key="der_obs_liq")
+                with col_d2:
+                    permite_efectivo_chk = st.checkbox("🔑 Autorizar Modificación de Retiro de Efectivo", value=False, key="der_efec_liq")
+                    monto_efectivo_aut = 0
+                    if permite_efectivo_chk:
+                        monto_efectivo_aut = int(round(limpiar_monto(st.text_input("Monto Sugerido en Efectivo (Gs.):", value="0", key="der_monto_efec_liq"))))
+
+                    if st.button("🚀 Confirmar y Enviar Derivación Interna", use_container_width=True, key="btn_enviar_der_liq"):
+                        crear_derivacion(
+                            remitente=usuario_actual,
+                            destinatario=destinatario_sel.lower(),
+                            cedula=cedula_militar,
+                            socio_nombre=nombre,
+                            desc_caso=obs_derivacion,
+                            permite_efectivo=permite_efectivo_chk,
+                            monto_efectivo=monto_efectivo_aut
+                        )
+                        st.success(f"✅ ¡Caso derivado exitosamente a **{destinatario_sel}**!")
+                        st.rerun()
+
+            dict_match = df_dictamenes[df_dictamenes['CEDULA'].astype(str).apply(limpiar_ci) == cedula_militar]
+            obs_dictamen = dict_match.iloc[-1]['DICTAMEN_GIRADOR'] if not dict_match.empty else "Sin observaciones previas."
+
+            if not dict_match.empty:
+                st.markdown("---")
+                st.warning(f"📌 **Dictamen Registrado por Giraduría:** {obs_dictamen}")
+
+            st.markdown("---")
+            pdf_bytes = generar_pdf_constancia("Evaluación de Liquidez", nombre, cedula_militar, unidad_militar, presupuestado, jubilacion, total_descuentos, liquido_real, limite_50, 0.0, "EVALUACIÓN REALIZADA", obs_dictamen)
+
+            st.download_button(
+                label="📄 Descargar / Imprimir Constancia de Evaluación (PDF)",
+                data=pdf_bytes,
+                file_name=f"Constancia_Credito_{cedula_militar}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        else:
+            st.warning("⚠️ No se encontraron resultados coincidentes en las bases de datos.")
+
+    with pestaña_potenciales:
+        st.markdown("### 🎯 Análisis de Potenciales Clientes / Oportunidades de Crédito")
+        st.caption("Filtre la base completa de Liquidez de las FF.AA. para identificar militares con margen libre de cuota disponible, distinguiendo entre Socios activos y No Socios (futuros clientes).")
+
+        if df_fuente_liquidez.empty:
+            st.info("👈 Cargá la Base de Liquidez (FF.AA.) para habilitar este módulo.")
+        else:
+            df_pot = df_fuente_liquidez.copy()
+            if 'emp_ci_clean' not in df_pot.columns and 'emp_ci' in df_pot.columns:
+                df_pot['emp_ci_clean'] = df_pot['emp_ci'].astype(str).apply(limpiar_ci)
+
+            df_pot['presup_num'] = df_pot['presupuestado'].apply(limpiar_monto)
+            df_pot['jubil_num'] = df_pot['jubilacion'].apply(limpiar_monto)
+            df_pot['girad_num'] = df_pot.get('giraduria', pd.Series([0]*len(df_pot))).apply(limpiar_monto)
+            df_pot['cf2_num'] = df_pot.get('descuento_cf2', pd.Series([0]*len(df_pot))).apply(limpiar_monto)
+            df_pot['jud_num'] = df_pot.get('judicial', pd.Series([0]*len(df_pot))).apply(limpiar_monto)
+
+            df_pot['limite_50_num'] = (df_pot['presup_num'] - df_pot['jubil_num']) / 2.0
+            df_pot['deudas_actuales_num'] = df_pot['girad_num'] + df_pot['cf2_num'] + df_pot['jud_num']
+            df_pot['margen_disponible_num'] = df_pot['limite_50_num'] - df_pot['deudas_actuales_num']
+
+            ci_socios_set = set()
+            if not df_fuente_giradurias.empty and 'emp_ci_clean' in df_fuente_giradurias.columns:
+                ci_socios_set = set(df_fuente_giradurias['emp_ci_clean'].dropna().unique())
+
+            df_pot['Es_Socio'] = df_pot['emp_ci_clean'].apply(lambda c: "Socio Activo" if c in ci_socios_set else "No Socio (Potencial)")
+
+            col_f1, col_f2, col_f3 = st.columns(3)
+            with col_f1:
+                filtro_socio = st.selectbox(
+                    "👥 Filtrar Tipo de Personal:",
+                    ["Todos", "No Socios (Potenciales Clientes)", "Socios Activos"],
+                    key="filtro_socio_potencial"
+                )
+            with col_f2:
+                margen_minimo = st.number_input(
+                    "💵 Margen Disponible Mínimo (Gs.):",
+                    value=300000,
+                    step=100000,
+                    key="margen_min_potencial"
+                )
+            with col_f3:
+                unidades_disponibles = ["Todas"] + sorted([str(u) for u in df_pot['UNIDAD'].dropna().unique() if str(u).strip() != ""]) if 'UNIDAD' in df_pot.columns else ["Todas"]
+                unidad_filtro = st.selectbox("🏛️ Filtrar por Unidad Militar:", unidades_disponibles, key="unid_potencial")
+
+            df_filtrado_pot = df_pot[df_pot['margen_disponible_num'] >= margen_minimo].copy()
+
+            if filtro_socio == "No Socios (Potenciales Clientes)":
+                df_filtrado_pot = df_filtrado_pot[df_filtrado_pot['Es_Socio'] == "No Socio (Potencial)"]
+            elif filtro_socio == "Socios Activos":
+                df_filtrado_pot = df_filtrado_pot[df_filtrado_pot['Es_Socio'] == "Socio Activo"]
+
+            if unidad_filtro != "Todas":
+                df_filtrado_pot = df_filtrado_pot[df_filtrado_pot['UNIDAD'] == unidad_filtro]
+
+            df_filtrado_pot = df_filtrado_pot.sort_values(by='margen_disponible_num', ascending=False)
+
+            total_potenciales_nosocios = len(df_pot[(df_pot['margen_disponible_num'] >= margen_minimo) & (df_pot['Es_Socio'] == "No Socio (Potencial)")])
+            total_potenciales_socios = len(df_pot[(df_pot['margen_disponible_num'] >= margen_minimo) & (df_pot['Es_Socio'] == "Socio Activo")])
+
+            m_p1, m_p2, m_p3 = st.columns(3)
+            m_p1.metric("🎯 Potenciales No Socios con Liquidez", f"{total_potenciales_nosocios:,}")
+            m_p2.metric("💳 Socios Activos con Margen Disponible", f"{total_potenciales_socios:,}")
+            m_p3.metric("📋 Total Coincidencias Filtro", f"{len(df_filtrado_pot):,}")
+
+            st.markdown("---")
+            if df_filtrado_pot.empty:
+                st.warning("⚠️ No se encontraron personas que cumplan con los criterios de liquidez y filtros seleccionados.")
+            else:
+                df_view_pot = pd.DataFrame()
+                df_view_pot['Cédula'] = df_filtrado_pot['emp_ci_clean']
+                df_view_pot['Nombre y Apellido'] = df_filtrado_pot['emp_nomape']
+                df_view_pot['Estado'] = df_filtrado_pot['Es_Socio']
+                df_view_pot['Unidad'] = df_filtrado_pot.get('UNIDAD', '-')
+                df_view_pot['Presupuestado (Gs.)'] = df_filtrado_pot['presup_num'].apply(formato_guarani)
+                df_view_pot['Límite 50% (Gs.)'] = df_filtrado_pot['limite_50_num'].apply(formato_guarani)
+                df_view_pot['Deudas Actuales (Gs.)'] = df_filtrado_pot['deudas_actuales_num'].apply(formato_guarani)
+                df_view_pot['Margen Libre Disponible (Gs.)'] = df_filtrado_pot['margen_disponible_num'].apply(formato_guarani)
+
+                st.dataframe(df_view_pot, use_container_width=True)
+
+                out_pot = io.BytesIO()
+                with pd.ExcelWriter(out_pot, engine='openpyxl') as writer:
+                    df_view_pot.to_excel(writer, sheet_name='Potenciales_Clientes', index=False)
+
+                st.download_button(
+                    label="📥 Descargar Listado de Potenciales Clientes (.XLSX)",
+                    data=out_pot.getvalue(),
+                    file_name=f"Potenciales_Clientes_Margen_Gs_{int(margen_minimo)}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
 if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
     st.subheader("🔍 Buscador de Liquidez y Estado de Socio")
     
