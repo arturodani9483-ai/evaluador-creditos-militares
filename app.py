@@ -1645,7 +1645,7 @@ if opcion == "🔍 Evaluador de Liquidez (FF.AA.)":
     matches_g = pd.DataFrame()
     
     if tipo_busqueda == "💳 Por Número de Cédula":
-        ci_input = st.text_input("Número de Cédula (C.I.):", placeholder="Ej: 5511820").strip()
+        ci_input = st.text_input("Número de Cédula (C.I.):", placeholder="Ej: 5511820", key="ci_busqueda_liquidez").strip()
         ci_input_clean = limpiar_ci(ci_input)
         if ci_input_clean:
             if not df_fuente_liquidez.empty:
